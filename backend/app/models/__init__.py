@@ -5,6 +5,7 @@ from app.models.audio_file import AudioFile
 from app.models.roadmap import RoadmapTask
 from app.models.content import ContentPost
 from app.models.activity import ActivityLog
+from app.models.setlist import Setlist, SetlistItem
 
 __all__ = [
     "Song",
@@ -14,4 +15,6 @@ __all__ = [
     "RoadmapTask",
     "ContentPost",
     "ActivityLog",
+    "Setlist",
+    "SetlistItem",
 ]

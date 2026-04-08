@@ -126,6 +126,27 @@ export interface ContentPost {
   song_title: string | null;
 }
 
+export interface SetlistItem {
+  id: number;
+  song_id: number;
+  position: number;
+  duration_minutes: number;
+  notes: string | null;
+  song_title: string | null;
+  song_artist: string | null;
+  song_status: string | null;
+}
+
+export interface Setlist {
+  id: number;
+  name: string;
+  description: string | null;
+  config: string;
+  items: SetlistItem[];
+  total_minutes: number;
+  song_count: number;
+}
+
 export const api = {
   dashboard: {
     get: () => json<DashboardResponse>(`${BASE}/dashboard`),
@@ -159,6 +180,13 @@ export const api = {
       post<ContentPost>(`${BASE}/content/posts`, data),
     update: (id: number, data: Record<string, unknown>) =>
       patch<ContentPost>(`${BASE}/content/posts/${id}`, data),
+  },
+  setlists: {
+    list: () => json<Setlist[]>(`${BASE}/setlists`),
+    get: (id: number) => json<Setlist>(`${BASE}/setlists/${id}`),
+    create: (data: Record<string, unknown>) => post<Setlist>(`${BASE}/setlists`, data),
+    update: (id: number, data: Record<string, unknown>) => patch<Setlist>(`${BASE}/setlists/${id}`, data),
+    delete: (id: number) => json<{ ok: boolean }>(`${BASE}/setlists/${id}`, { method: "DELETE" }),
   },
   media: {
     takeAudioUrl: (takeId: number) => `${BASE}/media/take/${takeId}/audio`,

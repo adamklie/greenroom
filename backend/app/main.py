@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
-from app.routers import bootstrap_router, content, dashboard, media, repertoire, sessions
+from app.routers import bootstrap_router, content, dashboard, media, repertoire, sessions, setlists
 
 
 @asynccontextmanager
@@ -28,6 +28,7 @@ app.include_router(repertoire.router)
 app.include_router(sessions.router)
 app.include_router(media.router)
 app.include_router(content.router)
+app.include_router(setlists.router)
 app.include_router(bootstrap_router.router)
 
 

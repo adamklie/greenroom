@@ -7,22 +7,47 @@ import {
   CalendarDays,
   Share2,
   RefreshCw,
+  ListMusic,
+  Sun,
+  Moon,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Repertoire from "./pages/Repertoire";
 import Sessions from "./pages/Sessions";
 import ContentPlanner from "./pages/ContentPlanner";
+import SetlistBuilder from "./pages/SetlistBuilder";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/repertoire", icon: Music, label: "Repertoire" },
   { to: "/sessions", icon: CalendarDays, label: "Sessions" },
+  { to: "/setlists", icon: ListMusic, label: "Setlists" },
   { to: "/content", icon: Share2, label: "Content" },
 ];
 
+function getInitialTheme(): "dark" | "light" {
+  if (typeof window !== "undefined") {
+    return (localStorage.getItem("greenroom-theme") as "dark" | "light") || "dark";
+  }
+  return "dark";
+}
+
 export default function App() {
   const [scanning, setScanning] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light">(getInitialTheme);
   const queryClient = useQueryClient();
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("greenroom-theme", next);
+  };
+
+  // Set initial theme on mount
+  if (typeof document !== "undefined") {
+    document.documentElement.setAttribute("data-theme", theme);
+  }
 
   const rescan = async () => {
     setScanning(true);
@@ -69,8 +94,8 @@ export default function App() {
           ))}
         </div>
 
-        {/* Rescan button */}
-        <div className="px-3 pb-4">
+        {/* Bottom actions */}
+        <div className="px-3 pb-4 space-y-2">
           <button
             onClick={rescan}
             disabled={scanning}
@@ -79,6 +104,14 @@ export default function App() {
           >
             <RefreshCw size={16} className={scanning ? "animate-spin" : ""} />
             {scanning ? "Scanning..." : "Rescan Files"}
+          </button>
+          <button
+            onClick={toggleTheme}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm border transition-colors hover:opacity-80"
+            style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}
+          >
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+            {theme === "dark" ? "Light Mode" : "Dark Mode"}
           </button>
         </div>
       </nav>
@@ -89,6 +122,7 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/repertoire" element={<Repertoire />} />
           <Route path="/sessions" element={<Sessions />} />
+          <Route path="/setlists" element={<SetlistBuilder />} />
           <Route path="/content" element={<ContentPlanner />} />
         </Routes>
       </main>
