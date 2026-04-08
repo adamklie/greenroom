@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type RoadmapPhase } from "../api/client";
 import { CheckCircle2, Circle, Music, Radio, Star, Mic } from "lucide-react";
 
@@ -17,6 +17,13 @@ function StatCard({ label, value, icon: Icon, color }: {
 }
 
 function PhaseCard({ phase }: { phase: RoadmapPhase }) {
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: ({ id, completed }: { id: number; completed: boolean }) =>
+      api.roadmap.toggleTask(id, completed),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+  });
+
   const pct = phase.total > 0 ? Math.round((phase.completed / phase.total) * 100) : 0;
 
   return (
@@ -39,9 +46,13 @@ function PhaseCard({ phase }: { phase: RoadmapPhase }) {
         }} />
       </div>
 
-      <div className="space-y-2 max-h-48 overflow-y-auto">
+      <div className="space-y-2 max-h-64 overflow-y-auto">
         {phase.tasks.map((t) => (
-          <div key={t.id} className="flex items-start gap-2 text-sm">
+          <button
+            key={t.id}
+            onClick={() => mutation.mutate({ id: t.id, completed: !t.completed })}
+            className="flex items-start gap-2 text-sm w-full text-left hover:opacity-80 transition-opacity"
+          >
             {t.completed
               ? <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0" style={{ color: "var(--green)" }} />
               : <Circle size={16} className="mt-0.5 flex-shrink-0" style={{ color: "var(--text-muted)" }} />
@@ -49,7 +60,7 @@ function PhaseCard({ phase }: { phase: RoadmapPhase }) {
             <span style={{ color: t.completed ? "var(--text-muted)" : "var(--text)", textDecoration: t.completed ? "line-through" : "none" }}>
               {t.task_text}
             </span>
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -94,6 +105,9 @@ export default function Dashboard() {
 
       {/* Roadmap */}
       <h3 className="text-xl font-semibold mb-4">Roadmap</h3>
+      <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
+        Click any task to toggle its completion
+      </p>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {roadmap.map((phase) => (
           <PhaseCard key={phase.phase} phase={phase} />

@@ -50,6 +50,28 @@ def get_session(session_id: int, db: Session = Depends(get_db)):
     return SessionDetail(**sr.model_dump(), takes=take_reads)
 
 
+@router.get("/takes/best", response_model=list[TakeRead])
+def best_takes(
+    min_rating: int = Query(1),
+    song_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Get highest-rated takes across all sessions."""
+    q = db.query(Take).filter(Take.rating.isnot(None), Take.rating >= min_rating)
+    if song_id:
+        q = q.filter(Take.song_id == song_id)
+    takes = q.order_by(Take.rating.desc()).limit(50).all()
+    result = []
+    for t in takes:
+        tr = TakeRead.model_validate(t)
+        if t.song:
+            tr.song_title = t.song.title
+        if t.session:
+            tr.session_date = str(t.session.date)
+        result.append(tr)
+    return result
+
+
 @router.patch("/takes/{take_id}", response_model=TakeRead)
 def update_take(take_id: int, data: TakeUpdate, db: Session = Depends(get_db)):
     take = db.query(Take).get(take_id)

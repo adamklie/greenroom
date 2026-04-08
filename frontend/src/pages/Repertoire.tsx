@@ -107,11 +107,34 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
   );
 }
 
+type SortKey = "title" | "status" | "times_practiced" | "take_count";
+type SortDir = "asc" | "desc";
+
+const STATUS_ORDER = { idea: 0, rehearsed: 1, polished: 2, recorded: 3, released: 4 };
+
+function sortSongs(songs: Song[], key: SortKey, dir: SortDir): Song[] {
+  return [...songs].sort((a, b) => {
+    let cmp = 0;
+    if (key === "title") cmp = a.title.localeCompare(b.title);
+    else if (key === "status") cmp = (STATUS_ORDER[a.status as keyof typeof STATUS_ORDER] ?? 0) - (STATUS_ORDER[b.status as keyof typeof STATUS_ORDER] ?? 0);
+    else if (key === "times_practiced") cmp = a.times_practiced - b.times_practiced;
+    else if (key === "take_count") cmp = a.take_count - b.take_count;
+    return dir === "asc" ? cmp : -cmp;
+  });
+}
+
 export default function Repertoire() {
   const [project, setProject] = useState("all");
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("times_practiced");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("desc"); }
+  };
 
   const queryClient = useQueryClient();
 
@@ -188,16 +211,24 @@ export default function Repertoire() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: "var(--bg-card)" }}>
-                <th className="text-left px-4 py-3 font-medium" style={{ color: "var(--text-muted)" }}>Song</th>
+                <th className="text-left px-4 py-3 font-medium cursor-pointer select-none" style={{ color: sortKey === "title" ? "var(--accent)" : "var(--text-muted)" }} onClick={() => toggleSort("title")}>
+                  Song {sortKey === "title" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                </th>
                 <th className="text-left px-4 py-3 font-medium" style={{ color: "var(--text-muted)" }}>Artist</th>
                 <th className="text-left px-4 py-3 font-medium" style={{ color: "var(--text-muted)" }}>Project</th>
-                <th className="text-left px-4 py-3 font-medium" style={{ color: "var(--text-muted)" }}>Status</th>
-                <th className="text-center px-4 py-3 font-medium" style={{ color: "var(--text-muted)" }}>Practiced</th>
-                <th className="text-center px-4 py-3 font-medium" style={{ color: "var(--text-muted)" }}>Takes</th>
+                <th className="text-left px-4 py-3 font-medium cursor-pointer select-none" style={{ color: sortKey === "status" ? "var(--accent)" : "var(--text-muted)" }} onClick={() => toggleSort("status")}>
+                  Status {sortKey === "status" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                </th>
+                <th className="text-center px-4 py-3 font-medium cursor-pointer select-none" style={{ color: sortKey === "times_practiced" ? "var(--accent)" : "var(--text-muted)" }} onClick={() => toggleSort("times_practiced")}>
+                  Practiced {sortKey === "times_practiced" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                </th>
+                <th className="text-center px-4 py-3 font-medium cursor-pointer select-none" style={{ color: sortKey === "take_count" ? "var(--accent)" : "var(--text-muted)" }} onClick={() => toggleSort("take_count")}>
+                  Takes {sortKey === "take_count" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                </th>
               </tr>
             </thead>
             <tbody>
-              {songs.map((song) => (
+              {sortSongs(songs, sortKey, sortDir).map((song) => (
                 <tr
                   key={song.id}
                   className="border-t cursor-pointer transition-colors"

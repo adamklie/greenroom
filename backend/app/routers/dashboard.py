@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import AudioFile, PracticeSession, RoadmapTask, Song, Take
 from app.schemas.dashboard import DashboardResponse, DashboardStats
-from app.schemas.roadmap import RoadmapPhase, RoadmapTaskRead
+from app.schemas.roadmap import RoadmapPhase, RoadmapTaskRead, RoadmapTaskUpdate
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -61,3 +61,14 @@ def get_dashboard(db: Session = Depends(get_db)):
     roadmap = [phases_map[k] for k in sorted(phases_map)]
 
     return DashboardResponse(stats=stats, roadmap=roadmap)
+
+
+@router.patch("/roadmap/{task_id}", response_model=RoadmapTaskRead)
+def toggle_roadmap_task(task_id: int, data: RoadmapTaskUpdate, db: Session = Depends(get_db)):
+    task = db.query(RoadmapTask).get(task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    task.completed = data.completed
+    db.commit()
+    db.refresh(task)
+    return RoadmapTaskRead.model_validate(task)

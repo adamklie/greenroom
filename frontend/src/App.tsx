@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { Routes, Route, NavLink } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Music,
   CalendarDays,
   Share2,
+  RefreshCw,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Repertoire from "./pages/Repertoire";
@@ -18,6 +21,19 @@ const navItems = [
 ];
 
 export default function App() {
+  const [scanning, setScanning] = useState(false);
+  const queryClient = useQueryClient();
+
+  const rescan = async () => {
+    setScanning(true);
+    try {
+      await fetch("/api/bootstrap/scan", { method: "POST" });
+      queryClient.invalidateQueries();
+    } finally {
+      setScanning(false);
+    }
+  };
+
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
@@ -51,6 +67,19 @@ export default function App() {
               {label}
             </NavLink>
           ))}
+        </div>
+
+        {/* Rescan button */}
+        <div className="px-3 pb-4">
+          <button
+            onClick={rescan}
+            disabled={scanning}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm border transition-colors hover:opacity-80 disabled:opacity-50"
+            style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}
+          >
+            <RefreshCw size={16} className={scanning ? "animate-spin" : ""} />
+            {scanning ? "Scanning..." : "Rescan Files"}
+          </button>
         </div>
       </nav>
 

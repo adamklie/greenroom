@@ -98,7 +98,40 @@ function SessionCard({ session }: { session: Session }) {
   );
 }
 
+function BestTakes() {
+  const { data: takes = [], isLoading } = useQuery({
+    queryKey: ["best-takes"],
+    queryFn: () => api.takes.best(1),
+  });
+
+  if (isLoading) return <div style={{ color: "var(--text-muted)" }}>Loading...</div>;
+  if (takes.length === 0) return (
+    <div className="text-center py-12 rounded-xl border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
+      <Star size={32} className="mx-auto mb-3" style={{ color: "var(--text-muted)" }} />
+      <p className="font-medium">No rated takes yet</p>
+      <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+        Expand a session above and rate your takes with stars
+      </p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {takes.map((t) => (
+        <div key={t.id} className="flex items-center gap-4">
+          <span className="text-sm w-24 flex-shrink-0" style={{ color: "var(--text-muted)" }}>{t.session_date}</span>
+          <div className="flex-1">
+            <TakeCard take={t} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Sessions() {
+  const [tab, setTab] = useState<"sessions" | "best">("sessions");
+
   const { data: sessions = [], isLoading } = useQuery({
     queryKey: ["sessions"],
     queryFn: api.sessions.list,
@@ -109,14 +142,45 @@ export default function Sessions() {
   return (
     <div>
       <h2 className="text-2xl font-bold mb-6">Practice Sessions</h2>
-      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
-        {sessions.length} sessions &middot; Click to expand and listen to takes
-      </p>
-      <div className="space-y-3">
-        {sessions.map((s) => (
-          <SessionCard key={s.id} session={s} />
-        ))}
+
+      {/* Tab switcher */}
+      <div className="flex gap-1 mb-6 p-1 rounded-lg w-fit" style={{ background: "var(--bg-card)" }}>
+        <button
+          onClick={() => setTab("sessions")}
+          className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
+          style={{
+            background: tab === "sessions" ? "var(--bg-hover)" : "transparent",
+            color: tab === "sessions" ? "var(--text)" : "var(--text-muted)",
+          }}
+        >
+          All Sessions ({sessions.length})
+        </button>
+        <button
+          onClick={() => setTab("best")}
+          className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
+          style={{
+            background: tab === "best" ? "var(--bg-hover)" : "transparent",
+            color: tab === "best" ? "var(--text)" : "var(--text-muted)",
+          }}
+        >
+          Best Takes
+        </button>
       </div>
+
+      {tab === "sessions" && (
+        <>
+          <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
+            Click to expand and listen to takes
+          </p>
+          <div className="space-y-3">
+            {sessions.map((s) => (
+              <SessionCard key={s.id} session={s} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {tab === "best" && <BestTakes />}
     </div>
   );
 }

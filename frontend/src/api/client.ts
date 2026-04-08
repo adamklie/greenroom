@@ -146,6 +146,8 @@ export const api = {
   takes: {
     update: (id: number, data: Record<string, unknown>) =>
       patch<Take>(`${BASE}/sessions/takes/${id}`, data),
+    best: (minRating = 1) =>
+      json<Take[]>(`${BASE}/sessions/takes/best?min_rating=${minRating}`),
   },
   roadmap: {
     toggleTask: (id: number, completed: boolean) =>
