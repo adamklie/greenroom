@@ -1,10 +1,12 @@
-.PHONY: dev backend frontend bootstrap install test setup
+.PHONY: dev backend frontend bootstrap install test setup export backup
 
-# First-time setup: install deps + bootstrap database
+# First-time setup: install deps + bootstrap database + hash files
 setup:
 	cd backend && pip install -e ".[dev]"
 	cd frontend && npm install
 	cd backend && python -m app.services.bootstrap
+	$(MAKE) hash
+	$(MAKE) export
 	@echo ""
 	@echo "✓ Setup complete! Run 'make dev' to start Greenroom."
 
@@ -33,6 +35,36 @@ frontend:
 # Bootstrap database from filesystem
 bootstrap:
 	cd backend && python -m app.services.bootstrap
+
+# Export annotations to git-tracked JSON
+export:
+	@cd backend && python -c "\
+	from app.database import SessionLocal; \
+	from app.services.backup import export_annotations; \
+	import json; \
+	from pathlib import Path; \
+	db = SessionLocal(); \
+	result = export_annotations(db); \
+	Path('../exports/annotations_latest.json').write_text(json.dumps(result['data'], indent=2)); \
+	print(f'Exported {len(result[\"data\"][\"songs\"])} songs, {len(result[\"data\"][\"takes\"])} takes to exports/annotations_latest.json'); \
+	db.close()"
+
+# Backup database
+backup:
+	@cd backend && python -c "\
+	from app.services.backup import backup_database; \
+	path = backup_database(); \
+	print(f'Backup: {path}')"
+
+# Hash all audio files for auto-heal
+hash:
+	@cd backend && python -c "\
+	from app.database import SessionLocal; \
+	from app.services.backup import hash_all_files; \
+	db = SessionLocal(); \
+	stats = hash_all_files(db); \
+	print(f'Hashed: {stats[\"newly_hashed\"]} new, {stats[\"already_hashed\"]} cached, {stats[\"missing_files\"]} missing'); \
+	db.close()"
 
 # Run tests
 test:
