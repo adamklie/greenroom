@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { RefreshCw, Check, AlertTriangle, CloudUpload, Music, Shield, HardDrive } from "lucide-react";
+import { RefreshCw, Check, AlertTriangle, CloudUpload, Music, Shield, HardDrive, FolderTree, ArrowRight } from "lucide-react";
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
   ok: <Check size={14} style={{ color: "var(--green)" }} />,
@@ -37,6 +37,123 @@ function StepResult({ step }: { step: Step }) {
       {STATUS_ICON[step.status] || STATUS_ICON.ok}
       <span className="text-sm font-medium w-48">{STEP_LABELS[step.step] || step.step}</span>
       <span className="text-sm" style={{ color: "var(--text-muted)" }}>{detail}</span>
+    </div>
+  );
+}
+
+const TYPE_COLORS: Record<string, string> = { cover: "var(--blue)", original: "var(--green)", idea: "var(--yellow)" };
+
+function ReorganizeSection() {
+  const [showPreview, setShowPreview] = useState(false);
+
+  const { data: preview, refetch } = useQuery({
+    queryKey: ["reorganize-preview"],
+    queryFn: api.reorganize.preview,
+    enabled: showPreview,
+  });
+
+  const executeMut = useMutation({
+    mutationFn: () => api.reorganize.execute(),
+    onSuccess: () => refetch(),
+  });
+
+  return (
+    <div className="rounded-xl p-5 border mb-6" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold flex items-center gap-2">
+          <FolderTree size={18} style={{ color: "var(--accent)" }} />
+          Organize Files
+        </h3>
+        {!showPreview ? (
+          <button onClick={() => setShowPreview(true)}
+            className="px-3 py-1.5 rounded text-sm border hover:opacity-80"
+            style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
+            Preview Changes
+          </button>
+        ) : (
+          <button onClick={() => refetch()}
+            className="px-3 py-1.5 rounded text-sm border hover:opacity-80"
+            style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
+            Refresh
+          </button>
+        )}
+      </div>
+
+      <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
+        Reorganize your files to match the database structure:
+        <strong> Covers/</strong> (by artist), <strong>Originals/</strong> (by title), <strong>Ideas/</strong>
+      </p>
+
+      {!showPreview && (
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+          Click "Preview Changes" to see what would move. Nothing happens until you approve.
+        </p>
+      )}
+
+      {preview && (
+        <div>
+          {/* Summary */}
+          <div className="flex gap-4 mb-4 text-sm">
+            <span style={{ color: "var(--accent)" }}><strong>{preview.total_moves}</strong> files to move</span>
+            <span style={{ color: "var(--green)" }}><strong>{preview.already_organized}</strong> already organized</span>
+            {preview.unlinked_files > 0 && (
+              <span style={{ color: "var(--yellow)" }}><strong>{preview.unlinked_files}</strong> unlinked (classify in Triage first)</span>
+            )}
+            {preview.missing_files > 0 && (
+              <span style={{ color: "var(--red)" }}><strong>{preview.missing_files}</strong> missing</span>
+            )}
+          </div>
+
+          {/* Move list */}
+          {preview.moves.length > 0 && (
+            <>
+              <div className="max-h-64 overflow-y-auto space-y-1 mb-4 rounded-lg p-2" style={{ background: "var(--bg)" }}>
+                {preview.moves.map((m) => (
+                  <div key={m.audio_file_id} className="flex items-center gap-2 text-xs py-1">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: TYPE_COLORS[m.song_type || ""] || "var(--text-muted)" }} />
+                    <span className="truncate flex-1" style={{ color: "var(--text-muted)" }}>
+                      {m.current_path.split("/").pop()}
+                    </span>
+                    <ArrowRight size={12} style={{ color: "var(--text-muted)" }} />
+                    <span className="truncate flex-1 font-medium">
+                      {m.proposed_path}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <button onClick={() => executeMut.mutate()}
+                disabled={executeMut.isPending}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium text-white disabled:opacity-50"
+                style={{ background: "var(--accent)" }}>
+                <FolderTree size={16} />
+                {executeMut.isPending ? "Organizing..." : `Organize ${preview.total_moves} Files`}
+              </button>
+            </>
+          )}
+
+          {preview.moves.length === 0 && (
+            <div className="flex items-center gap-2 text-sm" style={{ color: "var(--green)" }}>
+              <Check size={16} /> All files are already organized!
+            </div>
+          )}
+
+          {executeMut.data && (
+            <div className="mt-3 p-3 rounded-lg" style={{ background: "var(--bg)" }}>
+              <p className="text-sm" style={{ color: "var(--green)" }}>
+                Moved {executeMut.data.moved} files
+              </p>
+              {executeMut.data.errors.length > 0 && (
+                <div className="mt-1">
+                  {executeMut.data.errors.map((e, i) => (
+                    <p key={i} className="text-xs" style={{ color: "var(--red)" }}>{e}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -177,6 +294,9 @@ export default function Sync() {
           )}
         </div>
       )}
+
+      {/* Reorganize files */}
+      <ReorganizeSection />
 
       {/* Storage tips */}
       <div className="rounded-xl p-5 border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>

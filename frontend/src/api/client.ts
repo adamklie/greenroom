@@ -250,6 +250,14 @@ export const api = {
     update: (id: number, data: Record<string, unknown>) =>
       patch<ContentPost>(`${BASE}/content/posts/${id}`, data),
   },
+  reorganize: {
+    preview: () => json<{
+      moves: { audio_file_id: number; song_id: number | null; song_title: string | null; song_artist: string | null; song_type: string | null; current_path: string; proposed_path: string; reason: string }[];
+      already_organized: number; missing_files: number; unlinked_files: number; total_moves: number;
+    }>(`${BASE}/reorganize/preview`),
+    execute: (moveIds?: number[]) =>
+      post<{ moved: number; skipped: number; errors: string[] }>(`${BASE}/reorganize/execute`, { move_ids: moveIds ?? null }),
+  },
   sync: {
     afterPractice: () => post<{
       steps: { step: string; status: string; detail: string | Record<string, number> }[];
