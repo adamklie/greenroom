@@ -28,6 +28,7 @@ const inputStyle = { borderColor: "var(--border)", color: "var(--text)", backgro
 
 export default function ProcessSession() {
   const [directory, setDirectory] = useState("/Users/adamklie/Desktop");
+  const [directFile, setDirectFile] = useState("");
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
   const [clips, setClips] = useState<Clip[]>([]);
   const [duration, setDuration] = useState(0);
@@ -124,15 +125,41 @@ export default function ProcessSession() {
           <FolderOpen size={18} style={{ color: "var(--accent)" }} />
           Step 1: Select Video
         </h3>
+
+        {/* Direct file path input */}
+        <div className="flex gap-2 mb-3">
+          <input value={directFile} onChange={(e) => setDirectFile(e.target.value)}
+            placeholder="Paste full file path, e.g. /Users/adamklie/Desktop/GX020035.MP4"
+            className="flex-1 px-3 py-2 rounded-lg border text-sm outline-none" style={inputStyle}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && directFile.trim()) {
+                setSelectedVideo(directFile.trim()); setClips([]); setDuration(0);
+              }
+            }} />
+          <button onClick={() => { if (directFile.trim()) { setSelectedVideo(directFile.trim()); setClips([]); setDuration(0); } }}
+            disabled={!directFile.trim()}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
+            style={{ background: "var(--accent)" }}>
+            Load File
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>or scan a directory</span>
+          <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+        </div>
+
+        {/* Directory scanner */}
         <div className="flex gap-2 mb-4">
           <input value={directory} onChange={(e) => setDirectory(e.target.value)}
             placeholder="/Volumes/GOPRO/DCIM/100GOPRO"
             className="flex-1 px-3 py-2 rounded-lg border text-sm outline-none" style={inputStyle} />
           <button onClick={() => listMut.mutate()}
             disabled={listMut.isPending}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-white"
-            style={{ background: "var(--accent)" }}>
-            {listMut.isPending ? "Scanning..." : "Scan"}
+            className="px-4 py-2 rounded-lg text-sm font-medium border hover:opacity-80"
+            style={{ borderColor: "var(--border)", color: "var(--text)" }}>
+            {listMut.isPending ? "Scanning..." : "Scan Folder"}
           </button>
         </div>
 
@@ -145,7 +172,7 @@ export default function ProcessSession() {
                   background: selectedVideo === f.path ? "var(--bg-hover)" : "var(--bg)",
                   borderColor: selectedVideo === f.path ? "var(--accent)" : "var(--border)",
                 }}
-                onClick={() => { setSelectedVideo(f.path); setClips([]); setDuration(0); }}>
+                onClick={() => { setSelectedVideo(f.path); setDirectFile(f.path); setClips([]); setDuration(0); }}>
                 <div className="flex items-center gap-2">
                   <Video size={16} style={{ color: "var(--text-muted)" }} />
                   <span className="font-medium text-sm">{f.filename}</span>
@@ -167,6 +194,24 @@ export default function ProcessSession() {
 
         {listMut.data?.files?.length === 0 && (
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>No video files found in that directory.</p>
+        )}
+
+        {/* Show selected file + analyze button when loaded via direct path */}
+        {selectedVideo && !listMut.data?.files?.some(f => f.path === selectedVideo) && (
+          <div className="flex items-center justify-between p-3 rounded-lg border mt-2"
+            style={{ background: "var(--bg-hover)", borderColor: "var(--accent)" }}>
+            <div className="flex items-center gap-2">
+              <Video size={16} style={{ color: "var(--accent)" }} />
+              <span className="font-medium text-sm">{selectedVideo.split("/").pop()}</span>
+            </div>
+            <button onClick={() => analyzeMut.mutate(selectedVideo)}
+              disabled={analyzeMut.isPending}
+              className="flex items-center gap-1 px-3 py-1 rounded text-sm font-medium text-white"
+              style={{ background: "var(--green)" }}>
+              <Scan size={14} />
+              {analyzeMut.isPending ? "Analyzing..." : "Auto-Detect Clips"}
+            </button>
+          </div>
         )}
       </div>
 
