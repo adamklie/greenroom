@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Sun,
   Moon,
+  TrendingUp,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Songs from "./pages/Songs";
@@ -22,6 +23,7 @@ import SetlistBuilder from "./pages/SetlistBuilder";
 import ContentPlanner from "./pages/ContentPlanner";
 import Triage from "./pages/Triage";
 import Discover from "./pages/Discover";
+import Progress from "./pages/Progress";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -30,6 +32,7 @@ const navItems = [
   { to: "/ideas", icon: Lightbulb, label: "Ideas" },
   { to: "/sessions", icon: CalendarDays, label: "Sessions" },
   { to: "/discover", icon: Music, label: "Discover" },
+  { to: "/progress", icon: TrendingUp, label: "Progress" },
   { to: "/setlists", icon: ListMusic, label: "Setlists" },
   { to: "/content", icon: Share2, label: "Content" },
   { to: "/triage", icon: Inbox, label: "Triage" },
@@ -123,6 +126,7 @@ export default function App() {
           <Route path="/ideas" element={<Songs songType="idea" title="Ideas" />} />
           <Route path="/sessions" element={<Sessions />} />
           <Route path="/discover" element={<Discover />} />
+          <Route path="/progress" element={<Progress />} />
           <Route path="/setlists" element={<SetlistBuilder />} />
           <Route path="/content" element={<ContentPlanner />} />
           <Route path="/triage" element={<Triage />} />

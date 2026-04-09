@@ -250,6 +250,23 @@ export const api = {
     update: (id: number, data: Record<string, unknown>) =>
       patch<ContentPost>(`${BASE}/content/posts/${id}`, data),
   },
+  analytics: {
+    practiceFrequency: () => json<{ date: string; takes: number }[]>(`${BASE}/analytics/practice-frequency`),
+    ratingTrends: (songId?: number, dimension = "overall") => {
+      const params = new URLSearchParams({ dimension });
+      if (songId) params.set("song_id", String(songId));
+      return json<{ date: string; avg_rating: number; take_count: number }[]>(`${BASE}/analytics/rating-trends?${params}`);
+    },
+    skillRadar: () => json<Record<string, { average: number | null; count: number }>>(`${BASE}/analytics/skill-radar`),
+    songProgress: () => json<{
+      song_id: number; title: string; type: string; status: string;
+      take_count: number; last_practiced: string | null; avg_rating: number | null;
+    }[]>(`${BASE}/analytics/song-progress`),
+    sessionSummary: () => json<{
+      session_id: number; date: string; take_count: number; matched_takes: number; avg_overall: number | null;
+    }[]>(`${BASE}/analytics/session-summary`),
+    statusFunnel: () => json<{ status: string; count: number }[]>(`${BASE}/analytics/status-funnel`),
+  },
   appleMusic: {
     import: () => post<{
       total_tracks: number; newly_imported: number; updated: number;
