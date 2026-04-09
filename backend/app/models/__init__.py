@@ -8,6 +8,7 @@ from app.models.setlist import Setlist, SetlistItem
 from app.models.tag import Tag, song_tags, take_tags, PREDEFINED_TAGS
 from app.models.lyrics_version import LyricsVersion
 from app.models.triage import TriageItem
+from app.services.apple_music import ListeningHistory
 
 __all__ = [
     "Song",

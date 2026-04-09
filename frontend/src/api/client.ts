@@ -250,6 +250,21 @@ export const api = {
     update: (id: number, data: Record<string, unknown>) =>
       patch<ContentPost>(`${BASE}/content/posts/${id}`, data),
   },
+  appleMusic: {
+    import: () => post<{
+      total_tracks: number; newly_imported: number; updated: number;
+      linked_to_songs: number; own_recordings: number; exported_from_music_app: number;
+    }>(`${BASE}/apple-music/import`, {}),
+    stats: () => json<{
+      imported: boolean; total_tracks?: number; total_plays?: number;
+      top_artists?: { artist: string; plays: number; tracks: number }[];
+      top_genres?: { genre: string; plays: number }[];
+    }>(`${BASE}/apple-music/stats`),
+    suggestions: (limit = 20) =>
+      json<{ title: string; artist: string; play_count: number; genre: string; duration_seconds: number }[]>(
+        `${BASE}/apple-music/suggestions?limit=${limit}`
+      ),
+  },
   recommendations: {
     list: () => json<{
       category: string; priority: string; title: string; detail: string;

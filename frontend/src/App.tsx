@@ -7,6 +7,7 @@ import {
   PenTool,
   Lightbulb,
   CalendarDays,
+  Music,
   ListMusic,
   Share2,
   Inbox,
@@ -20,6 +21,7 @@ import Sessions from "./pages/Sessions";
 import SetlistBuilder from "./pages/SetlistBuilder";
 import ContentPlanner from "./pages/ContentPlanner";
 import Triage from "./pages/Triage";
+import Discover from "./pages/Discover";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -27,6 +29,7 @@ const navItems = [
   { to: "/originals", icon: PenTool, label: "Originals" },
   { to: "/ideas", icon: Lightbulb, label: "Ideas" },
   { to: "/sessions", icon: CalendarDays, label: "Sessions" },
+  { to: "/discover", icon: Music, label: "Discover" },
   { to: "/setlists", icon: ListMusic, label: "Setlists" },
   { to: "/content", icon: Share2, label: "Content" },
   { to: "/triage", icon: Inbox, label: "Triage" },
@@ -119,6 +122,7 @@ export default function App() {
           <Route path="/originals" element={<Songs songType="original" title="Originals" />} />
           <Route path="/ideas" element={<Songs songType="idea" title="Ideas" />} />
           <Route path="/sessions" element={<Sessions />} />
+          <Route path="/discover" element={<Discover />} />
           <Route path="/setlists" element={<SetlistBuilder />} />
           <Route path="/content" element={<ContentPlanner />} />
           <Route path="/triage" element={<Triage />} />
