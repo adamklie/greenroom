@@ -133,6 +133,7 @@ export default function ProcessSession() {
   const [dropDb, setDropDb] = useState(6);
   const [minGapDuration, setMinGapDuration] = useState(2);
   const [minClipDuration, setMinClipDuration] = useState(30);
+  const [showHelp, setShowHelp] = useState(false);
 
   const { data: songs = [] } = useQuery({ queryKey: ["songs-all"], queryFn: () => api.songs.list() });
   useQuery({ queryKey: ["tags"], queryFn: () => api.tags.list() });
@@ -287,37 +288,68 @@ export default function ProcessSession() {
           </h3>
 
           {/* Detection tuning */}
-          <div className="flex gap-4 items-end mb-4 p-3 rounded-lg" style={{ background: "var(--bg)" }}>
-            <div>
-              <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>
-                Volume drop ({dropDb} dB below median)
-              </label>
-              <input type="range" min={2} max={20} value={dropDb}
-                onChange={(e) => setDropDb(Number(e.target.value))} className="w-32" />
-              <div className="flex justify-between text-xs" style={{ color: "var(--text-muted)" }}>
-                <span>Sensitive</span><span>Strict</span>
+          <div className="mb-4 p-4 rounded-lg" style={{ background: "var(--bg)" }}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-medium">Detection Settings</span>
+              <div className="flex items-center gap-3">
+                {analyzeMut.data && (
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    Room level: {analyzeMut.data.median_db}dB | Threshold: {analyzeMut.data.threshold_db}dB | {clips.length} clips found
+                  </span>
+                )}
+                <button onClick={() => setShowHelp(!showHelp)} className="text-xs underline" style={{ color: "var(--accent)" }}>
+                  {showHelp ? "Hide tips" : "How to tune"}
+                </button>
               </div>
             </div>
-            <div>
-              <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Min gap ({minGapDuration}s)</label>
-              <input type="range" min={1} max={15} step={0.5} value={minGapDuration}
-                onChange={(e) => setMinGapDuration(Number(e.target.value))} className="w-28" />
-            </div>
-            <div>
-              <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Min clip ({minClipDuration}s)</label>
-              <input type="range" min={5} max={120} step={5} value={minClipDuration}
-                onChange={(e) => setMinClipDuration(Number(e.target.value))} className="w-28" />
-            </div>
-            <button onClick={() => analyzeMut.mutate(selectedVideo)} disabled={analyzeMut.isPending}
-              className="flex items-center gap-1 px-3 py-1.5 rounded text-sm font-medium text-white"
-              style={{ background: "var(--green)" }}>
-              <Scan size={14} /> {analyzeMut.isPending ? "Re-analyzing..." : "Re-Analyze"}
-            </button>
-            {analyzeMut.data && (
-              <span className="self-center text-xs" style={{ color: "var(--text-muted)" }}>
-                Median: {analyzeMut.data.median_db}dB, Threshold: {analyzeMut.data.threshold_db}dB
-              </span>
+
+            {showHelp && (
+              <div className="mb-4 p-3 rounded-lg text-xs space-y-2" style={{ background: "var(--bg-card)", color: "var(--text-muted)" }}>
+                <p><strong style={{ color: "var(--text)" }}>How it works:</strong> The analyzer measures volume across the whole video, finds the typical "playing" level (median), then looks for moments where volume drops below that level. Those drops are the gaps between songs.</p>
+                <p><strong style={{ color: "var(--text)" }}>Volume drop:</strong> How much quieter than the median a section needs to be to count as a "gap." <strong>Start at 4-6 dB.</strong> If you get one big clip, lower it (3-4). If you get too many clips, raise it (8-10). The waveform shows gray bars where gaps were detected.</p>
+                <p><strong style={{ color: "var(--text)" }}>Min gap:</strong> How many seconds of quiet before it counts as a real gap (vs. a brief pause within a song). <strong>2-3s works for most practice sessions.</strong> Raise to 5-8s if short pauses between song sections are being detected as gaps.</p>
+                <p><strong style={{ color: "var(--text)" }}>Min clip:</strong> Ignore detected clips shorter than this. <strong>30s filters out tuning and noodling.</strong> Lower to 15s if you play short songs. Raise to 60s if you're getting lots of small false clips.</p>
+                <p><strong style={{ color: "var(--text)" }}>Tip:</strong> Click the waveform to seek the video to that point. Purple regions are detected clips, gray regions are gaps. The red dashed line is the threshold. Adjust sliders and hit Re-Analyze to iterate quickly.</p>
+              </div>
             )}
+
+            <div className="flex gap-4 items-end flex-wrap">
+              <div>
+                <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>
+                  Volume drop: <strong>{dropDb} dB</strong> below median
+                </label>
+                <input type="range" min={2} max={20} value={dropDb}
+                  onChange={(e) => setDropDb(Number(e.target.value))} className="w-36" />
+                <div className="flex justify-between text-xs" style={{ color: "var(--text-muted)" }}>
+                  <span>More clips</span><span>Fewer clips</span>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>
+                  Min gap: <strong>{minGapDuration}s</strong>
+                </label>
+                <input type="range" min={1} max={15} step={0.5} value={minGapDuration}
+                  onChange={(e) => setMinGapDuration(Number(e.target.value))} className="w-28" />
+                <div className="flex justify-between text-xs" style={{ color: "var(--text-muted)" }}>
+                  <span>Short</span><span>Long</span>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>
+                  Min clip: <strong>{minClipDuration}s</strong>
+                </label>
+                <input type="range" min={5} max={180} step={5} value={minClipDuration}
+                  onChange={(e) => setMinClipDuration(Number(e.target.value))} className="w-28" />
+                <div className="flex justify-between text-xs" style={{ color: "var(--text-muted)" }}>
+                  <span>Short</span><span>Long</span>
+                </div>
+              </div>
+              <button onClick={() => analyzeMut.mutate(selectedVideo!)} disabled={analyzeMut.isPending}
+                className="flex items-center gap-1 px-4 py-2 rounded text-sm font-medium text-white"
+                style={{ background: "var(--green)" }}>
+                <Scan size={14} /> {analyzeMut.isPending ? "Analyzing..." : "Re-Analyze"}
+              </button>
+            </div>
           </div>
 
           {/* Energy waveform */}
