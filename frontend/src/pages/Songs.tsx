@@ -32,6 +32,34 @@ function StatusBadge({ status, onClick }: { status: string; onClick?: (e: React.
   );
 }
 
+const TYPE_OPTIONS = ["cover", "original", "idea"];
+const ALL_STATUSES = [...new Set([
+  ...STATUSES_BY_TYPE.cover, ...STATUSES_BY_TYPE.original, ...STATUSES_BY_TYPE.idea,
+])];
+const TUNING_OPTIONS = ["standard", "drop_d", "open_g", "open_d", "half_step_down", "full_step_down", "dadgad", "other"];
+const KEY_OPTIONS = ["", "C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B",
+  "Am", "A#m", "Bbm", "Bm", "Cm", "C#m", "Dm", "D#m", "Ebm", "Em", "Fm", "F#m", "Gm", "G#m"];
+
+function EditableField({ label, value, onChange, type = "text", options, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; type?: string; options?: string[]; placeholder?: string;
+}) {
+  const style = { borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" };
+  return (
+    <div>
+      <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>{label}</label>
+      {options ? (
+        <select value={value} onChange={(e) => onChange(e.target.value)}
+          className="w-full px-2 py-1.5 rounded border text-sm outline-none" style={style}>
+          {options.map((o) => <option key={o} value={o}>{o || "—"}</option>)}
+        </select>
+      ) : (
+        <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+          className="w-full px-2 py-1.5 rounded border text-sm outline-none" style={style} />
+      )}
+    </div>
+  );
+}
+
 function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => void }) {
   const { data: song } = useQuery({
     queryKey: ["song", songId],
@@ -40,50 +68,113 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
   const queryClient = useQueryClient();
   const [editingLyrics, setEditingLyrics] = useState(false);
   const [lyricsText, setLyricsText] = useState("");
+  const [newTag, setNewTag] = useState("");
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["song", songId] });
+    queryClient.invalidateQueries({ queryKey: ["songs"] });
+  };
+
+  const updateSong = useMutation({
+    mutationFn: (data: Record<string, unknown>) => api.songs.update(songId, data),
+    onSuccess: invalidate,
+  });
 
   const saveLyrics = useMutation({
     mutationFn: () => api.songs.updateLyrics(songId, lyricsText),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["song", songId] });
-      setEditingLyrics(false);
-    },
+    onSuccess: () => { invalidate(); setEditingLyrics(false); },
+  });
+
+  const addTag = useMutation({
+    mutationFn: (name: string) => api.songs.addTag(songId, name),
+    onSuccess: invalidate,
+  });
+
+  const removeTag = useMutation({
+    mutationFn: (name: string) => api.songs.removeTag(songId, name),
+    onSuccess: invalidate,
   });
 
   if (!song) return null;
 
-  const inputStyle = { borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" };
+  const save = (field: string, value: string | number | null) => {
+    updateSong.mutate({ [field]: value === "" ? null : value });
+  };
 
   return (
     <div className="fixed inset-y-0 right-0 w-[480px] border-l shadow-2xl z-50 overflow-y-auto p-6"
       style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
       <div className="flex justify-between items-start mb-4">
-        <div>
-          <h3 className="text-lg font-bold">{song.title}</h3>
-          {song.artist && <p className="text-sm" style={{ color: "var(--text-muted)" }}>{song.artist}</p>}
+        <button onClick={onClose} className="p-1 rounded hover:bg-white/10 ml-auto"><X size={18} /></button>
+      </div>
+
+      {/* Editable title + artist */}
+      <div className="mb-4">
+        <input onBlur={(e) => save("title", e.target.value)}
+          defaultValue={song.title}
+          className="text-lg font-bold bg-transparent border-b outline-none w-full pb-1 mb-1"
+          style={{ borderColor: "var(--border)", color: "var(--text)" }}
+          key={`title-${song.id}-${song.title}`} />
+        <input defaultValue={song.artist || ""} placeholder="Artist (for covers)"
+          onBlur={(e) => save("artist", e.target.value)}
+          className="text-sm bg-transparent border-b outline-none w-full pb-1"
+          style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}
+          key={`artist-${song.id}-${song.artist}`} />
+      </div>
+
+      {/* Type + Status + Project (editable dropdowns) */}
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        <EditableField label="Type" value={song.type} options={TYPE_OPTIONS}
+          onChange={(v) => save("type", v)} />
+        <EditableField label="Status" value={song.status}
+          options={STATUSES_BY_TYPE[song.type] || ALL_STATUSES}
+          onChange={(v) => save("status", v)} />
+        <EditableField label="Project" value={song.project}
+          options={PROJECTS.filter(p => p !== "all")}
+          onChange={(v) => save("project", v)} />
+      </div>
+
+      {/* Structured music fields (editable) */}
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <EditableField label="Key" value={song.key || ""} options={KEY_OPTIONS}
+          onChange={(v) => save("key", v)} />
+        <EditableField label="Tempo (BPM)" value={song.tempo_bpm?.toString() || ""} type="number"
+          placeholder="120"
+          onChange={(v) => save("tempo_bpm", v ? parseInt(v) : null)} />
+        <EditableField label="Tuning" value={song.tuning || "standard"} options={TUNING_OPTIONS}
+          onChange={(v) => save("tuning", v)} />
+        <EditableField label="Vibe" value={song.vibe || ""} placeholder="upbeat, melancholy..."
+          onChange={(v) => save("vibe", v)} />
+      </div>
+
+      {/* Tags (add/remove) */}
+      <div className="mb-4">
+        <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Tags</label>
+        <div className="flex flex-wrap gap-1 mb-2">
+          {song.tags.map((t) => (
+            <span key={t} className="px-2 py-0.5 rounded-full text-xs flex items-center gap-1 cursor-pointer hover:opacity-70"
+              style={{ background: "var(--bg-hover)", color: "var(--accent)" }}
+              onClick={() => removeTag.mutate(t)}>
+              <Tag size={10} />{t} <X size={10} />
+            </span>
+          ))}
+          <form onSubmit={(e) => { e.preventDefault(); if (newTag.trim()) { addTag.mutate(newTag.trim()); setNewTag(""); } }}
+            className="inline-flex">
+            <input value={newTag} onChange={(e) => setNewTag(e.target.value)} placeholder="+ tag"
+              className="px-2 py-0.5 rounded text-xs bg-transparent border outline-none w-20"
+              style={{ borderColor: "var(--border)", color: "var(--text)" }} />
+          </form>
         </div>
-        <button onClick={onClose} className="p-1 rounded hover:bg-white/10"><X size={18} /></button>
       </div>
 
-      {/* Type + Status + Tags */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        <StatusBadge status={song.status} />
-        <span className="px-2 py-0.5 rounded-full text-xs border capitalize" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
-          {song.type}
-        </span>
-        {song.tags.map((t) => (
-          <span key={t} className="px-2 py-0.5 rounded-full text-xs flex items-center gap-1"
-            style={{ background: "var(--bg-hover)", color: "var(--accent)" }}>
-            <Tag size={10} />{t}
-          </span>
-        ))}
-      </div>
-
-      {/* Structured fields */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        {song.key && <Field label="Key" value={song.key} />}
-        {song.tempo_bpm && <Field label="Tempo" value={`${song.tempo_bpm} BPM`} />}
-        {song.tuning && song.tuning !== "standard" && <Field label="Tuning" value={song.tuning} />}
-        {song.vibe && <Field label="Vibe" value={song.vibe} />}
+      {/* Notes (editable) */}
+      <div className="mb-4">
+        <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Notes</label>
+        <textarea defaultValue={song.notes || ""} placeholder="Add notes..."
+          onBlur={(e) => save("notes", e.target.value)}
+          rows={2} className="w-full px-2 py-1.5 rounded border text-sm outline-none resize-y"
+          style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" }}
+          key={`notes-${song.id}-${song.notes}`} />
       </div>
 
       {/* Reference recording (covers) */}
@@ -111,7 +202,7 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
           <div>
             <textarea value={lyricsText} onChange={(e) => setLyricsText(e.target.value)}
               rows={10} className="w-full px-3 py-2 rounded-lg border text-sm outline-none resize-y font-mono"
-              style={inputStyle} />
+              style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" }} />
             <div className="flex gap-2 mt-2">
               <button onClick={() => saveLyrics.mutate()}
                 className="px-3 py-1 rounded text-sm text-white" style={{ background: "var(--accent)" }}>Save</button>
@@ -126,6 +217,11 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
           </pre>
         ) : (
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>No lyrics yet</p>
+        )}
+        {song.lyrics_versions.length > 0 && (
+          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+            {song.lyrics_versions.length} previous version{song.lyrics_versions.length > 1 ? "s" : ""}
+          </p>
         )}
       </div>
 
@@ -166,22 +262,6 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
           ))}
         </div>
       )}
-
-      {song.notes && (
-        <div className="mt-4">
-          <h4 className="text-sm font-semibold mb-1">Notes</h4>
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>{song.notes}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg p-2 border" style={{ background: "var(--bg)", borderColor: "var(--border)" }}>
-      <div className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</div>
-      <div className="text-sm font-medium">{value}</div>
     </div>
   );
 }
