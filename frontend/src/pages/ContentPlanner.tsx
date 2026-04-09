@@ -164,7 +164,7 @@ export default function ContentPlanner() {
 
   const { data: songs = [] } = useQuery({
     queryKey: ["repertoire"],
-    queryFn: () => api.repertoire.list(),
+    queryFn: () => api.songs.list(),
   });
 
   if (isLoading) return <div style={{ color: "var(--text-muted)" }}>Loading...</div>;

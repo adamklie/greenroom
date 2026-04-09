@@ -22,51 +22,51 @@ function post<T>(url: string, body: Record<string, unknown>): Promise<T> {
   });
 }
 
+function put<T>(url: string, body: Record<string, unknown>): Promise<T> {
+  return json(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+// --- Types ---
+
 export interface DashboardStats {
   total_songs: number;
   total_sessions: number;
   total_takes: number;
   total_audio_files: number;
+  songs_by_type: Record<string, number>;
   songs_by_status: Record<string, number>;
   songs_by_project: Record<string, number>;
-  gig_ready_songs: number;
   unrated_takes: number;
-}
-
-export interface RoadmapTask {
-  id: number;
-  phase: number;
-  phase_title: string | null;
-  category: string | null;
-  task_text: string;
-  completed: boolean;
-  sort_order: number;
-}
-
-export interface RoadmapPhase {
-  phase: number;
-  phase_title: string;
-  tasks: RoadmapTask[];
-  total: number;
-  completed: number;
+  triage_pending: number;
 }
 
 export interface DashboardResponse {
   stats: DashboardStats;
-  roadmap: RoadmapPhase[];
 }
 
 export interface Song {
   id: number;
   title: string;
   artist: string | null;
+  type: string; // cover, original, idea
   project: string;
-  is_original: boolean;
   status: string;
-  times_practiced: number;
+  key: string | null;
+  tempo_bpm: number | null;
+  tuning: string | null;
+  vibe: string | null;
+  lyrics: string | null;
   notes: string | null;
+  times_practiced: number;
+  reference_audio_file_id: number | null;
+  promoted_from_id: number | null;
   has_audio: boolean;
   take_count: number;
+  tags: string[];
 }
 
 export interface Take {
@@ -79,10 +79,17 @@ export interface Take {
   end_time: string | null;
   video_path: string | null;
   audio_path: string | null;
-  rating: number | null;
+  rating_overall: number | null;
+  rating_vocals: number | null;
+  rating_guitar: number | null;
+  rating_drums: number | null;
+  rating_tone: number | null;
+  rating_timing: number | null;
+  rating_energy: number | null;
   notes: string | null;
   song_title: string | null;
   session_date: string | null;
+  tags: string[];
 }
 
 export interface AudioFile {
@@ -91,12 +98,22 @@ export interface AudioFile {
   file_path: string;
   file_type: string | null;
   source: string | null;
+  role: string | null;
   version: string | null;
+}
+
+export interface LyricsVersion {
+  id: number;
+  song_id: number;
+  version_number: number;
+  lyrics_text: string;
+  change_note: string | null;
 }
 
 export interface SongDetail extends Song {
   takes: Take[];
   audio_files: AudioFile[];
+  lyrics_versions: LyricsVersion[];
 }
 
 export interface Session {
@@ -110,6 +127,25 @@ export interface Session {
 
 export interface SessionDetail extends Session {
   takes: Take[];
+}
+
+export interface TagItem {
+  id: number;
+  name: string;
+  category: string;
+  color: string | null;
+  is_predefined: boolean;
+}
+
+export interface TriageItem {
+  id: number;
+  file_path: string;
+  file_type: string | null;
+  discovered_at: string | null;
+  suggested_song_id: number | null;
+  suggested_type: string | null;
+  suggested_source: string | null;
+  status: string;
 }
 
 export interface ContentPost {
@@ -147,18 +183,32 @@ export interface Setlist {
   song_count: number;
 }
 
+// --- API ---
+
 export const api = {
   dashboard: {
     get: () => json<DashboardResponse>(`${BASE}/dashboard`),
   },
-  repertoire: {
+  songs: {
     list: (params?: Record<string, string>) => {
       const qs = params ? "?" + new URLSearchParams(params).toString() : "";
-      return json<Song[]>(`${BASE}/repertoire${qs}`);
+      return json<Song[]>(`${BASE}/songs${qs}`);
     },
-    get: (id: number) => json<SongDetail>(`${BASE}/repertoire/${id}`),
+    get: (id: number) => json<SongDetail>(`${BASE}/songs/${id}`),
+    create: (data: Record<string, unknown>) => post<Song>(`${BASE}/songs`, data),
     update: (id: number, data: Record<string, unknown>) =>
-      patch<Song>(`${BASE}/repertoire/${id}`, data),
+      patch<Song>(`${BASE}/songs/${id}`, data),
+    delete: (id: number) =>
+      json<{ ok: boolean }>(`${BASE}/songs/${id}`, { method: "DELETE" }),
+    updateLyrics: (id: number, lyrics: string, changeNote?: string) =>
+      put<Song>(`${BASE}/songs/${id}/lyrics`, { lyrics, change_note: changeNote }),
+    lyricsVersions: (id: number) =>
+      json<LyricsVersion[]>(`${BASE}/songs/${id}/lyrics/versions`),
+    addTag: (id: number, tagName: string) =>
+      post<{ ok: boolean; tags: string[] }>(`${BASE}/songs/${id}/tags?tag_name=${encodeURIComponent(tagName)}`, {}),
+    removeTag: (id: number, tagName: string) =>
+      json<{ ok: boolean; tags: string[] }>(`${BASE}/songs/${id}/tags/${encodeURIComponent(tagName)}`, { method: "DELETE" }),
+    promote: (id: number) => post<Song>(`${BASE}/songs/${id}/promote`, {}),
   },
   sessions: {
     list: () => json<Session[]>(`${BASE}/sessions`),
@@ -167,19 +217,25 @@ export const api = {
   takes: {
     update: (id: number, data: Record<string, unknown>) =>
       patch<Take>(`${BASE}/sessions/takes/${id}`, data),
-    best: (minRating = 1) =>
-      json<Take[]>(`${BASE}/sessions/takes/best?min_rating=${minRating}`),
+    best: (minRating = 1, dimension = "overall") =>
+      json<Take[]>(`${BASE}/sessions/takes/best?min_rating=${minRating}&dimension=${dimension}`),
+    addTag: (id: number, tagName: string) =>
+      post<{ ok: boolean; tags: string[] }>(`${BASE}/sessions/takes/${id}/tags?tag_name=${encodeURIComponent(tagName)}`, {}),
+    removeTag: (id: number, tagName: string) =>
+      json<{ ok: boolean; tags: string[] }>(`${BASE}/sessions/takes/${id}/tags/${encodeURIComponent(tagName)}`, { method: "DELETE" }),
   },
-  roadmap: {
-    toggleTask: (id: number, completed: boolean) =>
-      patch<RoadmapTask>(`${BASE}/dashboard/roadmap/${id}`, { completed }),
+  tags: {
+    list: (category?: string) => {
+      const qs = category ? `?category=${category}` : "";
+      return json<TagItem[]>(`${BASE}/tags${qs}`);
+    },
+    create: (data: Record<string, unknown>) => post<TagItem>(`${BASE}/tags`, data),
   },
-  content: {
-    list: () => json<ContentPost[]>(`${BASE}/content/posts`),
-    create: (data: Record<string, unknown>) =>
-      post<ContentPost>(`${BASE}/content/posts`, data),
-    update: (id: number, data: Record<string, unknown>) =>
-      patch<ContentPost>(`${BASE}/content/posts/${id}`, data),
+  triage: {
+    list: (status = "pending") => json<TriageItem[]>(`${BASE}/triage?status=${status}`),
+    classify: (id: number, data: Record<string, unknown>) =>
+      patch<TriageItem>(`${BASE}/triage/${id}`, data),
+    skip: (id: number) => post<TriageItem>(`${BASE}/triage/${id}/skip`, {}),
   },
   setlists: {
     list: () => json<Setlist[]>(`${BASE}/setlists`),
@@ -188,8 +244,15 @@ export const api = {
     update: (id: number, data: Record<string, unknown>) => patch<Setlist>(`${BASE}/setlists/${id}`, data),
     delete: (id: number) => json<{ ok: boolean }>(`${BASE}/setlists/${id}`, { method: "DELETE" }),
   },
+  content: {
+    list: () => json<ContentPost[]>(`${BASE}/content/posts`),
+    create: (data: Record<string, unknown>) => post<ContentPost>(`${BASE}/content/posts`, data),
+    update: (id: number, data: Record<string, unknown>) =>
+      patch<ContentPost>(`${BASE}/content/posts/${id}`, data),
+  },
   media: {
     takeAudioUrl: (takeId: number) => `${BASE}/media/take/${takeId}/audio`,
+    takeVideoUrl: (takeId: number) => `${BASE}/media/take/${takeId}/video`,
     audioFileUrl: (audioFileId: number) => `${BASE}/media/audio/${audioFileId}`,
   },
 };

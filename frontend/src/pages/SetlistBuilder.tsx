@@ -246,7 +246,7 @@ export default function SetlistBuilder() {
 
   const { data: songs = [] } = useQuery({
     queryKey: ["repertoire"],
-    queryFn: () => api.repertoire.list(),
+    queryFn: () => api.songs.list(),
   });
 
   const createMut = useMutation({
