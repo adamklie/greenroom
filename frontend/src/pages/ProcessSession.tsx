@@ -93,6 +93,10 @@ export default function ProcessSession() {
   const [directFile, setDirectFile] = useState("");
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
   const [showBrowser, setShowBrowser] = useState(false);
+  // Silence detection tuning — band practice rooms are noisy!
+  const [silenceThreshold, setSilenceThreshold] = useState(-40); // dB, higher = more sensitive
+  const [minSilenceDuration, setMinSilenceDuration] = useState(2.0); // seconds
+  const [minClipDuration, setMinClipDuration] = useState(30); // seconds
   const [clips, setClips] = useState<Clip[]>([]);
   const [duration, setDuration] = useState(0);
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split("T")[0]);
@@ -109,7 +113,11 @@ export default function ProcessSession() {
   });
 
   const analyzeMut = useMutation({
-    mutationFn: (path: string) => api.gopro.analyze(path),
+    mutationFn: (path: string) => api.gopro.analyze(path, {
+      threshold: silenceThreshold,
+      minSilence: minSilenceDuration,
+      minClip: minClipDuration,
+    }),
     onSuccess: (data) => {
       setDuration(data.duration_seconds);
       setClips(data.proposed_clips.map((c) => ({
@@ -304,6 +312,44 @@ export default function ProcessSession() {
             <Scissors size={18} style={{ color: "var(--blue)" }} />
             Step 2: Review & Mark Clips
           </h3>
+
+          {/* Detection tuning */}
+          <div className="flex gap-4 items-end mb-4 p-3 rounded-lg" style={{ background: "var(--bg)" }}>
+            <div>
+              <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>
+                Noise threshold ({silenceThreshold} dB)
+              </label>
+              <input type="range" min={-60} max={-10} value={silenceThreshold}
+                onChange={(e) => setSilenceThreshold(Number(e.target.value))}
+                className="w-32" />
+              <div className="flex justify-between text-xs" style={{ color: "var(--text-muted)" }}>
+                <span>Quiet</span><span>Loud</span>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>
+                Min silence ({minSilenceDuration}s)
+              </label>
+              <input type="range" min={0.5} max={10} step={0.5} value={minSilenceDuration}
+                onChange={(e) => setMinSilenceDuration(Number(e.target.value))}
+                className="w-28" />
+            </div>
+            <div>
+              <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>
+                Min clip ({minClipDuration}s)
+              </label>
+              <input type="range" min={5} max={120} step={5} value={minClipDuration}
+                onChange={(e) => setMinClipDuration(Number(e.target.value))}
+                className="w-28" />
+            </div>
+            <button onClick={() => analyzeMut.mutate(selectedVideo!)}
+              disabled={analyzeMut.isPending}
+              className="flex items-center gap-1 px-3 py-1.5 rounded text-sm font-medium text-white"
+              style={{ background: "var(--green)" }}>
+              <Scan size={14} />
+              {analyzeMut.isPending ? "Analyzing..." : "Re-Analyze"}
+            </button>
+          </div>
 
           {/* Video player */}
           <video ref={videoRef} controls className="w-full rounded-lg mb-4" style={{ maxHeight: 400 }}>
