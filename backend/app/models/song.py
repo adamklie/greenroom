@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -12,15 +12,52 @@ class Song(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String, nullable=False)
     artist: Mapped[str | None] = mapped_column(String, nullable=True)
-    project: Mapped[str] = mapped_column(String, nullable=False)
-    is_original: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Three pillars: cover, original, idea
+    type: Mapped[str] = mapped_column(String, nullable=False, default="cover")
+
+    # Status progression
     status: Mapped[str] = mapped_column(String, default="idea")
+
+    # Project / band context
+    project: Mapped[str] = mapped_column(String, nullable=False)
+
+    # Structured music fields
+    key: Mapped[str | None] = mapped_column(String, nullable=True)
+    tempo_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tuning: Mapped[str | None] = mapped_column(String, nullable=True, default="standard")
+    vibe: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # Lyrics (current version)
+    lyrics: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Reference recording for covers
+    reference_audio_file_id: Mapped[int | None] = mapped_column(
+        ForeignKey("audio_files.id", use_alter=True), nullable=True
+    )
+
+    # If an idea was promoted to an original
+    promoted_from_id: Mapped[int | None] = mapped_column(
+        ForeignKey("songs.id"), nullable=True
+    )
+
+    # Legacy / carry-forward
+    is_original: Mapped[bool] = mapped_column(Boolean, default=False)
     times_practiced: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
 
     takes: Mapped[list["Take"]] = relationship(back_populates="song")  # noqa: F821
-    audio_files: Mapped[list["AudioFile"]] = relationship(back_populates="song")  # noqa: F821
+    audio_files: Mapped[list["AudioFile"]] = relationship(  # noqa: F821
+        back_populates="song", foreign_keys="AudioFile.song_id"
+    )
+    lyrics_versions: Mapped[list["LyricsVersion"]] = relationship(  # noqa: F821
+        back_populates="song", cascade="all, delete-orphan"
+    )
+    tags: Mapped[list["Tag"]] = relationship(  # noqa: F821
+        secondary="song_tags", back_populates="songs"
+    )

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
-from app.routers import bootstrap_router, content, dashboard, media, repertoire, sessions, setlists
+from app.routers import bootstrap_router, content, dashboard, media, sessions, setlists, songs, tags, triage
 
 
 @asynccontextmanager
@@ -13,7 +13,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Greenroom", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Greenroom", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,8 +24,10 @@ app.add_middleware(
 )
 
 app.include_router(dashboard.router)
-app.include_router(repertoire.router)
+app.include_router(songs.router)
 app.include_router(sessions.router)
+app.include_router(tags.router)
+app.include_router(triage.router)
 app.include_router(media.router)
 app.include_router(content.router)
 app.include_router(setlists.router)
@@ -34,4 +36,4 @@ app.include_router(bootstrap_router.router)
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "app": "greenroom"}
+    return {"status": "ok", "app": "greenroom", "version": "0.2.0"}

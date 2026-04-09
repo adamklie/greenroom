@@ -15,15 +15,28 @@ class TakeRead(BaseModel):
     end_time: str | None = None
     video_path: str | None = None
     audio_path: str | None = None
-    rating: int | None = None
+    rating_overall: int | None = None
+    rating_vocals: int | None = None
+    rating_guitar: int | None = None
+    rating_drums: int | None = None
+    rating_tone: int | None = None
+    rating_timing: int | None = None
+    rating_energy: int | None = None
     notes: str | None = None
     created_at: datetime | None = None
     song_title: str | None = None
     session_date: str | None = None
+    tags: list[str] = []
 
     model_config = {"from_attributes": True}
 
 
 class TakeUpdate(BaseModel):
-    rating: int | None = None
+    rating_overall: int | None = None
+    rating_vocals: int | None = None
+    rating_guitar: int | None = None
+    rating_drums: int | None = None
+    rating_tone: int | None = None
+    rating_timing: int | None = None
+    rating_energy: int | None = None
     notes: str | None = None

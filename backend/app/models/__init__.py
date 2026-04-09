@@ -2,19 +2,26 @@ from app.models.song import Song
 from app.models.session import PracticeSession
 from app.models.take import Take
 from app.models.audio_file import AudioFile
-from app.models.roadmap import RoadmapTask
 from app.models.content import ContentPost
 from app.models.activity import ActivityLog
 from app.models.setlist import Setlist, SetlistItem
+from app.models.tag import Tag, song_tags, take_tags, PREDEFINED_TAGS
+from app.models.lyrics_version import LyricsVersion
+from app.models.triage import TriageItem
 
 __all__ = [
     "Song",
     "PracticeSession",
     "Take",
     "AudioFile",
-    "RoadmapTask",
     "ContentPost",
     "ActivityLog",
     "Setlist",
     "SetlistItem",
+    "Tag",
+    "song_tags",
+    "take_tags",
+    "PREDEFINED_TAGS",
+    "LyricsVersion",
+    "TriageItem",
 ]

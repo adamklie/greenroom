@@ -18,9 +18,21 @@ class Take(Base):
     end_time: Mapped[str | None] = mapped_column(String, nullable=True)
     video_path: Mapped[str | None] = mapped_column(String, nullable=True)
     audio_path: Mapped[str | None] = mapped_column(String, nullable=True)
-    rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Multi-dimensional ratings (all 1-5, nullable)
+    rating_overall: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_vocals: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_guitar: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_drums: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_tone: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_timing: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_energy: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     session: Mapped["PracticeSession"] = relationship(back_populates="takes")  # noqa: F821
     song: Mapped["Song | None"] = relationship(back_populates="takes")  # noqa: F821
+    tags: Mapped[list["Tag"]] = relationship(  # noqa: F821
+        secondary="take_tags", back_populates="takes"
+    )

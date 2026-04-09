@@ -8,18 +8,20 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session as DBSession
 
 from app.config import settings
 from app.database import Base, SessionLocal, engine
-from app.models import AudioFile, PracticeSession, RoadmapTask, Song, Take
-from app.services.markdown_parser import parse_repertoire, parse_roadmap
+from app.models import (
+    AudioFile, PracticeSession, Song, Tag, Take, TriageItem,
+    PREDEFINED_TAGS,
+)
+from app.services.markdown_parser import parse_repertoire
 from app.services.media_scanner import scan_media
 from app.services.session_scanner import scan_sessions
 
 
 def _normalize_name(name: str) -> str:
-    """Normalize a song name for fuzzy matching."""
     name = name.lower().strip()
     name = re.sub(r"[^a-z0-9\s]", "", name)
     name = re.sub(r"\s+", " ", name)
@@ -27,46 +29,56 @@ def _normalize_name(name: str) -> str:
 
 
 def _clip_to_song_name(clip_name: str) -> str:
-    """Convert a clip name like 'smells_like_teen_spirit_2' to a normalized song name."""
-    # Strip file extension if present
     name = re.sub(r"\.\w{2,4}$", "", clip_name)
-    # Strip trailing _N (take numbers)
     name = re.sub(r"_(\d+)$", "", name)
     name = name.replace("_", " ")
     return _normalize_name(name)
 
 
+_ALIASES = {
+    "middle": "the middle",
+    "sugar were": "sugar were goin down",
+    "say it aint": "say it aint so",
+    "girl is acoustic": "girl is on my mind",
+    "girl is on mind": "girl is on my mind",
+}
+
+
 def _match_clip_to_song(clip_name: str, songs_by_norm: dict[str, Song]) -> Song | None:
-    """Try to match a clip name to a song in the database."""
     norm = _clip_to_song_name(clip_name)
-
-    # Strip ".mp4" suffix if present
     norm = re.sub(r"\.mp4$", "", norm)
-
-    # Exact match
     if norm in songs_by_norm:
         return songs_by_norm[norm]
-
-    # Common abbreviation expansions
-    _ALIASES = {
-        "middle": "the middle",
-        "sugar were": "sugar were goin down",
-        "say it aint": "say it aint so",
-        "girl is acoustic": "girl is on my mind",
-        "girl is on mind": "girl is on my mind",
-    }
     if norm in _ALIASES and _ALIASES[norm] in songs_by_norm:
         return songs_by_norm[_ALIASES[norm]]
-
-    # Substring match (clip name contained in song name or vice versa)
     for song_norm, song in songs_by_norm.items():
         if norm in song_norm or song_norm in norm:
             return song
-
     return None
 
 
-def bootstrap_songs(db: Session) -> dict[str, Song]:
+def _derive_song_type(project: str, is_original: bool, status: str) -> str:
+    """Derive song type from existing data."""
+    if project == "ideas":
+        return "idea"
+    if is_original:
+        return "original"
+    return "cover"
+
+
+def bootstrap_tags(db: DBSession) -> None:
+    """Seed predefined tags if they don't exist."""
+    for tag_data in PREDEFINED_TAGS:
+        existing = db.query(Tag).filter_by(name=tag_data["name"]).first()
+        if not existing:
+            db.add(Tag(
+                name=tag_data["name"],
+                category=tag_data["category"],
+                is_predefined=True,
+            ))
+
+
+def bootstrap_songs(db: DBSession) -> dict[str, Song]:
     """Parse REPERTOIRE.md and insert/update songs. Returns normalized name → Song map."""
     repertoire_path = settings.music_dir / "REPERTOIRE.md"
     if not repertoire_path.exists():
@@ -78,11 +90,14 @@ def bootstrap_songs(db: Session) -> dict[str, Song]:
 
     for p in parsed:
         norm = _normalize_name(p.title)
+        song_type = _derive_song_type(p.project, p.is_original, p.status)
+
         existing = db.query(Song).filter_by(title=p.title, project=p.project).first()
 
         if existing:
             existing.artist = p.artist
             existing.is_original = p.is_original
+            existing.type = song_type
             existing.status = p.status
             existing.times_practiced = p.times_practiced
             existing.notes = p.notes
@@ -94,6 +109,7 @@ def bootstrap_songs(db: Session) -> dict[str, Song]:
                 artist=p.artist,
                 project=p.project,
                 is_original=p.is_original,
+                type=song_type,
                 status=p.status,
                 times_practiced=p.times_practiced,
                 notes=p.notes,
@@ -105,40 +121,14 @@ def bootstrap_songs(db: Session) -> dict[str, Song]:
     return songs_by_norm
 
 
-def bootstrap_roadmap(db: Session) -> int:
-    """Parse ROADMAP.md and insert/update tasks. Returns count."""
-    roadmap_path = settings.music_dir / "ROADMAP.md"
-    if not roadmap_path.exists():
-        print("  ROADMAP.md not found, skipping")
-        return 0
-
-    parsed = parse_roadmap(roadmap_path)
-
-    # Clear and re-insert (roadmap is small and changes frequently)
-    db.query(RoadmapTask).delete()
-
-    for p in parsed:
-        db.add(RoadmapTask(
-            phase=p.phase,
-            phase_title=p.phase_title,
-            category=p.category,
-            task_text=p.task_text,
-            completed=p.completed,
-            sort_order=p.sort_order,
-        ))
-
-    return len(parsed)
-
-
-def bootstrap_sessions(db: Session, songs_by_norm: dict[str, Song]) -> tuple[int, int]:
-    """Scan practice sessions and insert/update. Returns (session_count, take_count)."""
+def bootstrap_sessions(db: DBSession, songs_by_norm: dict[str, Song]) -> tuple[int, int]:
+    """Scan practice sessions and insert/update."""
     parsed_sessions = scan_sessions(settings.music_dir)
     session_count = 0
     take_count = 0
 
     for ps in parsed_sessions:
         existing = db.query(PracticeSession).filter_by(folder_path=ps.folder_path).first()
-
         if existing:
             session = existing
         else:
@@ -157,7 +147,6 @@ def bootstrap_sessions(db: Session, songs_by_norm: dict[str, Song]) -> tuple[int
             ).first()
 
             if existing_take:
-                # Update paths if they changed
                 existing_take.video_path = pt.video_path
                 existing_take.audio_path = pt.audio_path
                 if not existing_take.song_id:
@@ -182,12 +171,17 @@ def bootstrap_sessions(db: Session, songs_by_norm: dict[str, Song]) -> tuple[int
     return session_count, take_count
 
 
-def bootstrap_media(db: Session, songs_by_norm: dict[str, Song]) -> int:
-    """Scan standalone audio files and insert/update. Returns count."""
+def bootstrap_media(db: DBSession, songs_by_norm: dict[str, Song]) -> tuple[int, int]:
+    """Scan audio files. Returns (matched_count, triage_count)."""
     parsed_files = scan_media(settings.music_dir)
-    count = 0
+    matched_count = 0
+    triage_count = 0
 
     for pf in parsed_files:
+        # Skip stems
+        if pf.is_stem:
+            continue
+
         existing = db.query(AudioFile).filter_by(file_path=pf.file_path).first()
         if existing:
             continue
@@ -196,40 +190,66 @@ def bootstrap_media(db: Session, songs_by_norm: dict[str, Song]) -> int:
         norm_hint = _normalize_name(pf.song_title_hint)
         matched = songs_by_norm.get(norm_hint)
 
+        # Try substring matching if exact fails
+        if not matched:
+            for song_norm, song in songs_by_norm.items():
+                if norm_hint in song_norm or song_norm in norm_hint:
+                    matched = song
+                    break
+
         af = AudioFile(
             song_id=matched.id if matched else None,
             file_path=pf.file_path,
             file_type=pf.file_type,
             source=pf.source,
+            role=pf.role,
             version=pf.version,
+            is_stem=pf.is_stem,
         )
         db.add(af)
-        count += 1
 
-    return count
+        if matched:
+            matched_count += 1
+        else:
+            # Add to triage queue
+            existing_triage = db.query(TriageItem).filter_by(file_path=pf.file_path).first()
+            if not existing_triage:
+                db.add(TriageItem(
+                    file_path=pf.file_path,
+                    file_type=pf.file_type,
+                    suggested_source=pf.source,
+                ))
+                triage_count += 1
+
+    return matched_count, triage_count
 
 
 def run_bootstrap():
     """Run the full bootstrap process."""
-    print("Greenroom Bootstrap")
+    print("Greenroom v2 Bootstrap")
     print(f"Music directory: {settings.music_dir}")
     print(f"Database: {settings.db_path}")
     print()
 
-    # Create tables
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
     try:
-        print("1. Parsing REPERTOIRE.md...")
+        print("1. Seeding tags...")
+        bootstrap_tags(db)
+        db.commit()
+        tag_count = db.query(Tag).count()
+        print(f"   {tag_count} tags")
+
+        print("2. Parsing REPERTOIRE.md...")
         songs_by_norm = bootstrap_songs(db)
         db.commit()
         print(f"   {len(songs_by_norm)} songs")
 
-        print("2. Parsing ROADMAP.md...")
-        task_count = bootstrap_roadmap(db)
-        db.commit()
-        print(f"   {task_count} tasks")
+        # Show type breakdown
+        for song_type in ["cover", "original", "idea"]:
+            count = db.query(Song).filter(Song.type == song_type).count()
+            print(f"     {song_type}: {count}")
 
         print("3. Scanning practice sessions...")
         sess_count, take_count = bootstrap_sessions(db, songs_by_norm)
@@ -237,14 +257,15 @@ def run_bootstrap():
         total_sessions = db.query(PracticeSession).count()
         total_takes = db.query(Take).count()
         matched_takes = db.query(Take).filter(Take.song_id.isnot(None)).count()
-        print(f"   {total_sessions} sessions, {total_takes} takes ({matched_takes} matched to songs)")
+        print(f"   {total_sessions} sessions, {total_takes} takes ({matched_takes} matched)")
 
         print("4. Scanning audio files...")
-        media_count = bootstrap_media(db, songs_by_norm)
+        matched, triaged = bootstrap_media(db, songs_by_norm)
         db.commit()
         total_audio = db.query(AudioFile).count()
-        matched_audio = db.query(AudioFile).filter(AudioFile.song_id.isnot(None)).count()
-        print(f"   {total_audio} audio files ({matched_audio} matched to songs)")
+        total_triage = db.query(TriageItem).count()
+        print(f"   {total_audio} audio files ({matched} matched)")
+        print(f"   {total_triage} items in triage queue")
 
         print()
         print("Bootstrap complete!")

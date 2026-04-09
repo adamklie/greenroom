@@ -1,4 +1,4 @@
-"""Scan the music directory for standalone audio/video files."""
+"""Scan music directories for standalone audio/video files."""
 
 from __future__ import annotations
 
@@ -8,106 +8,137 @@ from pathlib import Path
 
 AUDIO_EXTENSIONS = {".m4a", ".mp3", ".wav", ".aac", ".flac"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".MP4"}
+ALL_MEDIA_EXTENSIONS = AUDIO_EXTENSIONS | VIDEO_EXTENSIONS
 
-# Directories to skip during scanning
+# Directories inside the music dir to skip
 SKIP_DIRS = {"greenroom", ".claude", "_audio_exports", "Ozone Destructors"}
+
+# Directories that contain raw stems (not mixed songs)
+STEM_DIRS = {"000927_0001", "R1 91!o0001", "QUESTION001", "A01010_0001", "A71010_0001",
+             "A71010_0002", "A71010_0003", "A71010_0004"}
 
 
 @dataclass
 class ParsedAudioFile:
-    file_path: str  # relative to music_dir
-    file_type: str  # extension without dot
-    source: str  # 'solo', 'sural', 'joe', 'ideas', 'backing_track', etc.
-    song_title_hint: str  # best guess at song title from filename
-    version: str | None  # 'v1', 'v3', etc.
+    file_path: str  # relative to music_dir or absolute
+    file_type: str
+    source: str
+    song_title_hint: str
+    version: str | None
+    role: str = "recording"  # recording, reference, backing_track, stem, demo, final_mix
+    is_stem: bool = False
 
 
 def _extract_version(filename: str) -> str | None:
-    """Extract version string like 'v6' from a filename."""
     match = re.search(r"\b(v\d+)\b", filename, re.IGNORECASE)
     return match.group(1).lower() if match else None
 
 
-def _guess_title(filename: str, source: str) -> str:
-    """Best-effort extraction of song title from filename."""
+def _guess_title(filename: str) -> str:
     name = Path(filename).stem
-
-    # Strip date prefix like "2025_01_25_" or "2025-09-11_"
+    # Strip date prefixes
     name = re.sub(r"^\d{4}[-_]\d{1,2}[-_]\d{1,2}[-_]?", "", name)
-
     # Strip version suffixes
     name = re.sub(r"\s*v\d+\b.*", "", name, flags=re.IGNORECASE)
     name = re.sub(r"\s*(copy|FINAL|master|remaster\w*)\b.*", "", name, flags=re.IGNORECASE)
-
-    # Strip "adam " prefix from ideas
+    # Strip "adam " or date prefix patterns from ~/Music files
     name = re.sub(r"^adam\s+\d+\s*", "", name, flags=re.IGNORECASE)
-
-    # Replace underscores with spaces
+    name = re.sub(r"\s*-\s*\d{1,2}[/_]\d{1,2}[/_]\d{2,4},?\s*\d{1,2}\.\d{2}\s*(AM|PM)?\.?$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s*--\s*Adam.*$", "", name, flags=re.IGNORECASE)
     name = name.replace("_", " ").strip()
-
     return name if name else Path(filename).stem
 
 
 def _scan_directory(
-    dir_path: Path, source: str, music_dir: Path
+    dir_path: Path, source: str, base_dir: Path, recursive: bool = True
 ) -> list[ParsedAudioFile]:
-    """Recursively scan a directory for audio files."""
     results = []
     if not dir_path.exists():
         return results
 
-    for f in sorted(dir_path.rglob("*")):
+    iterator = dir_path.rglob("*") if recursive else dir_path.iterdir()
+    for f in sorted(iterator):
         if not f.is_file():
             continue
         if f.suffix.lower() not in AUDIO_EXTENSIONS:
             continue
-        # Skip files inside .band GarageBand bundles
+        # Skip GarageBand bundles
         if ".band" in str(f):
             continue
+        # Detect stems
+        is_stem = f.parent.name in STEM_DIRS and f.suffix.lower() == ".wav"
 
-        rel_path = str(f.relative_to(music_dir))
+        rel_path = str(f.relative_to(base_dir)) if str(f).startswith(str(base_dir)) else str(f)
         results.append(ParsedAudioFile(
             file_path=rel_path,
             file_type=f.suffix.lstrip(".").lower(),
             source=source,
-            song_title_hint=_guess_title(f.name, source),
+            song_title_hint=_guess_title(f.name),
             version=_extract_version(f.name),
+            role="stem" if is_stem else "recording",
+            is_stem=is_stem,
         ))
 
     return results
 
 
 def scan_media(music_dir: Path) -> list[ParsedAudioFile]:
-    """Scan all music directories for standalone audio files."""
+    """Scan all known music directories for audio files."""
     files: list[ParsedAudioFile] = []
 
-    # Solo recordings (top-level audio only, skip subdirs with raw WAVs)
-    solo_dir = music_dir / "Solo"
-    if solo_dir.exists():
-        for f in sorted(solo_dir.iterdir()):
-            if f.is_file() and f.suffix.lower() in AUDIO_EXTENSIONS:
-                files.append(ParsedAudioFile(
-                    file_path=str(f.relative_to(music_dir)),
-                    file_type=f.suffix.lstrip(".").lower(),
-                    source="solo",
-                    song_title_hint=_guess_title(f.name, "solo"),
-                    version=None,
-                ))
+    # Solo recordings (recursive now — catches grad_housing etc.)
+    files.extend(_scan_directory(music_dir / "Solo", "solo", music_dir, recursive=True))
 
     # Sural project
-    files.extend(_scan_directory(music_dir / "Sural", "sural", music_dir))
+    files.extend(_scan_directory(music_dir / "Sural", "collaborator", music_dir))
 
     # Joe collaborations
-    files.extend(_scan_directory(music_dir / "Joe", "joe", music_dir))
+    files.extend(_scan_directory(music_dir / "Joe", "collaborator", music_dir))
 
     # Ideas
-    files.extend(_scan_directory(music_dir / "Ideas", "ideas", music_dir))
+    files.extend(_scan_directory(music_dir / "Ideas", "phone", music_dir))
 
     # Backing tracks
-    files.extend(_scan_directory(music_dir / "Backing Tracks", "backing_track", music_dir))
+    for f in _scan_directory(music_dir / "Backing Tracks", "download", music_dir):
+        f.role = "backing_track"
+        files.append(f)
 
-    # Ozone Destructors finished recordings (not practice sessions)
-    od_runaway = music_dir / "Ozone Destructors" / "Runaway Train"
-    files.extend(_scan_directory(od_runaway, "ozone_destructors", music_dir))
+    # Ozone Destructors finished recordings
+    files.extend(_scan_directory(
+        music_dir / "Ozone Destructors" / "Runaway Train", "ozone_destructors", music_dir
+    ))
+
+    # ~/Music/ top-level files (NEW)
+    home_music = Path.home() / "Music"
+    if home_music.exists():
+        for f in sorted(home_music.iterdir()):
+            if not f.is_file() or f.suffix.lower() not in ALL_MEDIA_EXTENSIONS:
+                continue
+            files.append(ParsedAudioFile(
+                file_path=str(f),
+                file_type=f.suffix.lstrip(".").lower(),
+                source="unknown",
+                song_title_hint=_guess_title(f.name),
+                version=_extract_version(f.name),
+            ))
+
+    # ~/Desktop/ loose music files (NEW)
+    desktop = Path.home() / "Desktop"
+    if desktop.exists():
+        for f in sorted(desktop.iterdir()):
+            if not f.is_file():
+                continue
+            if f.suffix.lower() not in ALL_MEDIA_EXTENSIONS:
+                continue
+            # Skip GoPro raw files (those go through session scanner)
+            if f.name.startswith("GX") and f.suffix.upper() == ".MP4":
+                continue
+            files.append(ParsedAudioFile(
+                file_path=str(f),
+                file_type=f.suffix.lstrip(".").lower(),
+                source="unknown",
+                song_title_hint=_guess_title(f.name),
+                version=_extract_version(f.name),
+            ))
 
     return files
