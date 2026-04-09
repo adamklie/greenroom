@@ -17,6 +17,7 @@ import {
   TrendingUp,
   Scissors,
   Upload,
+  CloudUpload,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Songs from "./pages/Songs";
@@ -28,6 +29,7 @@ import Discover from "./pages/Discover";
 import Progress from "./pages/Progress";
 import ProcessSession from "./pages/ProcessSession";
 import Import from "./pages/Import";
+import Sync from "./pages/Sync";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -42,6 +44,7 @@ const navItems = [
   { to: "/content", icon: Share2, label: "Content" },
   { to: "/import", icon: Upload, label: "Import" },
   { to: "/triage", icon: Inbox, label: "Triage" },
+  { to: "/sync", icon: CloudUpload, label: "Sync" },
 ];
 
 function getInitialTheme(): "dark" | "light" {
@@ -138,6 +141,7 @@ export default function App() {
           <Route path="/content" element={<ContentPlanner />} />
           <Route path="/import" element={<Import />} />
           <Route path="/triage" element={<Triage />} />
+          <Route path="/sync" element={<Sync />} />
         </Routes>
       </main>
     </div>

@@ -250,6 +250,15 @@ export const api = {
     update: (id: number, data: Record<string, unknown>) =>
       patch<ContentPost>(`${BASE}/content/posts/${id}`, data),
   },
+  sync: {
+    afterPractice: () => post<{
+      steps: { step: string; status: string; detail: string | Record<string, number> }[];
+    }>(`${BASE}/sync/after-practice`, {}),
+    weekly: () => post<{
+      steps: { step: string; status: string; detail: string | Record<string, number> }[];
+    }>(`${BASE}/sync/weekly`, {}),
+    gitPush: () => post<{ ok: boolean; detail: string }>(`${BASE}/sync/git-push`, {}),
+  },
   backup: {
     create: () => post<{ ok: boolean; path: string }>(`${BASE}/backup/create`, {}),
     list: () => json<{ backups: { filename: string; path: string; size_mb: number; created: string }[] }>(`${BASE}/backup/list`),
