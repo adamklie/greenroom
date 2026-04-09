@@ -15,6 +15,7 @@ import {
   Sun,
   Moon,
   TrendingUp,
+  Scissors,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Songs from "./pages/Songs";
@@ -24,6 +25,7 @@ import ContentPlanner from "./pages/ContentPlanner";
 import Triage from "./pages/Triage";
 import Discover from "./pages/Discover";
 import Progress from "./pages/Progress";
+import ProcessSession from "./pages/ProcessSession";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -31,6 +33,7 @@ const navItems = [
   { to: "/originals", icon: PenTool, label: "Originals" },
   { to: "/ideas", icon: Lightbulb, label: "Ideas" },
   { to: "/sessions", icon: CalendarDays, label: "Sessions" },
+  { to: "/process", icon: Scissors, label: "Process" },
   { to: "/discover", icon: Music, label: "Discover" },
   { to: "/progress", icon: TrendingUp, label: "Progress" },
   { to: "/setlists", icon: ListMusic, label: "Setlists" },
@@ -125,6 +128,7 @@ export default function App() {
           <Route path="/originals" element={<Songs songType="original" title="Originals" />} />
           <Route path="/ideas" element={<Songs songType="idea" title="Ideas" />} />
           <Route path="/sessions" element={<Sessions />} />
+          <Route path="/process" element={<ProcessSession />} />
           <Route path="/discover" element={<Discover />} />
           <Route path="/progress" element={<Progress />} />
           <Route path="/setlists" element={<SetlistBuilder />} />

@@ -250,6 +250,30 @@ export const api = {
     update: (id: number, data: Record<string, unknown>) =>
       patch<ContentPost>(`${BASE}/content/posts/${id}`, data),
   },
+  gopro: {
+    listVideos: (directory: string) =>
+      json<{ files: { filename: string; path: string; size_mb: number; extension: string }[]; directory: string }>(
+        `${BASE}/gopro/list-videos?directory=${encodeURIComponent(directory)}`
+      ),
+    analyze: (videoPath: string, opts?: { threshold?: number; minSilence?: number; minClip?: number }) =>
+      post<{
+        video_path: string; duration_seconds: number;
+        proposed_clips: { start_seconds: number; end_seconds: number; duration_seconds: number; suggested_name: string }[];
+        silence_gaps: { start: number; end: number }[];
+      }>(`${BASE}/gopro/analyze`, {
+        video_path: videoPath,
+        silence_threshold_db: opts?.threshold ?? -30,
+        min_silence_duration: opts?.minSilence ?? 3.0,
+        min_clip_duration: opts?.minClip ?? 30.0,
+      }),
+    process: (data: {
+      source_path: string; session_date: string; project?: string;
+      clips: { start_seconds: number; end_seconds: number; clip_name: string; song_id?: number | null }[];
+    }) => post<{
+      session_id: number; session_date: string; clips_processed: number;
+      audio_extracted: number; errors: string[]; cuts_txt_path: string;
+    }>(`${BASE}/gopro/process`, data),
+  },
   analytics: {
     practiceFrequency: () => json<{ date: string; takes: number }[]>(`${BASE}/analytics/practice-frequency`),
     ratingTrends: (songId?: number, dimension = "overall") => {
