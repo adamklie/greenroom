@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
-from app.routers import analytics, apple_music, bootstrap_router, content, dashboard, filebrowser, files, gopro, media, recommendations, sessions, setlists, songs, tags, triage
+from app.routers import analytics, apple_music, bootstrap_router, content, dashboard, filebrowser, files, gopro, media, recommendations, sessions, setlists, songs, tags, triage, upload
 
 
 @asynccontextmanager
@@ -37,6 +37,7 @@ app.include_router(analytics.router)
 app.include_router(apple_music.router)
 app.include_router(gopro.router)
 app.include_router(filebrowser.router)
+app.include_router(upload.router)
 app.include_router(bootstrap_router.router)
 
 
