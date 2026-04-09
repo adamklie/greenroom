@@ -250,6 +250,13 @@ export const api = {
     update: (id: number, data: Record<string, unknown>) =>
       patch<ContentPost>(`${BASE}/content/posts/${id}`, data),
   },
+  browse: {
+    list: (path = "~") =>
+      json<{
+        path: string; parent: string; error?: string;
+        entries: { name: string; path: string; type: "directory" | "video"; size_mb?: number }[];
+      }>(`${BASE}/browse?path=${encodeURIComponent(path)}`),
+  },
   gopro: {
     listVideos: (directory: string) =>
       json<{ files: { filename: string; path: string; size_mb: number; extension: string }[]; directory: string }>(

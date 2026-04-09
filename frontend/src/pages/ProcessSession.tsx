@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { FolderOpen, Scan, Scissors, Play, Plus, Trash2, Check, Video } from "lucide-react";
+import { FolderOpen, Scan, Scissors, Play, Plus, Trash2, Check, Video, Folder, ChevronUp, X } from "lucide-react";
 
 interface Clip {
   start_seconds: number;
@@ -26,10 +26,73 @@ function parseTime(str: string): number {
 
 const inputStyle = { borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" };
 
+function FileBrowserModal({ onSelect, onClose }: { onSelect: (path: string) => void; onClose: () => void }) {
+  const [currentPath, setCurrentPath] = useState("/Users/adamklie");
+
+  const { data } = useQuery({
+    queryKey: ["browse", currentPath],
+    queryFn: () => api.browse.list(currentPath),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.6)" }}>
+      <div className="w-[560px] max-h-[70vh] rounded-xl border flex flex-col"
+        style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
+          <h3 className="font-semibold text-sm">Select Video File</h3>
+          <button onClick={onClose} className="p-1 rounded hover:bg-white/10"><X size={16} /></button>
+        </div>
+
+        {/* Path bar */}
+        <div className="flex items-center gap-2 px-4 py-2 border-b text-xs" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
+          {data?.parent && data.parent !== data.path && (
+            <button onClick={() => setCurrentPath(data.parent)}
+              className="p-1 rounded hover:bg-white/10" title="Go up">
+              <ChevronUp size={14} />
+            </button>
+          )}
+          <span className="truncate">{data?.path || currentPath}</span>
+        </div>
+
+        {/* File list */}
+        <div className="flex-1 overflow-y-auto px-2 py-2">
+          {data?.error && <p className="text-sm px-2 py-4" style={{ color: "var(--red)" }}>{data.error}</p>}
+          {data?.entries.map((entry) => (
+            <button key={entry.path}
+              onClick={() => {
+                if (entry.type === "directory") setCurrentPath(entry.path);
+                else onSelect(entry.path);
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-left hover:opacity-80 transition-opacity"
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+              {entry.type === "directory"
+                ? <Folder size={16} style={{ color: "var(--yellow)" }} />
+                : <Video size={16} style={{ color: "var(--accent)" }} />
+              }
+              <span className="flex-1 truncate">{entry.name}</span>
+              {entry.size_mb && (
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>{entry.size_mb} MB</span>
+              )}
+            </button>
+          ))}
+          {data?.entries.length === 0 && !data?.error && (
+            <p className="text-sm px-2 py-4 text-center" style={{ color: "var(--text-muted)" }}>
+              No folders or video files here
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProcessSession() {
   const [directory, setDirectory] = useState("/Users/adamklie/Desktop");
   const [directFile, setDirectFile] = useState("");
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
+  const [showBrowser, setShowBrowser] = useState(false);
   const [clips, setClips] = useState<Clip[]>([]);
   const [duration, setDuration] = useState(0);
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split("T")[0]);
@@ -126,23 +189,42 @@ export default function ProcessSession() {
           Step 1: Select Video
         </h3>
 
-        {/* Direct file path input */}
+        {/* Direct file path input + Browse button */}
         <div className="flex gap-2 mb-3">
           <input value={directFile} onChange={(e) => setDirectFile(e.target.value)}
-            placeholder="Paste full file path, e.g. /Users/adamklie/Desktop/GX020035.MP4"
+            placeholder="Paste file path or click Browse..."
             className="flex-1 px-3 py-2 rounded-lg border text-sm outline-none" style={inputStyle}
             onKeyDown={(e) => {
               if (e.key === "Enter" && directFile.trim()) {
                 setSelectedVideo(directFile.trim()); setClips([]); setDuration(0);
               }
             }} />
-          <button onClick={() => { if (directFile.trim()) { setSelectedVideo(directFile.trim()); setClips([]); setDuration(0); } }}
-            disabled={!directFile.trim()}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
+          <button onClick={() => setShowBrowser(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
             style={{ background: "var(--accent)" }}>
-            Load File
+            <FolderOpen size={16} /> Browse
           </button>
+          {directFile.trim() && (
+            <button onClick={() => { setSelectedVideo(directFile.trim()); setClips([]); setDuration(0); }}
+              className="px-4 py-2 rounded-lg text-sm font-medium border hover:opacity-80"
+              style={{ borderColor: "var(--border)", color: "var(--text)" }}>
+              Load
+            </button>
+          )}
         </div>
+
+        {showBrowser && (
+          <FileBrowserModal
+            onSelect={(path) => {
+              setDirectFile(path);
+              setSelectedVideo(path);
+              setClips([]);
+              setDuration(0);
+              setShowBrowser(false);
+            }}
+            onClose={() => setShowBrowser(false)}
+          />
+        )}
 
         <div className="flex items-center gap-3 mb-3">
           <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
