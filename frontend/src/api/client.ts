@@ -250,6 +250,18 @@ export const api = {
     update: (id: number, data: Record<string, unknown>) =>
       patch<ContentPost>(`${BASE}/content/posts/${id}`, data),
   },
+  files: {
+    healthCheck: () => json<{
+      total_broken: number;
+      broken_links: { table: string; record_id: number; field: string; path: string; song_title: string | null }[];
+    }>(`${BASE}/files/health`),
+    moveAudioFile: (id: number, newPath: string) =>
+      post<{ ok: boolean; new_path: string }>(`${BASE}/files/audio/${id}/move`, { new_path: newPath }),
+    consolidateOne: (id: number) =>
+      post<{ ok: boolean; new_path: string }>(`${BASE}/files/audio/${id}/consolidate`, {}),
+    consolidateAll: () =>
+      post<{ moved: number; skipped: number; errors: string[] }>(`${BASE}/files/consolidate-all`, {}),
+  },
   media: {
     takeAudioUrl: (takeId: number) => `${BASE}/media/take/${takeId}/audio`,
     takeVideoUrl: (takeId: number) => `${BASE}/media/take/${takeId}/video`,
