@@ -1,4 +1,4 @@
-.PHONY: dev backend frontend bootstrap install test setup export backup
+.PHONY: dev backend frontend bootstrap install test setup export backup after-practice weekly
 
 # First-time setup: install deps + bootstrap database + hash files
 setup:
@@ -65,6 +65,14 @@ hash:
 	stats = hash_all_files(db); \
 	print(f'Hashed: {stats[\"newly_hashed\"]} new, {stats[\"already_hashed\"]} cached, {stats[\"missing_files\"]} missing'); \
 	db.close()"
+
+# Post-practice routine: rescan, hash, export, backup, commit
+after-practice:
+	bash scripts/after-practice.sh
+
+# Weekly health check: scan, check links, hash, export, summary
+weekly:
+	bash scripts/weekly-check.sh
 
 # Run tests
 test:
