@@ -250,6 +250,12 @@ export const api = {
     update: (id: number, data: Record<string, unknown>) =>
       patch<ContentPost>(`${BASE}/content/posts/${id}`, data),
   },
+  recommendations: {
+    list: () => json<{
+      category: string; priority: string; title: string; detail: string;
+      song_id: number | null; song_title: string | null; data: Record<string, unknown>;
+    }[]>(`${BASE}/recommendations`),
+  },
   files: {
     healthCheck: () => json<{
       total_broken: number;

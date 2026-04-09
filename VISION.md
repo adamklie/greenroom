@@ -115,6 +115,27 @@ Based on your data:
 - "These 8 songs are all polished and in similar keys — good setlist?"
 - Setlist gap analysis: "You need more upbeat songs" or "No songs in E"
 
+#### Recommendation Engine
+Uses your practice data, ratings, listening history, and repertoire to suggest:
+- What to practice next (based on skill gaps, staleness, gig prep)
+- What to learn (based on Apple Music listening, genre gaps, difficulty progression)
+- What to improve (per-dimension rating trends, weak spots)
+- Gig readiness assessment (setlist completeness, polish level)
+
+#### Practice Progress & Analytics
+- Rating trends per song and per dimension over time
+- Practice frequency heatmap
+- Most improved / needs attention highlights
+- Skill radar chart (vocals, guitar, timing, etc.)
+- Genre/key/tempo distribution analysis
+- Session-over-session comparison
+
+#### Apple Music Integration
+- Import listening history from Apple Music local database
+- Auto-suggest covers based on most-played songs
+- Auto-link reference recordings from your library
+- Genre/mood profiling from listening patterns
+
 ### Future
 
 #### Gig & Venue Tracker
