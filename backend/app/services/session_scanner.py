@@ -1,4 +1,10 @@
-"""Scan Ozone Destructors practice sessions and parse cuts.txt files."""
+"""Scan Ozone Destructors practice sessions and parse cuts.txt files.
+
+Handles three folder structures:
+1. Early (clipped/): 2025-06-22 through 2025-11-23 — clips in clipped/, no cuts.txt
+2. Middle (cuts/ or clipped/, per-video cuts files): some have GX*_cuts.txt
+3. Modern (cuts.txt + cuts/): 2026-1-10 onward — full pipeline
+"""
 
 from __future__ import annotations
 
@@ -6,6 +12,8 @@ import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+
+VIDEO_EXTS = {".mp4", ".mov", ".MP4"}
 
 
 @dataclass
@@ -37,13 +45,18 @@ def _parse_session_date(folder_name: str) -> date | None:
         return None
 
 
-def _parse_cuts_txt(cuts_path: Path) -> list[tuple[str | None, str, str, str]]:
-    """Parse a cuts.txt file.
+def _parse_cuts_file(cuts_path: Path) -> list[tuple[str | None, str, str, str]]:
+    """Parse a cuts.txt or GX*_cuts.txt file.
 
     Returns list of (source_video, start_time, end_time, clip_name).
     """
     results = []
     current_video = None
+
+    # If filename is like GX010012_cuts.txt, extract the video name
+    fname = cuts_path.stem
+    if fname.startswith("GX") and fname.endswith("_cuts"):
+        current_video = fname.replace("_cuts", "") + ".MP4"
 
     for line in cuts_path.read_text().splitlines():
         line = line.strip()
@@ -57,15 +70,104 @@ def _parse_cuts_txt(cuts_path: Path) -> list[tuple[str | None, str, str, str]]:
                 current_video = video_match.group(1)
             continue
 
-        # Data line: "00:06:30 00:11:00 your_touch"
+        # Data line: "00:06:30 00:11:00 your_touch" or "00:00:00 00:02:00 losing_cells.mov"
         parts = line.split()
         if len(parts) >= 3 and ":" in parts[0] and ":" in parts[1]:
             start = parts[0]
             end = parts[1]
             clip_name = parts[2]
+            # Strip file extension from clip name if present
+            clip_name = re.sub(r"\.\w{2,4}$", "", clip_name)
             results.append((current_video, start, end, clip_name))
 
     return results
+
+
+def _find_audio_export(
+    clip_name: str, folder_name: str, audio_exports_dir: Path, music_dir: Path
+) -> str | None:
+    """Search for an audio export matching a clip name."""
+    audio_dir = audio_exports_dir / folder_name
+    if not audio_dir.exists():
+        return None
+
+    # Normalize clip name (strip extensions, lowercase for matching)
+    clean = re.sub(r"\.\w{2,4}$", "", clip_name)
+
+    # Try exact patterns
+    candidates = [
+        audio_dir / f"{folder_name}_{clean}.m4a",          # date-prefixed
+        audio_dir / f"{clean}.m4a",                         # unprefixed
+        audio_dir / f"{folder_name}_{clip_name}.m4a",       # with original name
+    ]
+    for c in candidates:
+        if c.exists():
+            return str(c.relative_to(music_dir))
+
+    # Fuzzy: search for any file containing the clip name
+    clean_lower = clean.lower().replace("_", " ")
+    for f in audio_dir.iterdir():
+        if f.suffix.lower() != ".m4a":
+            continue
+        fname_lower = f.stem.lower().replace("_", " ")
+        # Strip date prefix for comparison
+        fname_no_date = re.sub(r"^\d{4}-\d{1,2}-\d{1,2}[_ ]?", "", fname_lower)
+        if clean_lower == fname_no_date or clean_lower in fname_no_date:
+            return str(f.relative_to(music_dir))
+
+    return None
+
+
+def _find_video_clip(
+    clip_name: str, folder: Path, music_dir: Path
+) -> str | None:
+    """Search for a video clip in cuts/ or clipped/ directories."""
+    clean = re.sub(r"\.\w{2,4}$", "", clip_name)
+
+    for subdir_name in ["cuts", "clipped"]:
+        subdir = folder / subdir_name
+        if not subdir.exists():
+            continue
+        for ext in [".mp4", ".mov", ".MP4"]:
+            candidate = subdir / f"{clean}{ext}"
+            if candidate.exists():
+                return str(candidate.relative_to(music_dir))
+        # Also try with original clip_name (might include extension)
+        for f in subdir.iterdir():
+            if f.stem == clean and f.suffix.lower() in {".mp4", ".mov"}:
+                return str(f.relative_to(music_dir))
+
+    return None
+
+
+def _scan_clips_directory(
+    folder: Path, subdir_name: str, folder_name: str,
+    audio_exports_dir: Path, music_dir: Path
+) -> list[ParsedTake]:
+    """Scan a clipped/ or cuts/ directory directly (no cuts.txt)."""
+    subdir = folder / subdir_name
+    if not subdir.exists():
+        return []
+
+    takes = []
+    for f in sorted(subdir.iterdir()):
+        if not f.is_file() or f.suffix.lower() not in {".mp4", ".mov"}:
+            continue
+
+        clip_name = f.stem  # e.g., "your_touch" or "Feel Good Inc"
+        video_path = str(f.relative_to(music_dir))
+        audio_path = _find_audio_export(clip_name, folder_name, audio_exports_dir, music_dir)
+
+        takes.append(ParsedTake(
+            clip_name=clip_name,
+            source_video=None,
+            start_time="",
+            end_time="",
+            video_path=video_path,
+            audio_path=audio_path,
+        ))
+
+    return takes
 
 
 def scan_sessions(music_dir: Path) -> list[ParsedSession]:
@@ -86,32 +188,17 @@ def scan_sessions(music_dir: Path) -> list[ParsedSession]:
             continue
 
         folder_rel = str(folder.relative_to(music_dir))
+        takes: list[ParsedTake] = []
 
-        # Parse cuts.txt if it exists
+        # Strategy 1: Modern cuts.txt (single file with all timestamps)
         cuts_file = folder / "cuts.txt"
-        takes = []
-
         if cuts_file.exists():
-            parsed = _parse_cuts_txt(cuts_file)
+            parsed = _parse_cuts_file(cuts_file)
             for source_video, start, end, clip_name in parsed:
-                # Look for video clip
-                video_clip = folder / "cuts" / f"{clip_name}.mp4"
-                video_path = None
-                if video_clip.exists():
-                    video_path = str(video_clip.relative_to(music_dir))
-
-                # Look for audio export (date-prefixed)
-                audio_path = None
-                audio_dir = audio_exports_dir / folder.name
-                if audio_dir.exists():
-                    # Try date-prefixed format: 2026-3-1_your_touch.m4a
-                    prefixed = audio_dir / f"{folder.name}_{clip_name}.m4a"
-                    unprefixed = audio_dir / f"{clip_name}.m4a"
-                    if prefixed.exists():
-                        audio_path = str(prefixed.relative_to(music_dir))
-                    elif unprefixed.exists():
-                        audio_path = str(unprefixed.relative_to(music_dir))
-
+                video_path = _find_video_clip(clip_name, folder, music_dir)
+                audio_path = _find_audio_export(
+                    clip_name, folder.name, audio_exports_dir, music_dir
+                )
                 takes.append(ParsedTake(
                     clip_name=clip_name,
                     source_video=source_video,
@@ -120,6 +207,34 @@ def scan_sessions(music_dir: Path) -> list[ParsedSession]:
                     video_path=video_path,
                     audio_path=audio_path,
                 ))
+
+        # Strategy 2: Per-video cuts files (GX010012_cuts.txt)
+        if not takes:
+            per_video_cuts = sorted(folder.glob("GX*_cuts.txt"))
+            for pv_file in per_video_cuts:
+                parsed = _parse_cuts_file(pv_file)
+                for source_video, start, end, clip_name in parsed:
+                    video_path = _find_video_clip(clip_name, folder, music_dir)
+                    audio_path = _find_audio_export(
+                        clip_name, folder.name, audio_exports_dir, music_dir
+                    )
+                    takes.append(ParsedTake(
+                        clip_name=clip_name,
+                        source_video=source_video,
+                        start_time=start,
+                        end_time=end,
+                        video_path=video_path,
+                        audio_path=audio_path,
+                    ))
+
+        # Strategy 3: Fallback — scan clipped/ or cuts/ directory directly
+        if not takes:
+            for subdir_name in ["clipped", "cuts"]:
+                takes = _scan_clips_directory(
+                    folder, subdir_name, folder.name, audio_exports_dir, music_dir
+                )
+                if takes:
+                    break
 
         sessions.append(ParsedSession(
             session_date=session_date,
