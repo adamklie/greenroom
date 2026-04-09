@@ -3,13 +3,22 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import settings
 from app.database import Base, engine
-from app.routers import analytics, apple_music, bootstrap_router, content, dashboard, filebrowser, files, gopro, media, recommendations, sessions, setlists, songs, tags, triage, upload
+from app.routers import analytics, apple_music, backup, bootstrap_router, content, dashboard, filebrowser, files, gopro, media, recommendations, sessions, setlists, songs, tags, triage, upload
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    # Auto-backup database on every startup
+    try:
+        from app.services.backup import backup_database
+        if settings.db_path.exists():
+            path = backup_database()
+            print(f"Auto-backup: {path}")
+    except Exception as e:
+        print(f"Auto-backup failed (non-fatal): {e}")
     yield
 
 
@@ -38,6 +47,7 @@ app.include_router(apple_music.router)
 app.include_router(gopro.router)
 app.include_router(filebrowser.router)
 app.include_router(upload.router)
+app.include_router(backup.router)
 app.include_router(bootstrap_router.router)
 
 

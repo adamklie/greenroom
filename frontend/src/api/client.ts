@@ -250,6 +250,14 @@ export const api = {
     update: (id: number, data: Record<string, unknown>) =>
       patch<ContentPost>(`${BASE}/content/posts/${id}`, data),
   },
+  backup: {
+    create: () => post<{ ok: boolean; path: string }>(`${BASE}/backup/create`, {}),
+    list: () => json<{ backups: { filename: string; path: string; size_mb: number; created: string }[] }>(`${BASE}/backup/list`),
+    restore: (filename: string) => post<{ ok: boolean }>(`${BASE}/backup/restore/${filename}`, {}),
+    hashFiles: () => post<{ total: number; newly_hashed: number; already_hashed: number; missing_files: number }>(`${BASE}/backup/hash-files`, {}),
+    autoHeal: () => post<{ checked: number; healed: number; unresolvable: number }>(`${BASE}/backup/auto-heal`, {}),
+    export: () => post<{ ok: boolean; path: string; songs: number; takes: number; setlists: number }>(`${BASE}/backup/export`, {}),
+  },
   browse: {
     list: (path = "~") =>
       json<{
