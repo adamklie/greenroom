@@ -262,15 +262,15 @@ export const api = {
       json<{ files: { filename: string; path: string; size_mb: number; extension: string }[]; directory: string }>(
         `${BASE}/gopro/list-videos?directory=${encodeURIComponent(directory)}`
       ),
-    analyze: (videoPath: string, opts?: { threshold?: number; minSilence?: number; minClip?: number }) =>
+    analyze: (videoPath: string, opts?: { dropDb?: number; minGap?: number; minClip?: number }) =>
       post<{
-        video_path: string; duration_seconds: number;
+        video_path: string; duration_seconds: number; median_db: number; threshold_db: number;
         proposed_clips: { start_seconds: number; end_seconds: number; duration_seconds: number; suggested_name: string }[];
-        silence_gaps: { start: number; end: number }[];
+        energy_profile: { time: number; db: number }[];
       }>(`${BASE}/gopro/analyze`, {
         video_path: videoPath,
-        silence_threshold_db: opts?.threshold ?? -30,
-        min_silence_duration: opts?.minSilence ?? 3.0,
+        drop_db: opts?.dropDb ?? 6.0,
+        min_gap_duration: opts?.minGap ?? 2.0,
         min_clip_duration: opts?.minClip ?? 30.0,
       }),
     process: (data: {

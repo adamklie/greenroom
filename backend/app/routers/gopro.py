@@ -1,6 +1,7 @@
 """GoPro session workflow API — analyze videos, process clips."""
 
 from datetime import date
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -19,9 +20,10 @@ router = APIRouter(prefix="/api/gopro", tags=["gopro"])
 
 class AnalyzeRequest(BaseModel):
     video_path: str
-    silence_threshold_db: int = -30
-    min_silence_duration: float = 3.0
+    drop_db: float = 6.0        # dB below median to count as a gap
+    min_gap_duration: float = 2.0
     min_clip_duration: float = 30.0
+    window_seconds: float = 3.0
 
 
 class ClipInput(BaseModel):
@@ -33,33 +35,33 @@ class ClipInput(BaseModel):
 
 class ProcessRequest(BaseModel):
     source_path: str
-    session_date: str  # YYYY-MM-DD
+    session_date: str
     project: str = "ozone_destructors"
     clips: list[ClipInput]
 
 
 @router.get("/list-videos")
 def get_video_list(directory: str):
-    """List video files in a directory (SD card, Desktop, etc.)."""
     files = list_video_files(directory)
-    if not files:
-        return {"files": [], "message": f"No video files found in {directory}"}
     return {"files": files, "directory": directory}
 
 
 @router.post("/analyze")
 def analyze(req: AnalyzeRequest):
-    """Analyze a video file for silence gaps and propose clip boundaries."""
+    """Analyze video using energy-based gap detection."""
     try:
         result = analyze_video(
             req.video_path,
-            silence_threshold_db=req.silence_threshold_db,
-            min_silence_duration=req.min_silence_duration,
+            drop_db=req.drop_db,
+            min_gap_duration=req.min_gap_duration,
             min_clip_duration=req.min_clip_duration,
+            window_seconds=req.window_seconds,
         )
         return {
             "video_path": result.video_path,
             "duration_seconds": result.duration_seconds,
+            "median_db": result.median_db,
+            "threshold_db": result.threshold_db,
             "proposed_clips": [
                 {
                     "start_seconds": c.start_seconds,
@@ -69,8 +71,9 @@ def analyze(req: AnalyzeRequest):
                 }
                 for c in result.proposed_clips
             ],
-            "silence_gaps": [
-                {"start": s, "end": e} for s, e in result.silence_gaps
+            "energy_profile": [
+                {"time": p.time, "db": p.db}
+                for p in result.energy_profile
             ],
         }
     except (FileNotFoundError, ValueError) as e:
@@ -81,17 +84,15 @@ def analyze(req: AnalyzeRequest):
 
 @router.post("/process")
 def process(req: ProcessRequest, db: Session = Depends(get_db)):
-    """Process marked clips: cut video, extract audio, create DB records."""
+    """Process marked clips."""
     try:
         session_date = date.fromisoformat(req.session_date)
     except ValueError:
-        raise HTTPException(400, f"Invalid date format: {req.session_date}")
+        raise HTTPException(400, f"Invalid date: {req.session_date}")
 
-    source_dir = str(type(None))  # Will use source_path's parent directory
-    from pathlib import Path
     source_file = Path(req.source_path)
     if not source_file.exists():
-        raise HTTPException(400, f"Source video not found: {req.source_path}")
+        raise HTTPException(400, f"Video not found: {req.source_path}")
 
     clips = [
         ClipMarker(
@@ -106,11 +107,8 @@ def process(req: ProcessRequest, db: Session = Depends(get_db)):
 
     try:
         result = process_session(
-            db=db,
-            source_directory=str(source_file.parent),
-            session_date=session_date,
-            clips=clips,
-            project=req.project,
+            db=db, source_directory=str(source_file.parent),
+            session_date=session_date, clips=clips, project=req.project,
         )
         return {
             "session_id": result.session_id,
