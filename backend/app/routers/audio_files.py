@@ -40,6 +40,8 @@ def _af_to_read(af: AudioFile) -> AudioFileRead:
         rating_energy=af.rating_energy,
         notes=af.notes,
         created_at=af.created_at,
+        uploaded_at=af.uploaded_at,
+        recorded_at=af.recorded_at,
         song_title=af.song.title if af.song else None,
         song_artist=af.song.artist if af.song else None,
         song_type=af.song.type if af.song else None,
