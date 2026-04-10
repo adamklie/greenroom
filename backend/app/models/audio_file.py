@@ -56,6 +56,4 @@ class AudioFile(Base):
     session: Mapped["PracticeSession | None"] = relationship(  # noqa: F821
         foreign_keys=[session_id]
     )
-    tags: Mapped[list["Tag"]] = relationship(  # noqa: F821
-        secondary="take_tags", back_populates="takes"
-    )
+    # TODO: add audio_file_tags junction table for tags on audio files
