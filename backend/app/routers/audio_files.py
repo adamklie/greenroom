@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/audio-files", tags=["audio-files"])
 
 
 def _af_to_read(af: AudioFile) -> AudioFileRead:
-    """Convert AudioFile model to read schema with joined song info."""
+    """Convert AudioFile model to read schema with joined song + session info."""
     return AudioFileRead(
         id=af.id,
         song_id=af.song_id,
@@ -25,6 +25,12 @@ def _af_to_read(af: AudioFile) -> AudioFileRead:
         source=af.source,
         role=af.role,
         version=af.version,
+        session_id=af.session_id,
+        clip_name=af.clip_name,
+        source_video=af.source_video,
+        start_time=af.start_time,
+        end_time=af.end_time,
+        video_path=af.video_path,
         rating_overall=af.rating_overall,
         rating_vocals=af.rating_vocals,
         rating_guitar=af.rating_guitar,
@@ -37,6 +43,7 @@ def _af_to_read(af: AudioFile) -> AudioFileRead:
         song_title=af.song.title if af.song else None,
         song_artist=af.song.artist if af.song else None,
         song_type=af.song.type if af.song else None,
+        session_date=str(af.session.date) if af.session else None,
     )
 
 
@@ -98,6 +105,34 @@ def update_audio_file(audio_file_id: int, data: AudioFileUpdate, db: Session = D
         _auto_move_file(af, db)
 
     return _af_to_read(af)
+
+
+@router.delete("/{audio_file_id}")
+def delete_audio_file(audio_file_id: int, db: Session = Depends(get_db)):
+    """Soft-delete: move file to _trash/."""
+    af = db.query(AudioFile).get(audio_file_id)
+    if not af:
+        raise HTTPException(404, "Audio file not found")
+
+    current_full = resolve_path(af.file_path)
+    if current_full.exists():
+        trash_dir = settings.music_dir / "_trash"
+        trash_dir.mkdir(parents=True, exist_ok=True)
+        trash_path = trash_dir / current_full.name
+        # Handle collision
+        if trash_path.exists():
+            stem, suffix = trash_path.stem, trash_path.suffix
+            counter = 1
+            while trash_path.exists():
+                trash_path = trash_dir / f"{stem}_{counter}{suffix}"
+                counter += 1
+        shutil.move(str(current_full), str(trash_path))
+        af.file_path = str(trash_path.relative_to(settings.music_dir))
+        _cleanup_empty_parent(current_full.parent)
+
+    af.role = "deleted"
+    db.commit()
+    return {"ok": True, "id": audio_file_id}
 
 
 def _auto_move_file(af: AudioFile, db: Session):

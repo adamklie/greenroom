@@ -13,6 +13,14 @@ class AudioFileRead(BaseModel):
     source: str | None = None
     role: str | None = None
     version: str | None = None
+    # Session context (for practice clips)
+    session_id: int | None = None
+    clip_name: str | None = None
+    source_video: str | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    video_path: str | None = None
+    # Ratings
     rating_overall: int | None = None
     rating_vocals: int | None = None
     rating_guitar: int | None = None
@@ -22,10 +30,12 @@ class AudioFileRead(BaseModel):
     rating_energy: int | None = None
     notes: str | None = None
     created_at: datetime | None = None
-    # Joined from Song (for Library table view)
+    # Joined from Song
     song_title: str | None = None
     song_artist: str | None = None
     song_type: str | None = None
+    # Joined from Session
+    session_date: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -35,6 +45,7 @@ class AudioFileUpdate(BaseModel):
     source: str | None = None
     role: str | None = None
     version: str | None = None
+    clip_name: str | None = None
     rating_overall: int | None = None
     rating_vocals: int | None = None
     rating_guitar: int | None = None
