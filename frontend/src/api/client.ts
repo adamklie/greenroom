@@ -100,6 +100,12 @@ export interface AudioFile {
   source: string | null;
   role: string | null;
   version: string | null;
+  session_id: number | null;
+  clip_name: string | null;
+  source_video: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  video_path: string | null;
   rating_overall: number | null;
   rating_vocals: number | null;
   rating_guitar: number | null;
@@ -108,9 +114,13 @@ export interface AudioFile {
   rating_timing: number | null;
   rating_energy: number | null;
   notes: string | null;
+  created_at: string | null;
+  uploaded_at: string | null;
+  recorded_at: string | null;
   song_title: string | null;
   song_artist: string | null;
   song_type: string | null;
+  session_date: string | null;
 }
 
 export interface LyricsVersion {

@@ -20,6 +20,7 @@ import {
   CloudUpload,
   FileText,
   Settings2,
+  MessageSquare,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Songs from "./pages/Songs";
@@ -34,6 +35,7 @@ import Import from "./pages/Import";
 import Sync from "./pages/Sync";
 import Library from "./pages/Library";
 import Settings from "./pages/Settings";
+import Feedback from "./pages/Feedback";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -50,6 +52,7 @@ const navItems = [
   { to: "/import", icon: Upload, label: "Import" },
   { to: "/triage", icon: Inbox, label: "Triage" },
   { to: "/sync", icon: CloudUpload, label: "Sync" },
+  { to: "/feedback", icon: MessageSquare, label: "Feedback" },
   { to: "/settings", icon: Settings2, label: "Settings" },
 ];
 
@@ -149,6 +152,7 @@ export default function App() {
           <Route path="/import" element={<Import />} />
           <Route path="/triage" element={<Triage />} />
           <Route path="/sync" element={<Sync />} />
+          <Route path="/feedback" element={<Feedback />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
