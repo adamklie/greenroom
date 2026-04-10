@@ -28,6 +28,13 @@ class SongRead(SongBase):
     times_practiced: int = 0
     reference_audio_file_id: int | None = None
     promoted_from_id: int | None = None
+    rating_overall: int | None = None
+    rating_vocals: int | None = None
+    rating_guitar: int | None = None
+    rating_drums: int | None = None
+    rating_tone: int | None = None
+    rating_timing: int | None = None
+    rating_energy: int | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     has_audio: bool = False
@@ -50,6 +57,13 @@ class SongUpdate(BaseModel):
     lyrics: str | None = None
     notes: str | None = None
     reference_audio_file_id: int | None = None
+    rating_overall: int | None = None
+    rating_vocals: int | None = None
+    rating_guitar: int | None = None
+    rating_drums: int | None = None
+    rating_tone: int | None = None
+    rating_timing: int | None = None
+    rating_energy: int | None = None
 
 
 class SongDetail(SongRead):

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -14,17 +14,23 @@ class AudioFile(Base):
     file_path: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     file_type: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # Expanded source taxonomy
+    # Source taxonomy
     source: Mapped[str | None] = mapped_column(String, nullable=True)
-    # gopro, phone, logic_pro, garageband, suno_ai, backing_track,
-    # collaborator, download, apple_notes, unknown
-
-    # What role does this file play?
     role: Mapped[str] = mapped_column(String, nullable=False, default="recording")
-    # recording, reference, backing_track, stem, demo, final_mix
-
     version: Mapped[str | None] = mapped_column(String, nullable=True)
     is_stem: Mapped[bool] = mapped_column(Integer, nullable=False, default=False)
+
+    # Ratings (same 7 dimensions as takes — per individual track)
+    rating_overall: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_vocals: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_guitar: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_drums: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_tone: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_timing: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_energy: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Notes
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 

@@ -6,8 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models import AudioFile, LyricsVersion, Song, Tag, Take
+from app.schemas.audio_file import AudioFileRead, AudioFileUpdate
 from app.schemas.audio_file import AudioFileRead
 from app.schemas.lyrics_version import LyricsUpdate, LyricsVersionRead
 from app.schemas.song import SongCreate, SongDetail, SongRead, SongUpdate
@@ -259,3 +261,48 @@ def promote_idea(song_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_song)
     return _song_to_read(new_song, db)
+
+
+# --- Audio File CRUD ---
+
+@router.patch("/audio-files/{audio_file_id}", response_model=AudioFileRead)
+def update_audio_file(audio_file_id: int, data: AudioFileUpdate, db: Session = Depends(get_db)):
+    """Update an audio file's metadata. If song_id changes, file moves automatically."""
+    af = db.query(AudioFile).get(audio_file_id)
+    if not af:
+        raise HTTPException(404, "Audio file not found")
+
+    changes = data.model_dump(exclude_unset=True)
+    song_changed = "song_id" in changes and changes["song_id"] != af.song_id
+
+    for field, value in changes.items():
+        setattr(af, field, value)
+
+    db.commit()
+    db.refresh(af)
+
+    # If linked to a (new) song, move file to that song's organized location
+    if song_changed and af.song_id:
+        song = db.query(Song).get(af.song_id)
+        if song:
+            from app.services.autosync import compute_organized_path, resolve_path
+            from pathlib import Path
+            import shutil
+
+            current_full = resolve_path(af.file_path)
+            if current_full.exists():
+                target_rel = compute_organized_path(song, current_full.name)
+                target_full = settings.music_dir / target_rel
+
+                if str(current_full) != str(target_full):
+                    target_full.parent.mkdir(parents=True, exist_ok=True)
+                    if not target_full.exists():
+                        shutil.move(str(current_full), str(target_full))
+                        af.file_path = target_rel
+                        db.commit()
+
+                        # Clean up empty parent
+                        from app.services.autosync import _cleanup_empty_parent
+                        _cleanup_empty_parent(current_full.parent)
+
+    return AudioFileRead.model_validate(af)

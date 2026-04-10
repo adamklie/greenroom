@@ -41,6 +41,15 @@ class Song(Base):
         ForeignKey("songs.id"), nullable=True
     )
 
+    # Song-level ratings (overall impression of the song, not a specific recording)
+    rating_overall: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_vocals: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_guitar: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_drums: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_tone: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_timing: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_energy: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # Legacy / carry-forward
     is_original: Mapped[bool] = mapped_column(Boolean, default=False)
     times_practiced: Mapped[int] = mapped_column(Integer, default=0)
