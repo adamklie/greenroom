@@ -8,12 +8,12 @@ from pydantic import BaseModel
 class SongBase(BaseModel):
     title: str
     artist: str | None = None
-    type: str = "cover"
-    project: str = "solo"
-    status: str = "idea"
+    type: str | None = None        # cover, original, idea — all optional
+    project: str | None = None     # solo, ozone_destructors, sural, etc.
+    status: str | None = None      # optional status progression
     key: str | None = None
     tempo_bpm: int | None = None
-    tuning: str | None = "standard"
+    tuning: str | None = None
     vibe: str | None = None
     lyrics: str | None = None
     notes: str | None = None

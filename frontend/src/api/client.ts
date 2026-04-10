@@ -100,6 +100,17 @@ export interface AudioFile {
   source: string | null;
   role: string | null;
   version: string | null;
+  rating_overall: number | null;
+  rating_vocals: number | null;
+  rating_guitar: number | null;
+  rating_drums: number | null;
+  rating_tone: number | null;
+  rating_timing: number | null;
+  rating_energy: number | null;
+  notes: string | null;
+  song_title: string | null;
+  song_artist: string | null;
+  song_type: string | null;
 }
 
 export interface LyricsVersion {
@@ -249,6 +260,15 @@ export const api = {
     create: (data: Record<string, unknown>) => post<ContentPost>(`${BASE}/content/posts`, data),
     update: (id: number, data: Record<string, unknown>) =>
       patch<ContentPost>(`${BASE}/content/posts/${id}`, data),
+  },
+  audioFiles: {
+    list: (params?: Record<string, string>) => {
+      const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+      return json<AudioFile[]>(`${BASE}/audio-files${qs}`);
+    },
+    get: (id: number) => json<AudioFile>(`${BASE}/audio-files/${id}`),
+    update: (id: number, data: Record<string, unknown>) =>
+      patch<AudioFile>(`${BASE}/audio-files/${id}`, data),
   },
   reorganize: {
     preview: () => json<{

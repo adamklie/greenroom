@@ -22,6 +22,10 @@ class AudioFileRead(BaseModel):
     rating_energy: int | None = None
     notes: str | None = None
     created_at: datetime | None = None
+    # Joined from Song (for Library table view)
+    song_title: str | None = None
+    song_artist: str | None = None
+    song_type: str | None = None
 
     model_config = {"from_attributes": True}
 

@@ -18,6 +18,7 @@ import {
   Scissors,
   Upload,
   CloudUpload,
+  FileText,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Songs from "./pages/Songs";
@@ -30,9 +31,11 @@ import Progress from "./pages/Progress";
 import ProcessSession from "./pages/ProcessSession";
 import Import from "./pages/Import";
 import Sync from "./pages/Sync";
+import Library from "./pages/Library";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/library", icon: FileText, label: "Library" },
   { to: "/covers", icon: Disc3, label: "Covers" },
   { to: "/originals", icon: PenTool, label: "Originals" },
   { to: "/ideas", icon: Lightbulb, label: "Ideas" },
@@ -135,6 +138,7 @@ export default function App() {
           <Route path="/ideas" element={<Songs songType="idea" title="Ideas" />} />
           <Route path="/sessions" element={<Sessions />} />
           <Route path="/process" element={<ProcessSession />} />
+          <Route path="/library" element={<Library />} />
           <Route path="/discover" element={<Discover />} />
           <Route path="/progress" element={<Progress />} />
           <Route path="/setlists" element={<SetlistBuilder />} />

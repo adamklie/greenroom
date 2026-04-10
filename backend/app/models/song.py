@@ -13,14 +13,14 @@ class Song(Base):
     title: Mapped[str] = mapped_column(String, nullable=False)
     artist: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # Three pillars: cover, original, idea
-    type: Mapped[str] = mapped_column(String, nullable=False, default="cover")
+    # Three pillars: cover, original, idea (all optional)
+    type: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # Status progression
-    status: Mapped[str] = mapped_column(String, default="idea")
+    # Status progression (optional)
+    status: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # Project / band context
-    project: Mapped[str] = mapped_column(String, nullable=False)
+    # Project / band context (optional)
+    project: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Structured music fields
     key: Mapped[str | None] = mapped_column(String, nullable=True)
