@@ -1,7 +1,6 @@
-"""File upload and import API — receive files from the browser and classify them."""
+"""File upload and import API — files go directly to organized locations."""
 
 import shutil
-from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -10,19 +9,9 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import AudioFile, Song
+from app.services.autosync import compute_organized_path
 
 router = APIRouter(prefix="/api/upload", tags=["upload"])
-
-# Where uploaded files land before being organized
-INBOX_DIR = "_inbox"
-
-PROJECT_DIRS = {
-    "solo": "Solo",
-    "ozone_destructors": "Ozone Destructors/Recordings",
-    "sural": "Sural",
-    "joe": "Joe",
-    "ideas": "Ideas",
-}
 
 
 @router.post("")
@@ -37,58 +26,58 @@ async def upload_file(
     notes: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
-    """Upload a file, optionally classify it, and add to the database.
+    """Upload a file directly to its organized location.
 
-    If song_id is provided, links to that song.
-    If create_song_title is provided, creates a new song first.
-    If neither, the file goes to the inbox for later triage.
+    Files are placed in Covers/, Originals/, or Ideas/ based on the
+    song they're linked to. Unlinked files go to _inbox/.
     """
     if not file.filename:
         raise HTTPException(400, "No filename")
 
-    # Determine destination directory
-    if song_id or create_song_title:
-        dest_subdir = PROJECT_DIRS.get(project, "_inbox")
-    else:
-        dest_subdir = INBOX_DIR
-
-    dest_dir = settings.music_dir / dest_subdir
-    dest_dir.mkdir(parents=True, exist_ok=True)
-
-    # Handle filename collisions
-    dest_file = dest_dir / file.filename
-    if dest_file.exists():
-        stem = dest_file.stem
-        suffix = dest_file.suffix
-        counter = 1
-        while dest_file.exists():
-            dest_file = dest_dir / f"{stem}_{counter}{suffix}"
-            counter += 1
-
-    # Save file
-    with open(dest_file, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-
     # Create song if requested
-    if create_song_title and not song_id:
-        new_song = Song(
+    song = None
+    if song_id:
+        song = db.query(Song).get(song_id)
+    elif create_song_title:
+        song = Song(
             title=create_song_title,
             type=song_type,
             project=project,
             status="idea",
             notes=notes,
         )
-        db.add(new_song)
+        db.add(song)
         db.flush()
-        song_id = new_song.id
+        song_id = song.id
+
+    # Compute organized destination
+    if song:
+        target_rel = compute_organized_path(song, file.filename)
+    else:
+        target_rel = f"_inbox/{file.filename}"
+
+    target_full = settings.music_dir / target_rel
+    target_full.parent.mkdir(parents=True, exist_ok=True)
+
+    # Handle collision
+    if target_full.exists():
+        stem = target_full.stem
+        suffix = target_full.suffix
+        counter = 1
+        while target_full.exists():
+            target_full = target_full.parent / f"{stem}_{counter}{suffix}"
+            counter += 1
+        target_rel = str(target_full.relative_to(settings.music_dir))
+
+    # Save file
+    with open(target_full, "wb") as f:
+        shutil.copyfileobj(file.file, f)
 
     # Create audio file record
-    rel_path = str(dest_file.relative_to(settings.music_dir))
-    ext = dest_file.suffix.lstrip(".").lower()
-
+    ext = target_full.suffix.lstrip(".").lower()
     af = AudioFile(
         song_id=song_id,
-        file_path=rel_path,
+        file_path=target_rel,
         file_type=ext,
         source=source,
         role=role,
@@ -101,6 +90,6 @@ async def upload_file(
         "ok": True,
         "audio_file_id": af.id,
         "song_id": song_id,
-        "file_path": rel_path,
-        "filename": dest_file.name,
+        "file_path": target_rel,
+        "filename": target_full.name,
     }

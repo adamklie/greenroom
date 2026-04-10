@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, engine
-from app.routers import analytics, apple_music, backup, bootstrap_router, content, dashboard, filebrowser, files, gopro, media, recommendations, reorganize, sessions, setlists, songs, sync, tags, triage, upload
+from app.routers import analytics, apple_music, backup, bootstrap_router, content, dashboard, filebrowser, files, gopro, media, recommendations, reorganize, sessions, setlists, songs, sync, tags, trash, triage, upload
 
 
 @asynccontextmanager
@@ -50,6 +50,7 @@ app.include_router(upload.router)
 app.include_router(backup.router)
 app.include_router(sync.router)
 app.include_router(reorganize.router)
+app.include_router(trash.router)
 app.include_router(bootstrap_router.router)
 
 

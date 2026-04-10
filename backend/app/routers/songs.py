@@ -115,22 +115,47 @@ def update_song(song_id: int, data: SongUpdate, db: Session = Depends(get_db)):
     if not song:
         raise HTTPException(404, "Song not found")
 
-    for field, value in data.model_dump(exclude_unset=True).items():
+    # Track which fields changed (for auto-sync)
+    changes = data.model_dump(exclude_unset=True)
+    needs_file_sync = any(k in changes for k in ("type", "project", "title", "artist"))
+
+    for field, value in changes.items():
         setattr(song, field, value)
     song.updated_at = datetime.now()
     db.commit()
     db.refresh(song)
+
+    # Auto-sync: if type/project/title/artist changed, move files to match
+    if needs_file_sync:
+        from app.services.autosync import sync_song_files
+        moves = sync_song_files(db, song)
+        db.commit()
+
     return _song_to_read(song, db)
 
 
 @router.delete("/{song_id}")
 def delete_song(song_id: int, db: Session = Depends(get_db)):
-    song = db.query(Song).get(song_id)
-    if not song:
-        raise HTTPException(404, "Song not found")
-    db.delete(song)
-    db.commit()
-    return {"ok": True}
+    """Soft-delete: moves files to _trash/, marks song as deleted.
+    Files are permanently removed after 30 days."""
+    from app.services.autosync import soft_delete_song
+    try:
+        result = soft_delete_song(db, song_id)
+        return {"ok": True, "soft_deleted": True, **result}
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.post("/{song_id}/restore", response_model=SongRead)
+def restore_deleted_song(song_id: int, db: Session = Depends(get_db)):
+    """Restore a soft-deleted song."""
+    from app.services.autosync import restore_song
+    try:
+        restore_song(db, song_id)
+        song = db.query(Song).get(song_id)
+        return _song_to_read(song, db)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
 
 
 # --- Lyrics ---
