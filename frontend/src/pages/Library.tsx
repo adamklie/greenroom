@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type AudioFile, type Song } from "../api/client";
-import { Search, Play, Star, FileAudio } from "lucide-react";
+import { api } from "../api/client";
+import { Search, Star, FileAudio } from "lucide-react";
 
 const SOURCE_OPTIONS = ["", "phone", "logic_pro", "garageband", "suno_ai", "collaborator", "download", "gopro", "unknown"];
 const ROLE_OPTIONS = ["", "recording", "demo", "reference", "backing_track", "final_mix", "stem"];
