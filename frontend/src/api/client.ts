@@ -290,6 +290,8 @@ export const api = {
     get: (id: number) => json<AudioFile>(`${BASE}/audio-files/${id}`),
     update: (id: number, data: Record<string, unknown>) =>
       patch<AudioFile>(`${BASE}/audio-files/${id}`, data),
+    delete: (id: number) =>
+      json<{ ok: boolean }>(`${BASE}/audio-files/${id}`, { method: "DELETE" }),
   },
   reorganize: {
     preview: () => json<{

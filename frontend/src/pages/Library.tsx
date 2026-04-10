@@ -28,6 +28,7 @@ const ALL_COLUMNS: Column[] = [
   { key: "session_date", label: "Session", defaultVisible: false, sortable: true, width: "w-24" },
   { key: "clip_name", label: "Clip", defaultVisible: false, sortable: true, width: "w-24" },
   { key: "file_type", label: "Format", defaultVisible: false, sortable: true, width: "w-16" },
+  { key: "recorded_at", label: "Recorded", defaultVisible: true, sortable: true, width: "w-28" },
   { key: "created_at", label: "Added", defaultVisible: false, sortable: true, width: "w-24" },
 ];
 
@@ -97,7 +98,7 @@ export default function Library() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: number) => api.audioFiles.update(id, { role: "deleted" }),
+    mutationFn: (id: number) => api.audioFiles.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["audio-files"] }),
   });
 
@@ -313,6 +314,15 @@ export default function Library() {
                     </td>
                   )}
 
+                  {visibleCols.has("recorded_at") && (
+                    <td className="px-3 py-2">
+                      <input type="date" defaultValue={af.recorded_at?.split("T")[0] || ""}
+                        onBlur={(e) => save(af.id, "recorded_at", e.target.value || null)}
+                        className="px-1 py-0.5 rounded border text-xs outline-none bg-transparent" style={inputStyle}
+                        key={`rec-${af.id}`} />
+                    </td>
+                  )}
+
                   {visibleCols.has("created_at") && (
                     <td className="px-3 py-2" style={{ color: "var(--text-muted)" }}>
                       {af.created_at ? new Date(af.created_at).toLocaleDateString() : "—"}
@@ -320,9 +330,9 @@ export default function Library() {
                   )}
 
                   <td className="px-1 py-2">
-                    <button onClick={() => deleteMut.mutate(af.id)}
-                      className="p-1 rounded hover:bg-white/10 opacity-0 group-hover:opacity-100"
-                      style={{ color: "var(--red)" }}>
+                    <button onClick={() => { if (confirm("Delete this file?")) deleteMut.mutate(af.id); }}
+                      className="p-1 rounded hover:bg-white/10"
+                      style={{ color: "var(--text-muted)" }}>
                       <Trash2 size={12} />
                     </button>
                   </td>
