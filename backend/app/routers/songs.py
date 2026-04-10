@@ -72,7 +72,15 @@ def list_songs(
 
 @router.post("", response_model=SongRead)
 def create_song(data: SongCreate, db: Session = Depends(get_db)):
-    song = Song(**data.model_dump())
+    values = data.model_dump()
+    # DB has NOT NULL on type/status/project from original schema — provide defaults
+    if not values.get("type"):
+        values["type"] = "idea"
+    if not values.get("status"):
+        values["status"] = "idea"
+    if not values.get("project"):
+        values["project"] = "solo"
+    song = Song(**values)
     db.add(song)
     db.commit()
     db.refresh(song)
