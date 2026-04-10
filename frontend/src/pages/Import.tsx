@@ -254,9 +254,9 @@ export default function Import() {
         }}
       >
         <Upload size={40} className="mx-auto mb-4" style={{ color: isDragging ? "var(--accent)" : "var(--text-muted)" }} />
-        <p className="font-medium mb-1">{isDragging ? "Drop files here" : "Drag & drop audio files"}</p>
+        <p className="font-medium mb-1">{isDragging ? "Drop files here" : "Drag & drop audio or video files"}</p>
         <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
-          m4a, mp3, wav, mp4, mov
+          m4a, mp3, wav — or mp4, mov (audio extracted automatically)
         </p>
         <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white cursor-pointer"
           style={{ background: "var(--accent)" }}>
