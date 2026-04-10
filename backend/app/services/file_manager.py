@@ -183,9 +183,10 @@ def consolidate_file(db: Session, audio_file_id: int) -> str:
             dest_file = dest_folder / f"{stem}_{counter}{suffix}"
             counter += 1
 
-    shutil.move(str(old_full), str(dest_file))
+    # COPY, not move — original stays where it is until user deletes it
+    shutil.copy2(str(old_full), str(dest_file))
 
-    # Update DB with relative path
+    # Update DB to point to the new copy inside Greenroom
     new_rel = str(dest_file.relative_to(settings.music_dir))
     af.file_path = new_rel
     db.commit()
