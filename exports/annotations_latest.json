@@ -1,5 +1,5 @@
 {
-  "exported_at": "2026-04-09T16:02:29.523714",
+  "exported_at": "2026-04-10T08:46:30.306931",
   "songs": [
     {
       "id": 1,
@@ -212,7 +212,7 @@
     {
       "id": 14,
       "title": "Your Touch",
-      "artist": null,
+      "artist": "The Black Keys",
       "type": "cover",
       "status": "rehearsed",
       "project": "ozone_destructors",
@@ -390,7 +390,7 @@
       "title": "All Apologies",
       "artist": "Nirvana",
       "type": "cover",
-      "status": "idea",
+      "status": "rehearsed",
       "project": "ozone_destructors",
       "key": null,
       "tempo_bpm": null,
@@ -980,7 +980,7 @@
     {
       "id": 62,
       "title": "Girl Is On My Mind",
-      "artist": null,
+      "artist": "The Black Keys",
       "type": "original",
       "status": "idea",
       "project": "ozone_destructors",
@@ -1726,6 +1726,38 @@
       "vibe": null,
       "lyrics": null,
       "notes": "Video improvisation",
+      "times_practiced": 0,
+      "tags": []
+    },
+    {
+      "id": 109,
+      "title": "Test Song",
+      "artist": "Test Artist",
+      "type": "cover",
+      "status": "deleted",
+      "project": "solo",
+      "key": null,
+      "tempo_bpm": null,
+      "tuning": "standard",
+      "vibe": null,
+      "lyrics": null,
+      "notes": "\n[Deleted: 2026-04-10T08:05:32.479350]",
+      "times_practiced": 0,
+      "tags": []
+    },
+    {
+      "id": 110,
+      "title": "Frisky",
+      "artist": "Dominic Fike",
+      "type": "cover",
+      "status": "idea",
+      "project": "solo",
+      "key": null,
+      "tempo_bpm": null,
+      "tuning": "standard",
+      "vibe": null,
+      "lyrics": null,
+      "notes": null,
       "times_practiced": 0,
       "tags": []
     }
