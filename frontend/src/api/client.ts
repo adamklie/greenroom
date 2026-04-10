@@ -261,6 +261,17 @@ export const api = {
     update: (id: number, data: Record<string, unknown>) =>
       patch<ContentPost>(`${BASE}/content/posts/${id}`, data),
   },
+  options: {
+    list: (category?: string) => {
+      const qs = category ? `?category=${category}` : "";
+      return json<{ id: number; category: string; value: string; label: string | null; is_default: boolean }[]>(`${BASE}/options${qs}`);
+    },
+    create: (category: string, value: string, label?: string) =>
+      post<{ id: number; category: string; value: string; label: string | null }>(
+        `${BASE}/options`, { category, value, label }),
+    delete: (id: number) =>
+      json<{ ok: boolean }>(`${BASE}/options/${id}`, { method: "DELETE" }),
+  },
   audioFiles: {
     list: (params?: Record<string, string>) => {
       const qs = params ? "?" + new URLSearchParams(params).toString() : "";

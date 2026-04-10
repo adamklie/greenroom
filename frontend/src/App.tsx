@@ -19,6 +19,7 @@ import {
   Upload,
   CloudUpload,
   FileText,
+  Settings2,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Songs from "./pages/Songs";
@@ -32,6 +33,7 @@ import ProcessSession from "./pages/ProcessSession";
 import Import from "./pages/Import";
 import Sync from "./pages/Sync";
 import Library from "./pages/Library";
+import Settings from "./pages/Settings";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -48,6 +50,7 @@ const navItems = [
   { to: "/import", icon: Upload, label: "Import" },
   { to: "/triage", icon: Inbox, label: "Triage" },
   { to: "/sync", icon: CloudUpload, label: "Sync" },
+  { to: "/settings", icon: Settings2, label: "Settings" },
 ];
 
 function getInitialTheme(): "dark" | "light" {
@@ -146,6 +149,7 @@ export default function App() {
           <Route path="/import" element={<Import />} />
           <Route path="/triage" element={<Triage />} />
           <Route path="/sync" element={<Sync />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
     </div>
