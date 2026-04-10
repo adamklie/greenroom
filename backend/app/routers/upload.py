@@ -74,6 +74,7 @@ async def upload_file(
         shutil.copyfileobj(file.file, f)
 
     # Create audio file record
+    from datetime import datetime
     ext = target_full.suffix.lstrip(".").lower()
     af = AudioFile(
         song_id=song_id,
@@ -81,6 +82,7 @@ async def upload_file(
         file_type=ext,
         source=source,
         role=role,
+        uploaded_at=datetime.now(),
     )
     db.add(af)
     db.commit()

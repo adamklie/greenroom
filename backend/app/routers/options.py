@@ -29,10 +29,15 @@ class OptionCreate(BaseModel):
 @router.get("", response_model=list[OptionRead])
 def list_options(category: str | None = Query(None), db: Session = Depends(get_db)):
     """List options, optionally filtered by category."""
-    # Seed defaults if table is empty
-    if db.query(Option).count() == 0:
+    # Seed defaults if table is empty or missing defaults
+    existing_count = db.query(Option).filter_by(is_default=True).count()
+    if existing_count < len(DEFAULT_OPTIONS):
         for opt in DEFAULT_OPTIONS:
-            db.add(Option(**opt, is_default=True))
+            exists = db.query(Option).filter_by(
+                category=opt["category"], value=opt["value"]
+            ).first()
+            if not exists:
+                db.add(Option(**opt, is_default=True))
         db.commit()
 
     q = db.query(Option)

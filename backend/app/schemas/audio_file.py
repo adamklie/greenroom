@@ -30,6 +30,8 @@ class AudioFileRead(BaseModel):
     rating_energy: int | None = None
     notes: str | None = None
     created_at: datetime | None = None
+    uploaded_at: datetime | None = None
+    recorded_at: datetime | None = None
     # Joined from Song
     song_title: str | None = None
     song_artist: str | None = None
@@ -54,3 +56,5 @@ class AudioFileUpdate(BaseModel):
     rating_timing: int | None = None
     rating_energy: int | None = None
     notes: str | None = None
+    uploaded_at: datetime | None = None
+    recorded_at: datetime | None = None

@@ -48,7 +48,10 @@ class AudioFile(Base):
     # Notes
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    uploaded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # when imported into Greenroom
+    recorded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # when the recording was made
 
     song: Mapped["Song | None"] = relationship(  # noqa: F821
         back_populates="audio_files", foreign_keys=[song_id]
