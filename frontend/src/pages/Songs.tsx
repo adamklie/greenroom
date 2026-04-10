@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Song } from "../api/client";
-import { Search, X, Play, Music, Tag, ArrowUpRight, Star, Plus } from "lucide-react";
+import { Search, X, Play, Music, Tag, ArrowUpRight, Star, Plus, Trash2 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   idea: "var(--text-muted)", learning: "var(--blue)", rehearsed: "var(--yellow)",
@@ -35,88 +35,71 @@ function StatusBadge({ status, onClick }: { status: string; onClick?: (e: React.
 const SOURCE_OPTIONS = ["", "phone", "logic_pro", "garageband", "suno_ai", "collaborator", "download", "gopro", "unknown"];
 const ROLE_OPTIONS = ["", "recording", "demo", "reference", "backing_track", "final_mix"];
 
-function AudioFileCard({ af, onUpdate }: { af: { id: number; file_path: string; file_type: string | null; source: string | null; role: string | null; version: string | null; rating_overall: number | null; notes: string | null }; onUpdate: () => void }) {
-  const [expanded, setExpanded] = useState(false);
+function SongAudioFileRow({ af, onUpdate }: { af: { id: number; file_path: string; file_type: string | null; source: string | null; role: string | null; rating_overall: number | null; notes: string | null; recorded_at?: string | null; session_date?: string | null }; onUpdate: () => void }) {
+  const queryClient = useQueryClient();
+  const [playing, setPlaying] = useState(false);
   const updateMut = useMutation({
     mutationFn: (data: Record<string, unknown>) => api.audioFiles.update(af.id, data),
     onSuccess: onUpdate,
   });
-
+  const deleteMut = useMutation({
+    mutationFn: () => api.audioFiles.delete(af.id),
+    onSuccess: () => { onUpdate(); queryClient.invalidateQueries({ queryKey: ["audio-files"] }); },
+  });
   const save = (field: string, value: unknown) => updateMut.mutate({ [field]: value === "" ? null : value });
   const filename = af.file_path.split("/").pop() || af.file_path;
   const iStyle = { borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" };
 
   return (
-    <div className="rounded-lg border p-3" style={{ background: "var(--bg)", borderColor: "var(--border)" }}>
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-xs font-medium truncate flex-1">{filename}</span>
-        {af.version && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}>{af.version}</span>}
-        <button onClick={() => setExpanded(!expanded)} className="text-xs" style={{ color: "var(--accent)" }}>
-          {expanded ? "Less" : "Edit"}
-        </button>
-      </div>
-
-      {/* Audio player */}
-      {af.file_type && ["m4a", "mp3", "wav"].includes(af.file_type) && (
-        <audio controls className="w-full h-7 mb-1" style={{ filter: "invert(1) hue-rotate(180deg)" }}>
-          <source src={api.media.audioFileUrl(af.id)} />
-        </audio>
-      )}
-
-      {/* Compact: source + role + rating */}
-      <div className="flex items-center gap-2 text-xs">
-        {af.source && <span style={{ color: "var(--text-muted)" }}>{af.source}</span>}
-        {af.role && af.role !== "recording" && <span className="capitalize" style={{ color: "var(--text-muted)" }}>· {af.role}</span>}
-        {af.rating_overall && <span style={{ color: "var(--yellow)" }}>{"★".repeat(af.rating_overall)}</span>}
-      </div>
-
-      {/* Expanded: full editing */}
-      {expanded && (
-        <div className="mt-2 pt-2 border-t space-y-2" style={{ borderColor: "var(--border)" }}>
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="text-xs block mb-0.5" style={{ color: "var(--text-muted)" }}>Source</label>
-              <select value={af.source || ""} onChange={(e) => save("source", e.target.value)}
-                className="w-full px-1 py-1 rounded border text-xs outline-none" style={iStyle}>
-                {SOURCE_OPTIONS.map(o => <option key={o} value={o}>{o || "—"}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs block mb-0.5" style={{ color: "var(--text-muted)" }}>Role</label>
-              <select value={af.role || ""} onChange={(e) => save("role", e.target.value)}
-                className="w-full px-1 py-1 rounded border text-xs outline-none" style={iStyle}>
-                {ROLE_OPTIONS.map(o => <option key={o} value={o}>{o || "—"}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs block mb-0.5" style={{ color: "var(--text-muted)" }}>Version</label>
-              <input defaultValue={af.version || ""} onBlur={(e) => save("version", e.target.value)}
-                placeholder="v1, v2..."
-                className="w-full px-1 py-1 rounded border text-xs outline-none" style={iStyle}
-                key={`ver-${af.id}`} />
-            </div>
+    <tr className="border-t" style={{ borderColor: "var(--border)" }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+      <td className="px-2 py-1.5">
+        <div>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setPlaying(!playing)} className="flex-shrink-0">
+              <Play size={10} style={{ color: "var(--accent)" }} />
+            </button>
+            <span className="font-medium truncate">{filename}</span>
           </div>
-          <div>
-            <label className="text-xs block mb-0.5" style={{ color: "var(--text-muted)" }}>Rating</label>
-            <div className="flex gap-0.5">
-              {[1,2,3,4,5].map(n => (
-                <button key={n} onClick={() => save("rating_overall", n)} className="p-0">
-                  <Star size={14} fill={af.rating_overall && n <= af.rating_overall ? "var(--yellow)" : "none"}
-                    style={{ color: af.rating_overall && n <= af.rating_overall ? "var(--yellow)" : "var(--text-muted)" }} />
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="text-xs block mb-0.5" style={{ color: "var(--text-muted)" }}>Notes</label>
-            <input defaultValue={af.notes || ""} onBlur={(e) => save("notes", e.target.value)}
-              placeholder="Notes about this recording..."
-              className="w-full px-1 py-1 rounded border text-xs outline-none" style={iStyle}
-              key={`notes-${af.id}`} />
-          </div>
+          {af.session_date && <span className="text-xs" style={{ color: "var(--text-muted)" }}>{af.session_date}</span>}
+          {af.recorded_at && !af.session_date && <span className="text-xs" style={{ color: "var(--text-muted)" }}>{new Date(af.recorded_at).toLocaleDateString()}</span>}
+          {playing && af.file_type && ["m4a", "mp3", "wav"].includes(af.file_type) && (
+            <audio controls autoPlay className="w-full h-6 mt-1" style={{ filter: "invert(1) hue-rotate(180deg)" }}>
+              <source src={api.media.audioFileUrl(af.id)} />
+            </audio>
+          )}
         </div>
-      )}
-    </div>
+      </td>
+      <td className="px-2 py-1.5">
+        <select value={af.source || ""} onChange={(e) => save("source", e.target.value)}
+          className="w-full px-1 py-0.5 rounded border text-xs outline-none bg-transparent" style={iStyle}>
+          {SOURCE_OPTIONS.map(o => <option key={o} value={o}>{o || "—"}</option>)}
+        </select>
+      </td>
+      <td className="px-2 py-1.5">
+        <select value={af.role || ""} onChange={(e) => save("role", e.target.value)}
+          className="w-full px-1 py-0.5 rounded border text-xs outline-none bg-transparent" style={iStyle}>
+          {ROLE_OPTIONS.map(o => <option key={o} value={o}>{o || "—"}</option>)}
+        </select>
+      </td>
+      <td className="px-2 py-1.5 text-center">
+        <div className="flex gap-0.5 justify-center">
+          {[1,2,3,4,5].map(n => (
+            <button key={n} onClick={() => save("rating_overall", n)} className="p-0">
+              <Star size={10} fill={af.rating_overall && n <= af.rating_overall ? "var(--yellow)" : "none"}
+                style={{ color: af.rating_overall && n <= af.rating_overall ? "var(--yellow)" : "var(--text-muted)" }} />
+            </button>
+          ))}
+        </div>
+      </td>
+      <td className="px-1 py-1.5">
+        <button onClick={() => { if (confirm("Delete?")) deleteMut.mutate(); }}
+          className="p-0.5 rounded hover:bg-white/10" style={{ color: "var(--text-muted)" }}>
+          <Trash2 size={11} />
+        </button>
+      </td>
+    </tr>
   );
 }
 
@@ -329,14 +312,27 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
         )}
       </div>
 
-      {/* All recordings (unified — audio files + practice takes are the same thing) */}
+      {/* All recordings — mini Library table filtered to this song */}
       {song.audio_files.length > 0 && (
         <div className="mb-4">
           <h4 className="text-sm font-semibold mb-2">Recordings ({song.audio_files.length})</h4>
-          <div className="space-y-2">
-            {song.audio_files.map((af) => (
-              <AudioFileCard key={af.id} af={af} onUpdate={invalidate} />
-            ))}
+          <div className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--border)" }}>
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ background: "var(--bg)" }}>
+                  <th className="text-left px-2 py-1.5 font-medium" style={{ color: "var(--text-muted)" }}>File</th>
+                  <th className="text-left px-2 py-1.5 font-medium w-16" style={{ color: "var(--text-muted)" }}>Source</th>
+                  <th className="text-left px-2 py-1.5 font-medium w-16" style={{ color: "var(--text-muted)" }}>Role</th>
+                  <th className="text-center px-2 py-1.5 font-medium w-20" style={{ color: "var(--text-muted)" }}>Rating</th>
+                  <th className="w-6" />
+                </tr>
+              </thead>
+              <tbody>
+                {song.audio_files.map((af) => (
+                  <SongAudioFileRow key={af.id} af={af} onUpdate={invalidate} />
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
