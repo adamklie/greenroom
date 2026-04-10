@@ -157,6 +157,8 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
   const [editingLyrics, setEditingLyrics] = useState(false);
   const [lyricsText, setLyricsText] = useState("");
   const [newTag, setNewTag] = useState("");
+  const [panelWidth, setPanelWidth] = useState(520);
+  const [dragging, setDragging] = useState(false);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["song", songId] });
@@ -189,9 +191,25 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
     updateSong.mutate({ [field]: value === "" ? null : value });
   };
 
+  const handleMouseDown = () => {
+    setDragging(true);
+    const onMove = (e: MouseEvent) => {
+      const w = window.innerWidth - e.clientX;
+      setPanelWidth(Math.max(380, Math.min(900, w)));
+    };
+    const onUp = () => { setDragging(false); window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
   return (
-    <div className="fixed inset-y-0 right-0 w-[480px] border-l shadow-2xl z-50 overflow-y-auto p-6"
-      style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
+    <div className="fixed inset-y-0 right-0 border-l shadow-2xl z-50 flex"
+      style={{ width: panelWidth, background: "var(--bg-card)", borderColor: "var(--border)" }}>
+      {/* Drag to resize */}
+      <div onMouseDown={handleMouseDown}
+        className="w-1.5 cursor-col-resize flex-shrink-0 hover:opacity-100 transition-opacity"
+        style={{ background: dragging ? "var(--accent)" : "var(--border)", opacity: dragging ? 1 : 0.3 }} />
+      <div className="flex-1 overflow-y-auto p-6">
       <div className="flex justify-between items-start mb-4">
         <button onClick={onClose} className="p-1 rounded hover:bg-white/10 ml-auto"><X size={18} /></button>
       </div>
@@ -298,13 +316,11 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
                 className="px-3 py-1 rounded text-sm" style={{ color: "var(--text-muted)" }}>Cancel</button>
             </div>
           </div>
-        ) : song.lyrics ? (
+        ) : song.lyrics && (
           <pre className="text-sm whitespace-pre-wrap font-mono p-3 rounded-lg max-h-48 overflow-y-auto"
             style={{ background: "var(--bg)", color: "var(--text-muted)" }}>
             {song.lyrics}
           </pre>
-        ) : (
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>No lyrics yet</p>
         )}
         {song.lyrics_versions.length > 0 && (
           <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
@@ -313,7 +329,7 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
         )}
       </div>
 
-      {/* Audio files — editable table */}
+      {/* All recordings (unified — audio files + practice takes are the same thing) */}
       {song.audio_files.length > 0 && (
         <div className="mb-4">
           <h4 className="text-sm font-semibold mb-2">Recordings ({song.audio_files.length})</h4>
@@ -324,26 +340,7 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
           </div>
         </div>
       )}
-
-      {/* Takes */}
-      {song.takes.length > 0 && (
-        <div>
-          <h4 className="text-sm font-semibold mb-2">Practice Takes ({song.takes.length})</h4>
-          {song.takes.map((t) => (
-            <div key={t.id} className="rounded-lg p-3 mb-2 border" style={{ background: "var(--bg)", borderColor: "var(--border)" }}>
-              <div className="flex justify-between items-center text-sm mb-1">
-                <span>{t.session_date}</span>
-                {t.rating_overall && <span style={{ color: "var(--yellow)" }}>{"★".repeat(t.rating_overall)}</span>}
-              </div>
-              {t.audio_path && (
-                <audio controls className="w-full h-8" style={{ filter: "invert(1) hue-rotate(180deg)" }}>
-                  <source src={api.media.takeAudioUrl(t.id)} />
-                </audio>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      </div>{/* end scrollable content */}
     </div>
   );
 }
