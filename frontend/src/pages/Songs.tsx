@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Song } from "../api/client";
-import { Search, X, Play, Music, Tag, ArrowUpRight, Star } from "lucide-react";
+import { Search, X, Play, Music, Tag, ArrowUpRight, Star, Plus } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   idea: "var(--text-muted)", learning: "var(--blue)", rehearsed: "var(--yellow)",
@@ -350,6 +350,9 @@ export default function Songs({ songType, title }: { songType: string; title: st
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newArtist, setNewArtist] = useState("");
 
   const queryClient = useQueryClient();
   const params: Record<string, string> = { type: songType };
@@ -373,6 +376,22 @@ export default function Songs({ songType, title }: { songType: string; title: st
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["songs"] }),
   });
 
+  const createMut = useMutation({
+    mutationFn: () => api.songs.create({
+      title: newTitle,
+      artist: songType === "cover" ? newArtist || null : null,
+      type: songType,
+      status: songType === "idea" ? "captured" : "idea",
+    }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["songs"] });
+      setShowCreate(false);
+      setNewTitle("");
+      setNewArtist("");
+      setSelectedId(data.id);
+    },
+  });
+
   const cycleStatus = (song: Song) => {
     const statuses = STATUSES_BY_TYPE[songType] || STATUSES_BY_TYPE.cover;
     const idx = statuses.indexOf(song.status);
@@ -382,9 +401,46 @@ export default function Songs({ songType, title }: { songType: string; title: st
 
   const statuses = STATUSES_BY_TYPE[songType] || STATUSES_BY_TYPE.cover;
 
+  const inputStyle2 = { borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" };
+
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">{title}</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold">{title}</h2>
+        <button onClick={() => setShowCreate(!showCreate)}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
+          style={{ background: "var(--accent)" }}>
+          <Plus size={16} /> Add {songType === "cover" ? "Cover" : songType === "original" ? "Original" : "Idea"}
+        </button>
+      </div>
+
+      {showCreate && (
+        <div className="rounded-xl p-4 border mb-4 flex gap-3 items-end"
+          style={{ background: "var(--bg-card)", borderColor: "var(--accent)" }}>
+          <div className="flex-1">
+            <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Title</label>
+            <input autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && newTitle.trim()) createMut.mutate(); }}
+              placeholder={songType === "cover" ? "Song title..." : songType === "idea" ? "Idea name..." : "Song title..."}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none" style={inputStyle2} />
+          </div>
+          {songType === "cover" && (
+            <div className="flex-1">
+              <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Artist</label>
+              <input value={newArtist} onChange={(e) => setNewArtist(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && newTitle.trim()) createMut.mutate(); }}
+                placeholder="Original artist..."
+                className="w-full px-3 py-2 rounded-lg border text-sm outline-none" style={inputStyle2} />
+            </div>
+          )}
+          <button onClick={() => createMut.mutate()} disabled={!newTitle.trim()}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
+            style={{ background: "var(--accent)" }}>Create</button>
+          <button onClick={() => { setShowCreate(false); setNewTitle(""); setNewArtist(""); }}
+            className="px-4 py-2 rounded-lg text-sm border"
+            style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>Cancel</button>
+        </div>
+      )}
 
       <div className="flex gap-3 mb-6 flex-wrap">
         <div className="relative">
