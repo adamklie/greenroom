@@ -3,7 +3,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import PracticeSession, Tag, Take
+from app.models import AudioFile, PracticeSession, Tag, Take
 from app.schemas.session import SessionDetail, SessionRead
 from app.schemas.take import TakeRead, TakeUpdate
 
@@ -31,7 +31,9 @@ def list_sessions(
     sessions = q.order_by(PracticeSession.date.desc()).all()
     result = []
     for s in sessions:
-        take_count = db.query(func.count(Take.id)).filter(Take.session_id == s.id).scalar()
+        take_count = db.query(
+            func.count(func.distinct(func.coalesce(AudioFile.video_path, AudioFile.file_path)))
+        ).filter(AudioFile.session_id == s.id).scalar()
         sr = SessionRead.model_validate(s)
         sr.take_count = take_count
         result.append(sr)

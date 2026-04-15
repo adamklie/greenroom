@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, engine
-from app.routers import analytics, apple_music, audio_files, backup, bootstrap_router, content, dashboard, feedback, filebrowser, files, gopro, media, options, recommendations, reorganize, sessions, setlists, songs, sync, tags, trash, triage, upload
+from app.routers import analytics, apple_music, audio_files, backup, bootstrap_router, content, dashboard, dedup, feedback, filebrowser, files, gopro, media, options, recommendations, reorganize, sessions, setlists, songs, sync, tabs as tabs_router, tags, trash, trim, triage, upload
 
 
 @asynccontextmanager
@@ -26,7 +26,7 @@ app = FastAPI(title="Greenroom", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5176"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,6 +54,9 @@ app.include_router(reorganize.router)
 app.include_router(trash.router)
 app.include_router(options.router)
 app.include_router(feedback.router)
+app.include_router(trim.router)
+app.include_router(tabs_router.router)
+app.include_router(dedup.router)
 app.include_router(bootstrap_router.router)
 
 

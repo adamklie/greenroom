@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, GitMerge, Check, Zap } from "lucide-react";
 
 const CATEGORIES = [
   { key: "source", label: "Sources", description: "Where audio files come from" },
@@ -84,6 +84,138 @@ function CategorySection({ category, label, description }: { category: string; l
   );
 }
 
+function DedupSection() {
+  const queryClient = useQueryClient();
+  const [fuzzy, setFuzzy] = useState(false);
+  const { data: groups = [], isLoading } = useQuery({
+    queryKey: ["dedup", fuzzy],
+    queryFn: () => api.dedup.duplicates(fuzzy),
+  });
+
+  const [selections, setSelections] = useState<Record<string, number>>({});
+
+  const mergeMut = useMutation({
+    mutationFn: ({ keepId, mergeIds }: { keepId: number; mergeIds: number[] }) =>
+      api.dedup.merge(keepId, mergeIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dedup"] });
+      queryClient.invalidateQueries({ queryKey: ["songs"] });
+      queryClient.invalidateQueries({ queryKey: ["audio-files"] });
+    },
+  });
+
+  const mergeGroup = (group: typeof groups[0], keepId: number) => {
+    const mergeIds = group.entries.filter(e => e.id !== keepId).map(e => e.id);
+    mergeMut.mutate({ keepId, mergeIds });
+  };
+
+  const autoMergeAll = () => {
+    if (!confirm(`Auto-merge ${groups.length} duplicate groups? The entry with the most audio+takes will be kept in each group.`)) return;
+    for (const group of groups) {
+      // Pick the one with most content
+      const best = [...group.entries].sort((a, b) =>
+        (b.audio_count + b.take_count) - (a.audio_count + a.take_count)
+      )[0];
+      mergeGroup(group, best.id);
+    }
+  };
+
+  if (isLoading) return <div style={{ color: "var(--text-muted)" }}>Scanning for duplicates...</div>;
+
+  return (
+    <div className="rounded-xl p-5 border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="font-semibold flex items-center gap-2">
+          <GitMerge size={16} /> Song Deduplication
+        </h3>
+        {groups.length > 0 && (
+          <button onClick={autoMergeAll}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium text-white"
+            style={{ background: "var(--accent)" }}>
+            <Zap size={12} /> Auto-Merge All ({groups.length})
+          </button>
+        )}
+      </div>
+      <div className="flex items-center gap-3 mb-4">
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+          Songs with matching title + artist. Pick which to keep — audio files, takes, and metadata merge into it.
+        </p>
+        <label className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap">
+          <input type="checkbox" checked={fuzzy} onChange={(e) => setFuzzy(e.target.checked)} />
+          Fuzzy matching
+        </label>
+      </div>
+
+      {groups.length === 0 && (
+        <div className="text-center py-6">
+          <Check size={24} className="mx-auto mb-2" style={{ color: "var(--green)" }} />
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>No duplicates found</p>
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {groups.map((group) => {
+          const selected = selections[group.key] || group.entries[0]?.id;
+          return (
+            <div key={group.key} className="rounded-lg border p-3" style={{ borderColor: "var(--border)" }}>
+              <div className="text-sm font-medium mb-2">
+                {group.entries[0].title}
+                {group.entries[0].artist && <span style={{ color: "var(--text-muted)" }}> — {group.entries[0].artist}</span>}
+                <span className="text-xs ml-2 px-1.5 py-0.5 rounded" style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}>
+                  {group.entries.length} entries
+                </span>
+              </div>
+
+              <table className="w-full text-xs mb-2">
+                <thead>
+                  <tr style={{ color: "var(--text-muted)" }}>
+                    <th className="text-left py-1 w-8">Keep</th>
+                    <th className="text-left py-1">ID</th>
+                    <th className="text-left py-1">Type</th>
+                    <th className="text-left py-1">Status</th>
+                    <th className="text-left py-1">Project</th>
+                    <th className="text-center py-1">Audio</th>
+                    <th className="text-center py-1">Takes</th>
+                    <th className="text-left py-1">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.entries.map((entry) => (
+                    <tr key={entry.id} className="border-t" style={{ borderColor: "var(--border)",
+                      background: selected === entry.id ? "rgba(139,92,246,0.08)" : "transparent" }}>
+                      <td className="py-1.5">
+                        <input type="radio" name={`keep-${group.key}`}
+                          checked={selected === entry.id}
+                          onChange={() => setSelections(s => ({ ...s, [group.key]: entry.id }))} />
+                      </td>
+                      <td className="py-1.5" style={{ color: "var(--accent)" }}>{entry.id}</td>
+                      <td className="py-1.5">{entry.type || "—"}</td>
+                      <td className="py-1.5">{entry.status || "—"}</td>
+                      <td className="py-1.5">{entry.project || "—"}</td>
+                      <td className="py-1.5 text-center">{entry.audio_count}</td>
+                      <td className="py-1.5 text-center">{entry.take_count}</td>
+                      <td className="py-1.5 truncate max-w-32" style={{ color: "var(--text-muted)" }}>
+                        {entry.notes || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <button onClick={() => mergeGroup(group, selected)}
+                disabled={mergeMut.isPending}
+                className="flex items-center gap-1 px-3 py-1 rounded text-xs font-medium text-white disabled:opacity-50"
+                style={{ background: "var(--green)" }}>
+                <GitMerge size={11} /> Merge into #{selected}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function Settings() {
   return (
     <div className="max-w-2xl">
@@ -93,6 +225,7 @@ export default function Settings() {
       </p>
 
       <div className="space-y-6">
+        <DedupSection />
         {CATEGORIES.map(({ key, label, description }) => (
           <CategorySection key={key} category={key} label={label} description={description} />
         ))}

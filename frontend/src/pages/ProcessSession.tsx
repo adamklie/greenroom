@@ -126,6 +126,7 @@ export default function ProcessSession() {
   const [clips, setClips] = useState<Clip[]>([]);
   const [duration, setDuration] = useState(0);
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split("T")[0]);
+  const [existingSessionId, setExistingSessionId] = useState<number | null>(null);
   const [marking, setMarking] = useState<{ start: number } | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -136,6 +137,8 @@ export default function ProcessSession() {
   const [showHelp, setShowHelp] = useState(false);
 
   const { data: songs = [] } = useQuery({ queryKey: ["songs-all"], queryFn: () => api.songs.list() });
+  const { data: allSessions = [] } = useQuery({ queryKey: ["sessions-all"], queryFn: () => api.sessions.list() });
+  const recentSessions = [...allSessions].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")).slice(0, 30);
   useQuery({ queryKey: ["tags"], queryFn: () => api.tags.list() });
 
   const listMut = useMutation({ mutationFn: () => api.gopro.listVideos(directory) });
@@ -159,6 +162,7 @@ export default function ProcessSession() {
         start_seconds: c.start_seconds, end_seconds: c.end_seconds,
         clip_name: c.clip_name, song_id: c.song_id,
       })),
+      existing_session_id: existingSessionId,
     }),
   });
 
@@ -387,14 +391,19 @@ export default function ProcessSession() {
               <div key={i} className="p-3 rounded-lg border" style={{ background: "var(--bg)", borderColor: "var(--border)" }}>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-xs w-6 text-center font-bold" style={{ color: "var(--accent)" }}>{i + 1}</span>
-                  <button onClick={() => seekTo(clip.start_seconds)} className="text-xs" style={{ color: "var(--accent)" }}>▶</button>
+                  <button onClick={() => seekTo(clip.start_seconds)} title="Jump to start" className="text-xs" style={{ color: "var(--accent)" }}>▶</button>
                   <input value={formatTime(clip.start_seconds)}
                     onChange={(e) => updateClip(i, "start_seconds", parseTime(e.target.value))}
-                    className="w-20 px-2 py-1 rounded border text-sm text-center outline-none" style={inputStyle} />
+                    onFocus={() => seekTo(clip.start_seconds)}
+                    title="Click to seek; type to edit"
+                    className="w-20 px-2 py-1 rounded border text-sm text-center outline-none cursor-pointer" style={inputStyle} />
                   <span style={{ color: "var(--text-muted)" }}>→</span>
+                  <button onClick={() => seekTo(clip.end_seconds)} title="Jump to end" className="text-xs" style={{ color: "var(--accent)" }}>▶</button>
                   <input value={formatTime(clip.end_seconds)}
                     onChange={(e) => updateClip(i, "end_seconds", parseTime(e.target.value))}
-                    className="w-20 px-2 py-1 rounded border text-sm text-center outline-none" style={inputStyle} />
+                    onFocus={() => seekTo(clip.end_seconds)}
+                    title="Click to seek; type to edit"
+                    className="w-20 px-2 py-1 rounded border text-sm text-center outline-none cursor-pointer" style={inputStyle} />
                   <span className="text-xs" style={{ color: "var(--text-muted)" }}>({formatTime(clip.end_seconds - clip.start_seconds)})</span>
                   <input value={clip.clip_name} onChange={(e) => updateClip(i, "clip_name", e.target.value)}
                     placeholder="clip name..." className="flex-1 px-2 py-1 rounded border text-sm outline-none" style={inputStyle} />
@@ -438,8 +447,18 @@ export default function ProcessSession() {
           <div className="flex gap-3 items-center mb-4">
             <div>
               <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Session Date</label>
-              <input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)}
+              <input type="date" value={sessionDate} onChange={(e) => { setSessionDate(e.target.value); setExistingSessionId(null); }}
                 className="px-3 py-2 rounded-lg border text-sm outline-none" style={inputStyle} />
+            </div>
+            <div>
+              <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Target Session</label>
+              <select value={existingSessionId ?? ""} onChange={(e) => setExistingSessionId(e.target.value ? Number(e.target.value) : null)}
+                className="px-3 py-2 rounded-lg border text-sm outline-none" style={inputStyle}>
+                <option value="">New session</option>
+                {recentSessions.map((s) => (
+                  <option key={s.id} value={s.id}>#{s.id} · {s.date} · {s.folder_path.split("/").pop()} ({s.take_count ?? 0})</option>
+                ))}
+              </select>
             </div>
             <div className="flex-1" />
             <button onClick={() => processMut.mutate()} disabled={processMut.isPending || clips.length === 0}

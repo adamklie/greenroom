@@ -1,10 +1,13 @@
 """Audio Files API — the fundamental unit. List, edit, and manage all recordings."""
 
 import shutil
+import subprocess
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+
+from app.models.audio_file import generate_identifier
 
 from app.config import settings
 from app.database import get_db
@@ -17,17 +20,20 @@ router = APIRouter(prefix="/api/audio-files", tags=["audio-files"])
 
 def _af_to_read(af: AudioFile) -> AudioFileRead:
     """Convert AudioFile model to read schema with joined song + session info."""
+    abs_path = settings.music_dir / af.file_path if af.file_path else None
     return AudioFileRead(
         id=af.id,
         song_id=af.song_id,
         file_path=af.file_path,
         file_type=af.file_type,
+        identifier=af.identifier,
+        submitted_file_name=af.submitted_file_name,
         source=af.source,
         role=af.role,
         version=af.version,
         session_id=af.session_id,
         clip_name=af.clip_name,
-        source_video=af.source_video,
+        source_file=af.source_file,
         start_time=af.start_time,
         end_time=af.end_time,
         video_path=af.video_path,
@@ -38,6 +44,10 @@ def _af_to_read(af: AudioFile) -> AudioFileRead:
         rating_tone=af.rating_tone,
         rating_timing=af.rating_timing,
         rating_energy=af.rating_energy,
+        rating_keys=af.rating_keys,
+        rating_bass=af.rating_bass,
+        rating_mix=af.rating_mix,
+        rating_other=af.rating_other,
         notes=af.notes,
         created_at=af.created_at,
         uploaded_at=af.uploaded_at,
@@ -46,6 +56,7 @@ def _af_to_read(af: AudioFile) -> AudioFileRead:
         song_artist=af.song.artist if af.song else None,
         song_type=af.song.type if af.song else None,
         session_date=str(af.session.date) if af.session else None,
+        file_exists=abs_path.exists() if abs_path else False,
     )
 
 
@@ -56,10 +67,14 @@ def list_audio_files(
     role: str | None = Query(None),
     has_song: bool | None = Query(None),
     search: str | None = Query(None),
+    include_deleted: bool = Query(False),
     db: Session = Depends(get_db),
 ):
-    """List all audio files with optional filters."""
+    """List all audio files with optional filters. Hides role='deleted' unless include_deleted=true."""
     q = db.query(AudioFile).filter(AudioFile.is_stem == False)  # noqa: E712
+
+    if not include_deleted and role != "deleted":
+        q = q.filter((AudioFile.role != "deleted") | (AudioFile.role.is_(None)))
 
     if song_id is not None:
         q = q.filter(AudioFile.song_id == song_id)
@@ -72,7 +87,13 @@ def list_audio_files(
     elif has_song is False:
         q = q.filter(AudioFile.song_id.is_(None))
     if search:
-        q = q.filter(AudioFile.file_path.ilike(f"%{search}%"))
+        like = f"%{search}%"
+        q = q.filter(
+            (AudioFile.file_path.ilike(like))
+            | (AudioFile.identifier.ilike(like))
+            | (AudioFile.clip_name.ilike(like))
+            | (AudioFile.submitted_file_name.ilike(like))
+        )
 
     files = q.order_by(AudioFile.created_at.desc()).all()
     return [_af_to_read(af) for af in files]
@@ -135,6 +156,65 @@ def delete_audio_file(audio_file_id: int, db: Session = Depends(get_db)):
     af.role = "deleted"
     db.commit()
     return {"ok": True, "id": audio_file_id}
+
+
+FFMPEG = "/Users/adamklie/opt/ffmpeg" if Path("/Users/adamklie/opt/ffmpeg").exists() else "ffmpeg"
+
+
+@router.post("/{audio_file_id}/extract-audio", response_model=AudioFileRead)
+def extract_audio(audio_file_id: int, db: Session = Depends(get_db)):
+    """Create an audio (m4a) sibling for a video AudioFile."""
+    af = db.query(AudioFile).get(audio_file_id)
+    if not af:
+        raise HTTPException(404, "Audio file not found")
+    if af.file_type not in {"mp4", "mov"}:
+        raise HTTPException(400, f"Source is not a video (file_type={af.file_type})")
+
+    video_abs = settings.music_dir / af.file_path
+    if not video_abs.exists():
+        raise HTTPException(400, f"Source file missing on disk: {af.file_path}")
+
+    if af.session and af.clip_name:
+        date_str = f"{af.session.date.year}-{af.session.date.month}-{af.session.date.day}"
+        audio_dir = settings.music_dir / "_audio_exports" / af.source.replace("_", " ").title() / date_str \
+            if af.source else video_abs.parent
+        audio_name = f"{date_str}_{af.clip_name}.m4a"
+    else:
+        audio_dir = video_abs.parent
+        audio_name = f"{video_abs.stem}.m4a"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    audio_abs = audio_dir / audio_name
+    audio_rel = str(audio_abs.relative_to(settings.music_dir))
+
+    existing = db.query(AudioFile).filter_by(file_path=audio_rel).first()
+    if existing:
+        return _af_to_read(existing)
+
+    subprocess.run([
+        FFMPEG, "-i", str(video_abs), "-vn", "-acodec", "aac", "-b:a", "192k", "-y", str(audio_abs),
+    ], capture_output=True, timeout=120, check=True)
+
+    ts = af.recorded_at.isoformat() if af.recorded_at else ""
+    new_af = AudioFile(
+        song_id=af.song_id,
+        file_path=audio_rel,
+        file_type="m4a",
+        identifier=generate_identifier(audio_name, ts),
+        source=af.source,
+        role=af.role or "practice_clip",
+        is_stem=False,
+        session_id=af.session_id,
+        clip_name=af.clip_name,
+        source_file=af.source_file,
+        start_time=af.start_time,
+        end_time=af.end_time,
+        video_path=af.file_path,
+        recorded_at=af.recorded_at,
+    )
+    db.add(new_af)
+    db.commit()
+    db.refresh(new_af)
+    return _af_to_read(new_af)
 
 
 def _auto_move_file(af: AudioFile, db: Session):

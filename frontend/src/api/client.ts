@@ -44,8 +44,25 @@ export interface DashboardStats {
   triage_pending: number;
 }
 
+export interface RecentSong {
+  id: number; title: string; artist: string | null;
+  type: string; status: string; created_at: string | null;
+}
+export interface RecentAudioFile {
+  id: number; identifier: string | null; file_path: string; file_type: string;
+  song_id: number | null; song_title: string | null;
+  session_id: number | null; session_date: string | null;
+  created_at: string | null; uploaded_at: string | null; recorded_at: string | null;
+}
+export interface RecentSession {
+  id: number; date: string; folder_path: string;
+  clip_count: number; created_at: string | null;
+}
 export interface DashboardResponse {
   stats: DashboardStats;
+  recent_songs: RecentSong[];
+  recent_audio_files: RecentAudioFile[];
+  recent_sessions: RecentSession[];
 }
 
 export interface Song {
@@ -97,12 +114,14 @@ export interface AudioFile {
   song_id: number | null;
   file_path: string;
   file_type: string | null;
+  identifier: string | null;
+  submitted_file_name: string | null;
   source: string | null;
   role: string | null;
   version: string | null;
   session_id: number | null;
   clip_name: string | null;
-  source_video: string | null;
+  source_file: string | null;
   start_time: string | null;
   end_time: string | null;
   video_path: string | null;
@@ -113,6 +132,10 @@ export interface AudioFile {
   rating_tone: number | null;
   rating_timing: number | null;
   rating_energy: number | null;
+  rating_keys: number | null;
+  rating_bass: number | null;
+  rating_mix: number | null;
+  rating_other: number | null;
   notes: string | null;
   created_at: string | null;
   uploaded_at: string | null;
@@ -121,6 +144,7 @@ export interface AudioFile {
   song_artist: string | null;
   song_type: string | null;
   session_date: string | null;
+  file_exists: boolean | null;
 }
 
 export interface LyricsVersion {
@@ -129,6 +153,19 @@ export interface LyricsVersion {
   version_number: number;
   lyrics_text: string;
   change_note: string | null;
+}
+
+export interface SongTab {
+  id: number;
+  song_id: number;
+  label: string | null;
+  instrument: string | null;
+  file_path: string;
+  file_format: string | null;
+  original_filename: string | null;
+  is_primary: boolean;
+  notes: string | null;
+  created_at: string | null;
 }
 
 export interface SongDetail extends Song {
@@ -167,6 +204,7 @@ export interface TriageItem {
   suggested_type: string | null;
   suggested_source: string | null;
   status: string;
+  audio_file_id: number | null;
 }
 
 export interface ContentPost {
@@ -292,6 +330,10 @@ export const api = {
       patch<AudioFile>(`${BASE}/audio-files/${id}`, data),
     delete: (id: number) =>
       json<{ ok: boolean }>(`${BASE}/audio-files/${id}`, { method: "DELETE" }),
+    trim: (id: number, startTime: number, endTime: number) =>
+      post<AudioFile>(`${BASE}/audio-files/${id}/trim`, { start_time: startTime, end_time: endTime }),
+    extractAudio: (id: number) =>
+      post<AudioFile>(`${BASE}/audio-files/${id}/extract-audio`, {}),
   },
   reorganize: {
     preview: () => json<{
@@ -300,6 +342,27 @@ export const api = {
     }>(`${BASE}/reorganize/preview`),
     execute: (moveIds?: number[]) =>
       post<{ moved: number; skipped: number; errors: string[] }>(`${BASE}/reorganize/execute`, { move_ids: moveIds ?? null }),
+  },
+  tabs: {
+    list: (songId?: number) => {
+      const qs = songId !== undefined ? `?song_id=${songId}` : "";
+      return json<SongTab[]>(`${BASE}/tabs${qs}`);
+    },
+    get: (id: number) => json<SongTab>(`${BASE}/tabs/${id}`),
+    update: (id: number, data: Record<string, unknown>) =>
+      patch<SongTab>(`${BASE}/tabs/${id}`, data),
+    delete: (id: number) =>
+      json<{ ok: boolean }>(`${BASE}/tabs/${id}`, { method: "DELETE" }),
+    fileUrl: (id: number) => `${BASE}/tabs/${id}/file`,
+  },
+  dedup: {
+    duplicates: (fuzzy = false) => json<{
+      key: string;
+      entries: { id: number; title: string; artist: string | null; type: string | null; status: string | null; project: string | null; audio_count: number; take_count: number; notes: string | null }[];
+    }[]>(`${BASE}/dedup/duplicates${fuzzy ? "?fuzzy=true" : ""}`),
+    merge: (keepId: number, mergeIds: number[]) =>
+      post<{ ok: boolean; kept: { id: number; title: string }; merged_audio: number; merged_takes: number; deleted_songs: { id: number; title: string }[] }>(
+        `${BASE}/dedup/merge`, { keep_id: keepId, merge_ids: mergeIds }),
   },
   sync: {
     afterPractice: () => post<{
@@ -344,6 +407,7 @@ export const api = {
     process: (data: {
       source_path: string; session_date: string; project?: string;
       clips: { start_seconds: number; end_seconds: number; clip_name: string; song_id?: number | null }[];
+      existing_session_id?: number | null;
     }) => post<{
       session_id: number; session_date: string; clips_processed: number;
       audio_extracted: number; errors: string[]; cuts_txt_path: string;
@@ -367,18 +431,22 @@ export const api = {
     statusFunnel: () => json<{ status: string; count: number }[]>(`${BASE}/analytics/status-funnel`),
   },
   appleMusic: {
-    import: () => post<{
-      total_tracks: number; newly_imported: number; updated: number;
-      linked_to_songs: number; own_recordings: number; exported_from_music_app: number;
-    }>(`${BASE}/apple-music/import`, {}),
-    stats: () => json<{
+    ingestDump: (path: string, wipe = false) =>
+      post<Record<string, unknown>>(`${BASE}/apple-music/ingest-dump`, { path, wipe }),
+    linkSongs: () => post<Record<string, number>>(`${BASE}/apple-music/link-songs`, {}),
+    stats: (includeAllGenres = false) => json<{
       imported: boolean; total_tracks?: number; total_plays?: number;
+      total_listen_hours?: number; excluded_genres?: string[];
       top_artists?: { artist: string; plays: number; tracks: number }[];
       top_genres?: { genre: string; plays: number }[];
-    }>(`${BASE}/apple-music/stats`),
-    suggestions: (limit = 20) =>
-      json<{ title: string; artist: string; play_count: number; genre: string; duration_seconds: number }[]>(
-        `${BASE}/apple-music/suggestions?limit=${limit}`
+    }>(`${BASE}/apple-music/stats?include_all_genres=${includeAllGenres}`),
+    suggestions: (limit = 20, includeAllGenres = false) =>
+      json<{
+        title: string; artist: string; album: string | null; genre: string | null;
+        play_count: number; total_play_ms: number; last_played_at: string | null;
+        duration_seconds: number | null;
+      }[]>(
+        `${BASE}/apple-music/suggestions?limit=${limit}&include_all_genres=${includeAllGenres}`
       ),
   },
   recommendations: {

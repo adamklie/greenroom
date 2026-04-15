@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+/* AlphaTab music notation font — required for tab rendering */
+@font-face {
+  font-family: "alphaTab";
+  src: url("/alphatab/Bravura.woff2") format("woff2"),
+       url("/alphatab/Bravura.woff") format("woff"),
+       url("/alphatab/Bravura.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
 /* Dark theme (default) */
 :root, [data-theme="dark"] {
   --bg: #0f1117;

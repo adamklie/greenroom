@@ -197,10 +197,15 @@ def bootstrap_media(db: DBSession, songs_by_norm: dict[str, Song]) -> tuple[int,
                     matched = song
                     break
 
+        from pathlib import Path as _Path
+        from app.models.audio_file import generate_identifier
+        orig_name = _Path(pf.file_path).name
         af = AudioFile(
             song_id=matched.id if matched else None,
             file_path=pf.file_path,
             file_type=pf.file_type,
+            identifier=generate_identifier(orig_name),
+            submitted_file_name=orig_name,
             source=pf.source,
             role=pf.role,
             version=pf.version,

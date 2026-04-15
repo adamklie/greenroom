@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import AudioFile, LyricsVersion, Song, Tag, Take
+from app.models.listening import ListeningHistory
 from app.schemas.audio_file import AudioFileRead, AudioFileUpdate
 from app.schemas.audio_file import AudioFileRead
 from app.schemas.lyrics_version import LyricsUpdate, LyricsVersionRead
@@ -20,8 +21,16 @@ router = APIRouter(prefix="/api/songs", tags=["songs"])
 
 def _song_to_read(song: Song, db: Session) -> SongRead:
     has_audio = db.query(AudioFile.id).filter(AudioFile.song_id == song.id).first() is not None
-    take_count = db.query(func.count(Take.id)).filter(Take.song_id == song.id).scalar()
+    take_count = db.query(func.count(AudioFile.id)).filter(AudioFile.song_id == song.id).scalar()
     tag_names = [t.name for t in song.tags]
+    apple_play_count, apple_last_played = (
+        db.query(
+            func.coalesce(func.sum(ListeningHistory.play_count), 0),
+            func.max(ListeningHistory.last_played_at),
+        )
+        .filter(ListeningHistory.linked_song_id == song.id)
+        .first()
+    )
     return SongRead(
         id=song.id,
         title=song.title,
@@ -43,6 +52,8 @@ def _song_to_read(song: Song, db: Session) -> SongRead:
         has_audio=has_audio,
         take_count=take_count,
         tags=tag_names,
+        apple_play_count=int(apple_play_count or 0),
+        apple_last_played=apple_last_played,
     )
 
 
@@ -53,9 +64,12 @@ def list_songs(
     status: str | None = Query(None),
     search: str | None = Query(None),
     tag: str | None = Query(None),
+    include_deleted: bool = Query(False),
     db: Session = Depends(get_db),
 ):
     q = db.query(Song)
+    if not include_deleted:
+        q = q.filter(Song.status != "deleted")
     if type:
         q = q.filter(Song.type == type)
     if project:
@@ -63,7 +77,9 @@ def list_songs(
     if status:
         q = q.filter(Song.status == status)
     if search:
-        q = q.filter(Song.title.ilike(f"%{search}%"))
+        q = q.filter(
+            Song.title.ilike(f"%{search}%") | Song.artist.ilike(f"%{search}%")
+        )
     if tag:
         q = q.filter(Song.tags.any(Tag.name == tag))
     songs = q.order_by(Song.times_practiced.desc(), Song.title).all()
@@ -94,7 +110,12 @@ def get_song(song_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Song not found")
 
     takes = db.query(Take).filter(Take.song_id == song_id).all()
-    audio_files = db.query(AudioFile).filter(AudioFile.song_id == song_id).all()
+    audio_files = (
+        db.query(AudioFile)
+        .filter(AudioFile.song_id == song_id)
+        .order_by(AudioFile.recorded_at.desc().nullslast(), AudioFile.uploaded_at.desc().nullslast())
+        .all()
+    )
     lyrics_versions = (
         db.query(LyricsVersion)
         .filter(LyricsVersion.song_id == song_id)

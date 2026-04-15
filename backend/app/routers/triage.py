@@ -16,7 +16,21 @@ def list_triage(
     q = db.query(TriageItem)
     if status:
         q = q.filter(TriageItem.status == status)
-    return q.order_by(TriageItem.discovered_at.desc()).all()
+    items = q.order_by(TriageItem.discovered_at.desc()).all()
+
+    # Look up audio_file_ids by file_path
+    file_paths = [i.file_path for i in items]
+    af_map = {}
+    if file_paths:
+        afs = db.query(AudioFile.id, AudioFile.file_path).filter(AudioFile.file_path.in_(file_paths)).all()
+        af_map = {fp: af_id for af_id, fp in afs}
+
+    results = []
+    for item in items:
+        read = TriageItemRead.model_validate(item)
+        read.audio_file_id = af_map.get(item.file_path)
+        results.append(read)
+    return results
 
 
 @router.patch("/{item_id}", response_model=TriageItemRead)

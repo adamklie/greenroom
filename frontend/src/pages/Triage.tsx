@@ -1,7 +1,41 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type TriageItem, type Song } from "../api/client";
-import { FileAudio, Check, SkipForward, Plus } from "lucide-react";
+import { FileAudio, Check, SkipForward, Plus, Scissors } from "lucide-react";
+
+function TrimControls({ audioFileId, onSuccess }: { audioFileId: number; onSuccess: () => void }) {
+  const [trimStart, setTrimStart] = useState("");
+  const [trimEnd, setTrimEnd] = useState("");
+  const trimMut = useMutation({
+    mutationFn: () => api.audioFiles.trim(audioFileId, parseFloat(trimStart), parseFloat(trimEnd)),
+    onSuccess: () => { setTrimStart(""); setTrimEnd(""); onSuccess(); },
+  });
+  const inputStyle = { borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" };
+  return (
+    <div className="flex items-end gap-2">
+      <div>
+        <label className="text-xs block mb-0.5" style={{ color: "var(--text-muted)" }}>Start (sec)</label>
+        <input type="number" step="0.1" min="0" value={trimStart}
+          onChange={(e) => setTrimStart(e.target.value)}
+          className="w-20 px-2 py-1 rounded border text-xs outline-none" style={inputStyle} placeholder="0.0" />
+      </div>
+      <div>
+        <label className="text-xs block mb-0.5" style={{ color: "var(--text-muted)" }}>End (sec)</label>
+        <input type="number" step="0.1" min="0" value={trimEnd}
+          onChange={(e) => setTrimEnd(e.target.value)}
+          className="w-20 px-2 py-1 rounded border text-xs outline-none" style={inputStyle} placeholder="30.0" />
+      </div>
+      <button onClick={() => trimMut.mutate()}
+        disabled={!trimStart || !trimEnd || trimMut.isPending}
+        className="px-3 py-1 rounded text-xs text-white disabled:opacity-50"
+        style={{ background: "var(--accent)" }}>
+        {trimMut.isPending ? "Trimming..." : "Create Trim"}
+      </button>
+      {trimMut.isError && <span className="text-xs" style={{ color: "var(--red, #f44)" }}>Failed</span>}
+      {trimMut.isSuccess && <span className="text-xs" style={{ color: "var(--green)" }}>Trimmed!</span>}
+    </div>
+  );
+}
 
 function TriageCard({ item, songs, onDone }: { item: TriageItem; songs: Song[]; onDone: () => void }) {
   const queryClient = useQueryClient();
@@ -10,6 +44,7 @@ function TriageCard({ item, songs, onDone }: { item: TriageItem; songs: Song[]; 
   const [songType, setSongType] = useState(item.suggested_type || "cover");
   const [source, setSource] = useState(item.suggested_source || "unknown");
   const [creating, setCreating] = useState(false);
+  const [showTrim, setShowTrim] = useState(false);
 
   const classifyMut = useMutation({
     mutationFn: () => api.triage.classify(item.id, {
@@ -90,6 +125,19 @@ function TriageCard({ item, songs, onDone }: { item: TriageItem; songs: Song[]; 
           <input placeholder="New song title..." value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
             className="flex-1 px-2 py-1 rounded border text-sm outline-none" style={inputStyle} />
           <button onClick={() => setCreating(false)} className="text-xs" style={{ color: "var(--text-muted)" }}>Cancel</button>
+        </div>
+      )}
+
+      {/* Trim controls */}
+      {item.audio_file_id && (
+        <div className="mb-3">
+          <button onClick={() => setShowTrim(!showTrim)}
+            className="flex items-center gap-1 text-xs mb-2" style={{ color: "var(--accent)" }}>
+            <Scissors size={12} /> {showTrim ? "Cancel Trim" : "Trim Audio"}
+          </button>
+          {showTrim && (
+            <TrimControls audioFileId={item.audio_file_id} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["triage"] })} />
+          )}
         </div>
       )}
 

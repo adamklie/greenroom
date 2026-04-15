@@ -18,6 +18,13 @@ take_tags = Table(
     Column("tag_id", Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
 )
 
+audio_file_tags = Table(
+    "audio_file_tags",
+    Base.metadata,
+    Column("audio_file_id", Integer, ForeignKey("audio_files.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
+)
+
 
 class Tag(Base):
     __tablename__ = "tags"
@@ -33,6 +40,9 @@ class Tag(Base):
     )
     takes: Mapped[list["Take"]] = relationship(  # noqa: F821
         secondary=take_tags, back_populates="tags"
+    )
+    audio_files: Mapped[list["AudioFile"]] = relationship(  # noqa: F821
+        secondary=audio_file_tags, back_populates="tags"
     )
 
 

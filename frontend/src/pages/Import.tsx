@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { Upload, FileAudio, Check, Plus, X } from "lucide-react";
+import { Upload, FileAudio, Check, Plus, X, Scissors } from "lucide-react";
 
 const inputStyle = { borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" };
 
@@ -35,6 +35,49 @@ interface PendingFile {
   status: "pending" | "uploading" | "done" | "error";
   error?: string;
   resultId?: number;
+}
+
+function TrimControls({ audioFileId }: { audioFileId: number }) {
+  const [trimStart, setTrimStart] = useState("");
+  const [trimEnd, setTrimEnd] = useState("");
+  const [showTrim, setShowTrim] = useState(false);
+  const trimMut = useMutation({
+    mutationFn: () => api.audioFiles.trim(audioFileId, parseFloat(trimStart), parseFloat(trimEnd)),
+    onSuccess: () => { setTrimStart(""); setTrimEnd(""); },
+  });
+  const iStyle = { borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" };
+  return (
+    <div className="mt-2">
+      <button onClick={() => setShowTrim(!showTrim)}
+        className="flex items-center gap-1 text-xs mb-1" style={{ color: "var(--accent)" }}>
+        <Scissors size={11} /> {showTrim ? "Cancel Trim" : "Trim Audio"}
+      </button>
+      {showTrim && (
+        <div className="flex items-end gap-2">
+          <div>
+            <label className="text-xs block mb-0.5" style={{ color: "var(--text-muted)" }}>Start (sec)</label>
+            <input type="number" step="0.1" min="0" value={trimStart}
+              onChange={(e) => setTrimStart(e.target.value)}
+              className="w-20 px-2 py-1 rounded border text-xs outline-none" style={iStyle} placeholder="0.0" />
+          </div>
+          <div>
+            <label className="text-xs block mb-0.5" style={{ color: "var(--text-muted)" }}>End (sec)</label>
+            <input type="number" step="0.1" min="0" value={trimEnd}
+              onChange={(e) => setTrimEnd(e.target.value)}
+              className="w-20 px-2 py-1 rounded border text-xs outline-none" style={iStyle} placeholder="30.0" />
+          </div>
+          <button onClick={() => trimMut.mutate()}
+            disabled={!trimStart || !trimEnd || trimMut.isPending}
+            className="px-3 py-1 rounded text-xs text-white disabled:opacity-50"
+            style={{ background: "var(--accent)" }}>
+            {trimMut.isPending ? "Trimming..." : "Create Trim"}
+          </button>
+          {trimMut.isError && <span className="text-xs" style={{ color: "var(--red, #f44)" }}>Failed</span>}
+          {trimMut.isSuccess && <span className="text-xs" style={{ color: "var(--green)" }}>Trimmed!</span>}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function FileCard({ pending, songs, onChange, onRemove, onUpload }: {
@@ -140,9 +183,10 @@ function FileCard({ pending, songs, onChange, onRemove, onUpload }: {
       )}
 
       {isDone && (
-        <p className="text-xs" style={{ color: "var(--green)" }}>
-          Imported successfully
-        </p>
+        <div>
+          <p className="text-xs" style={{ color: "var(--green)" }}>Imported successfully</p>
+          {pending.resultId && <TrimControls audioFileId={pending.resultId} />}
+        </div>
       )}
     </div>
   );

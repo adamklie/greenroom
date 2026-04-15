@@ -38,6 +38,7 @@ class ProcessRequest(BaseModel):
     session_date: str
     project: str = "ozone_destructors"
     clips: list[ClipInput]
+    existing_session_id: int | None = None
 
 
 @router.get("/list-videos")
@@ -109,6 +110,7 @@ def process(req: ProcessRequest, db: Session = Depends(get_db)):
         result = process_session(
             db=db, source_directory=str(source_file.parent),
             session_date=session_date, clips=clips, project=req.project,
+            existing_session_id=req.existing_session_id,
         )
         return {
             "session_id": result.session_id,

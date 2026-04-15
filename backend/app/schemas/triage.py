@@ -14,6 +14,7 @@ class TriageItemRead(BaseModel):
     suggested_type: str | None = None
     suggested_source: str | None = None
     status: str = "pending"
+    audio_file_id: int | None = None
 
     model_config = {"from_attributes": True}
 

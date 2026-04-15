@@ -40,6 +40,8 @@ class SongRead(SongBase):
     has_audio: bool = False
     take_count: int = 0
     tags: list[str] = []
+    apple_play_count: int = 0
+    apple_last_played: datetime | None = None
 
     model_config = {"from_attributes": True}
 

@@ -12,13 +12,14 @@ import re
 import struct
 import subprocess
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from sqlalchemy.orm import Session as DBSession
 
 from app.config import settings
-from app.models import PracticeSession, Take
+from app.models import AudioFile, PracticeSession
+from app.models.audio_file import generate_identifier
 
 FFMPEG = "/Users/adamklie/opt/ffmpeg"
 if not Path(FFMPEG).exists():
@@ -271,21 +272,35 @@ def process_session(
     session_date: date,
     clips: list[ClipMarker],
     project: str = "ozone_destructors",
+    existing_session_id: int | None = None,
 ) -> ProcessResult:
-    """Process clips: cut videos, extract audio, create DB records."""
+    """Process clips: cut videos, extract audio, create DB records.
+
+    If existing_session_id is given, clips are added to that session and
+    written into its folder (cuts.txt is appended, not overwritten).
+    """
     errors: list[str] = []
     source_dir = Path(source_directory)
 
-    date_str = f"{session_date.year}-{session_date.month}-{session_date.day}"
+    # Resolve target session + folder
+    session: PracticeSession | None = None
+    if existing_session_id is not None:
+        session = db.query(PracticeSession).get(existing_session_id)
+        if not session:
+            raise ValueError(f"Session {existing_session_id} not found")
+        session_folder = settings.music_dir / session.folder_path
+        date_str = f"{session.date.year}-{session.date.month}-{session.date.day}"
+    else:
+        date_str = f"{session_date.year}-{session_date.month}-{session_date.day}"
+        session_folder = settings.music_dir / "Ozone Destructors" / "Practice Sessions" / date_str
 
-    session_folder = settings.music_dir / "Ozone Destructors" / "Practice Sessions" / date_str
     cuts_folder = session_folder / "cuts"
     cuts_folder.mkdir(parents=True, exist_ok=True)
 
     audio_folder = settings.music_dir / "_audio_exports" / "Ozone Destructors" / date_str
     audio_folder.mkdir(parents=True, exist_ok=True)
 
-    # Write cuts.txt
+    # Write cuts.txt (append if adding to existing session)
     cuts_txt_path = session_folder / "cuts.txt"
     current_video = None
     cuts_lines = []
@@ -296,17 +311,25 @@ def process_session(
         start_tc = _seconds_to_timecode(clip.start_seconds)
         end_tc = _seconds_to_timecode(clip.end_seconds)
         cuts_lines.append(f"{start_tc} {end_tc} {_sanitize_name(clip.clip_name)}")
-    cuts_txt_path.write_text("\n".join(cuts_lines) + "\n")
-
-    # Create DB session
-    folder_rel = str(session_folder.relative_to(settings.music_dir))
-    existing_session = db.query(PracticeSession).filter_by(folder_path=folder_rel).first()
-    if existing_session:
-        session = existing_session
+    new_cuts_text = "\n".join(cuts_lines) + "\n"
+    if existing_session_id is not None and cuts_txt_path.exists():
+        prior = cuts_txt_path.read_text()
+        if not prior.endswith("\n"):
+            prior += "\n"
+        cuts_txt_path.write_text(prior + new_cuts_text)
     else:
-        session = PracticeSession(date=session_date, project=project, folder_path=folder_rel)
-        db.add(session)
-        db.flush()
+        cuts_txt_path.write_text(new_cuts_text)
+
+    # Create DB session if not provided
+    folder_rel = str(session_folder.relative_to(settings.music_dir))
+    if session is None:
+        existing_session = db.query(PracticeSession).filter_by(folder_path=folder_rel).first()
+        if existing_session:
+            session = existing_session
+        else:
+            session = PracticeSession(date=session_date, project=project, folder_path=folder_rel)
+            db.add(session)
+            db.flush()
 
     clips_processed = 0
     audio_extracted = 0
@@ -335,31 +358,31 @@ def process_session(
             errors.append(f"Failed to cut {clip.clip_name}: {e}")
             continue
 
-        # Extract audio
-        audio_out = audio_folder / f"{date_str}_{safe_name}.m4a"
-        try:
-            subprocess.run([
-                FFMPEG, "-i", str(video_out), "-vn", "-acodec", "aac",
-                "-b:a", "192k", "-y", str(audio_out),
-            ], capture_output=True, timeout=60, check=True)
-            audio_extracted += 1
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-            errors.append(f"Failed to extract audio for {clip.clip_name}: {e}")
-
-        # Create Take
+        # Audio extraction happens on demand via the "Extract audio" button
+        # in the Library view. Processing only produces the video clip.
         video_rel = str(video_out.relative_to(settings.music_dir))
-        audio_rel = str(audio_out.relative_to(settings.music_dir)) if audio_out.exists() else None
+        recorded_at_dt = datetime.combine(session.date, datetime.min.time())
+        start_tc = _seconds_to_timecode(clip.start_seconds)
+        end_tc = _seconds_to_timecode(clip.end_seconds)
 
-        existing_take = db.query(Take).filter_by(
-            session_id=session.id, clip_name=safe_name
-        ).first()
-        if not existing_take:
-            db.add(Take(
-                session_id=session.id, song_id=clip.song_id,
-                clip_name=safe_name, source_video=clip.source_video,
-                start_time=_seconds_to_timecode(clip.start_seconds),
-                end_time=_seconds_to_timecode(clip.end_seconds),
-                video_path=video_rel, audio_path=audio_rel,
+        for path_rel, ftype in [(video_rel, "mp4")]:
+            if db.query(AudioFile).filter_by(file_path=path_rel).first():
+                continue
+            db.add(AudioFile(
+                song_id=clip.song_id,
+                file_path=path_rel,
+                file_type=ftype,
+                identifier=generate_identifier(Path(path_rel).name, recorded_at_dt.isoformat()),
+                source=project,
+                role="practice_clip",
+                is_stem=False,
+                session_id=session.id,
+                clip_name=safe_name,
+                source_file=clip.source_video,
+                start_time=start_tc,
+                end_time=end_tc,
+                video_path=video_rel,
+                recorded_at=recorded_at_dt,
             ))
 
     db.commit()

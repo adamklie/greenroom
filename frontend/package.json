@@ -13,6 +13,8 @@
     "vite": "^8.0.4"
   },
   "dependencies": {
+    "@coderline/alphatab": "^1.8.2",
+    "@coderline/alphatab-vite": "^1.8.2",
     "@tailwindcss/vite": "^4.2.2",
     "@tanstack/react-query": "^5.96.2",
     "@types/react": "^19.2.14",

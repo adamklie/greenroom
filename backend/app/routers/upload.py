@@ -124,11 +124,14 @@ async def upload_file(
             leftover.unlink()
 
     # Create audio file record
+    from app.models.audio_file import generate_identifier
     ext = target_full.suffix.lstrip(".").lower()
     af = AudioFile(
         song_id=song_id,
         file_path=target_rel,
         file_type=ext,
+        identifier=generate_identifier(file.filename),
+        submitted_file_name=file.filename,
         source=source,
         role=role,
         uploaded_at=datetime.now(),

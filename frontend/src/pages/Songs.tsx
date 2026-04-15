@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Song } from "../api/client";
-import { Search, X, Play, Music, Tag, ArrowUpRight, Star, Plus, Trash2 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { api, type Song, type AudioFile } from "../api/client";
+import { Search, X, Play, Music, Tag, ArrowUpRight, Star, Plus, Trash2, ChevronDown, ChevronRight, Scissors, FileMusic, Upload } from "lucide-react";
+import { TabViewer } from "../components/TabViewer";
 
 const STATUS_COLORS: Record<string, string> = {
   idea: "var(--text-muted)", learning: "var(--blue)", rehearsed: "var(--yellow)",
@@ -35,9 +37,80 @@ function StatusBadge({ status, onClick }: { status: string; onClick?: (e: React.
 const SOURCE_OPTIONS = ["", "phone", "logic_pro", "garageband", "suno_ai", "collaborator", "download", "gopro", "unknown"];
 const ROLE_OPTIONS = ["", "recording", "demo", "reference", "backing_track", "final_mix"];
 
-function SongAudioFileRow({ af, onUpdate }: { af: { id: number; file_path: string; file_type: string | null; source: string | null; role: string | null; rating_overall: number | null; notes: string | null; recorded_at?: string | null; session_date?: string | null }; onUpdate: () => void }) {
+const RATING_FIELDS: { key: string; label: string }[] = [
+  { key: "rating_overall", label: "Overall" },
+  { key: "rating_vocals", label: "Vocals" },
+  { key: "rating_guitar", label: "Guitar" },
+  { key: "rating_drums", label: "Drums" },
+  { key: "rating_keys", label: "Keys" },
+  { key: "rating_bass", label: "Bass" },
+  { key: "rating_tone", label: "Tone" },
+  { key: "rating_timing", label: "Timing" },
+  { key: "rating_energy", label: "Energy" },
+  { key: "rating_mix", label: "Mix" },
+  { key: "rating_other", label: "Other" },
+];
+
+function StarPicker({ value, onChange, size = 10 }: { value: number | null; onChange: (v: number | null) => void; size?: number }) {
+  const handleClick = (starIndex: number, isLeftHalf: boolean) => {
+    const newVal = isLeftHalf ? starIndex - 0.5 : starIndex;
+    // Click same value again to clear
+    if (value === newVal) {
+      onChange(null);
+    } else {
+      onChange(newVal);
+    }
+  };
+
+  return (
+    <div className="flex">
+      {[1,2,3,4,5].map(n => {
+        const full = value !== null && value >= n;
+        const half = value !== null && value >= n - 0.5 && value < n;
+        return (
+          <div key={n} className="relative" style={{ width: size + 1, height: size }}>
+            {/* Left half — clicks to n-0.5 */}
+            <button className="absolute inset-y-0 left-0 w-1/2 z-10 p-0" style={{ background: "transparent" }}
+              onClick={() => handleClick(n, true)} />
+            {/* Right half — clicks to n */}
+            <button className="absolute inset-y-0 right-0 w-1/2 z-10 p-0" style={{ background: "transparent" }}
+              onClick={() => handleClick(n, false)} />
+            {/* Star rendering */}
+            <svg width={size} height={size} viewBox="0 0 24 24" className="absolute inset-0 pointer-events-none">
+              <defs>
+                <clipPath id={`half-${size}-${n}`}>
+                  <rect x="0" y="0" width="12" height="24" />
+                </clipPath>
+              </defs>
+              {/* Empty star outline */}
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                fill="none" stroke={full || half ? "var(--yellow)" : "var(--text-muted)"} strokeWidth="1.5" />
+              {/* Full fill */}
+              {full && (
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                  fill="var(--yellow)" />
+              )}
+              {/* Half fill */}
+              {half && (
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                  fill="var(--yellow)" clipPath={`url(#half-${size}-${n})`} />
+              )}
+            </svg>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SongAudioFileRow({ af, onUpdate }: { af: AudioFile; onUpdate: () => void }) {
   const queryClient = useQueryClient();
+  const [expanded, setExpanded] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [showTrim, setShowTrim] = useState(false);
+  const [trimStart, setTrimStart] = useState("");
+  const [trimEnd, setTrimEnd] = useState("");
+
   const updateMut = useMutation({
     mutationFn: (data: Record<string, unknown>) => api.audioFiles.update(af.id, data),
     onSuccess: onUpdate,
@@ -46,60 +119,163 @@ function SongAudioFileRow({ af, onUpdate }: { af: { id: number; file_path: strin
     mutationFn: () => api.audioFiles.delete(af.id),
     onSuccess: () => { onUpdate(); queryClient.invalidateQueries({ queryKey: ["audio-files"] }); },
   });
+  const trimMut = useMutation({
+    mutationFn: () => api.audioFiles.trim(af.id, parseFloat(trimStart), parseFloat(trimEnd)),
+    onSuccess: () => { onUpdate(); setShowTrim(false); setTrimStart(""); setTrimEnd(""); },
+  });
+
   const save = (field: string, value: unknown) => updateMut.mutate({ [field]: value === "" ? null : value });
-  const filename = af.file_path.split("/").pop() || af.file_path;
+  const displayName = af.identifier || af.file_path.split("/").pop() || af.file_path;
   const iStyle = { borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" };
 
   return (
-    <tr className="border-t" style={{ borderColor: "var(--border)" }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
-      <td className="px-2 py-1.5">
-        <div>
-          <div className="flex items-center gap-1">
-            <button onClick={() => setPlaying(!playing)} className="flex-shrink-0">
-              <Play size={10} style={{ color: "var(--accent)" }} />
-            </button>
-            <span className="font-medium truncate">{filename}</span>
+    <>
+      <tr className="border-t cursor-pointer" style={{ borderColor: "var(--border)" }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        onClick={() => setExpanded(!expanded)}>
+        <td className="px-2 py-1.5">
+          <div>
+            <div className="flex items-center gap-1">
+              {expanded ? <ChevronDown size={10} style={{ color: "var(--text-muted)" }} /> : <ChevronRight size={10} style={{ color: "var(--text-muted)" }} />}
+              <button onClick={(e) => { e.stopPropagation(); setPlaying(!playing); }} className="flex-shrink-0">
+                <Play size={10} style={{ color: "var(--accent)" }} />
+              </button>
+              <span className="font-medium truncate">{displayName}</span>
+            </div>
+            {af.recorded_at && <span className="text-xs ml-5" style={{ color: "var(--text-muted)" }}>{new Date(af.recorded_at).toLocaleDateString()}</span>}
+            {!af.recorded_at && af.session_date && <span className="text-xs ml-5" style={{ color: "var(--text-muted)" }}>{af.session_date}</span>}
+            {playing && af.file_type && (
+              af.file_type && ["mp4", "mov"].includes(af.file_type) ? (
+                <video controls autoPlay className="w-full max-h-48 mt-1 rounded" onClick={(e) => e.stopPropagation()}>
+                  <source src={api.media.audioFileUrl(af.id)} />
+                </video>
+              ) : (
+                <audio controls autoPlay className="w-full h-6 mt-1" style={{ filter: "invert(1) hue-rotate(180deg)" }}
+                  onClick={(e) => e.stopPropagation()}>
+                  <source src={api.media.audioFileUrl(af.id)} />
+                </audio>
+              )
+            )}
           </div>
-          {af.session_date && <span className="text-xs" style={{ color: "var(--text-muted)" }}>{af.session_date}</span>}
-          {af.recorded_at && !af.session_date && <span className="text-xs" style={{ color: "var(--text-muted)" }}>{new Date(af.recorded_at).toLocaleDateString()}</span>}
-          {playing && af.file_type && ["m4a", "mp3", "wav"].includes(af.file_type) && (
-            <audio controls autoPlay className="w-full h-6 mt-1" style={{ filter: "invert(1) hue-rotate(180deg)" }}>
-              <source src={api.media.audioFileUrl(af.id)} />
-            </audio>
-          )}
-        </div>
-      </td>
-      <td className="px-2 py-1.5">
-        <select value={af.source || ""} onChange={(e) => save("source", e.target.value)}
-          className="w-full px-1 py-0.5 rounded border text-xs outline-none bg-transparent" style={iStyle}>
-          {SOURCE_OPTIONS.map(o => <option key={o} value={o}>{o || "—"}</option>)}
-        </select>
-      </td>
-      <td className="px-2 py-1.5">
-        <select value={af.role || ""} onChange={(e) => save("role", e.target.value)}
-          className="w-full px-1 py-0.5 rounded border text-xs outline-none bg-transparent" style={iStyle}>
-          {ROLE_OPTIONS.map(o => <option key={o} value={o}>{o || "—"}</option>)}
-        </select>
-      </td>
-      <td className="px-2 py-1.5 text-center">
-        <div className="flex gap-0.5 justify-center">
-          {[1,2,3,4,5].map(n => (
-            <button key={n} onClick={() => save("rating_overall", n)} className="p-0">
-              <Star size={10} fill={af.rating_overall && n <= af.rating_overall ? "var(--yellow)" : "none"}
-                style={{ color: af.rating_overall && n <= af.rating_overall ? "var(--yellow)" : "var(--text-muted)" }} />
-            </button>
-          ))}
-        </div>
-      </td>
-      <td className="px-1 py-1.5">
-        <button onClick={() => { if (confirm("Delete?")) deleteMut.mutate(); }}
-          className="p-0.5 rounded hover:bg-white/10" style={{ color: "var(--text-muted)" }}>
-          <Trash2 size={11} />
-        </button>
-      </td>
-    </tr>
+        </td>
+        <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+          <select value={af.source || ""} onChange={(e) => save("source", e.target.value)}
+            className="w-full px-1 py-0.5 rounded border text-xs outline-none bg-transparent" style={iStyle}>
+            {SOURCE_OPTIONS.map(o => <option key={o} value={o}>{o || "—"}</option>)}
+          </select>
+        </td>
+        <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+          <select value={af.role || ""} onChange={(e) => save("role", e.target.value)}
+            className="w-full px-1 py-0.5 rounded border text-xs outline-none bg-transparent" style={iStyle}>
+            {ROLE_OPTIONS.map(o => <option key={o} value={o}>{o || "—"}</option>)}
+          </select>
+        </td>
+        <td className="px-2 py-1.5 text-center" onClick={(e) => e.stopPropagation()}>
+          <StarPicker value={af.rating_overall} onChange={(n) => save("rating_overall", n)} />
+        </td>
+        <td className="px-1 py-1.5" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => { if (confirm("Delete?")) deleteMut.mutate(); }}
+            className="p-0.5 rounded hover:bg-white/10" style={{ color: "var(--text-muted)" }}>
+            <Trash2 size={11} />
+          </button>
+        </td>
+      </tr>
+      {expanded && (
+        <tr style={{ borderColor: "var(--border)" }}>
+          <td colSpan={5} className="px-3 py-3" style={{ background: "var(--bg)" }}>
+            {/* Read-only info */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+              {af.submitted_file_name && <span>Original: <strong style={{ color: "var(--text)" }}>{af.submitted_file_name}</strong></span>}
+              <span>Path: <strong style={{ color: "var(--text)" }}>{af.file_path}</strong></span>
+              {af.created_at && <span>Created: {new Date(af.created_at).toLocaleDateString()}</span>}
+              {af.uploaded_at && <span>Uploaded: {new Date(af.uploaded_at).toLocaleDateString()}</span>}
+            </div>
+
+            {/* Editable fields */}
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <div>
+                <label className="text-xs block mb-0.5" style={{ color: "var(--text-muted)" }}>Version</label>
+                <input defaultValue={af.version || ""} placeholder="v1"
+                  onBlur={(e) => save("version", e.target.value)}
+                  className="w-full px-2 py-1 rounded border text-xs outline-none" style={iStyle}
+                  key={`ver-${af.id}-${af.version}`} />
+              </div>
+              <div>
+                <label className="text-xs block mb-0.5" style={{ color: "var(--text-muted)" }}>Recorded</label>
+                <input type="date" defaultValue={af.recorded_at ? af.recorded_at.slice(0, 10) : ""}
+                  onChange={(e) => save("recorded_at", e.target.value || null)}
+                  className="w-full px-2 py-1 rounded border text-xs outline-none" style={iStyle}
+                  key={`rec-${af.id}-${af.recorded_at}`} />
+              </div>
+              <div>
+                <label className="text-xs block mb-0.5" style={{ color: "var(--text-muted)" }}>Clip Name</label>
+                <input defaultValue={af.clip_name || ""} placeholder="clip name"
+                  onBlur={(e) => save("clip_name", e.target.value)}
+                  className="w-full px-2 py-1 rounded border text-xs outline-none" style={iStyle}
+                  key={`clip-${af.id}-${af.clip_name}`} />
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div className="mb-3">
+              <label className="text-xs block mb-0.5" style={{ color: "var(--text-muted)" }}>Notes</label>
+              <textarea defaultValue={af.notes || ""} placeholder="Add notes..."
+                onBlur={(e) => save("notes", e.target.value)}
+                rows={2} className="w-full px-2 py-1 rounded border text-xs outline-none resize-y" style={iStyle}
+                key={`notes-${af.id}-${af.notes}`} />
+            </div>
+
+            {/* All ratings */}
+            <div className="mb-3">
+              <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Ratings</label>
+              <div className="grid grid-cols-3 gap-x-4 gap-y-1.5">
+                {RATING_FIELDS.map(({ key, label }) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</span>
+                    <StarPicker value={(af as Record<string, unknown>)[key] as number | null}
+                      onChange={(n) => save(key, n)} size={9} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Trim */}
+            <div>
+              <button onClick={() => setShowTrim(!showTrim)}
+                className="flex items-center gap-1 text-xs mb-2" style={{ color: "var(--accent)" }}>
+                <Scissors size={10} /> {showTrim ? "Cancel Trim" : "Trim Audio"}
+              </button>
+              {showTrim && (
+                <div className="flex items-end gap-2">
+                  <div>
+                    <label className="text-xs block mb-0.5" style={{ color: "var(--text-muted)" }}>Start (sec)</label>
+                    <input type="number" step="0.1" min="0" value={trimStart}
+                      onChange={(e) => setTrimStart(e.target.value)}
+                      className="w-20 px-2 py-1 rounded border text-xs outline-none" style={iStyle}
+                      placeholder="0.0" />
+                  </div>
+                  <div>
+                    <label className="text-xs block mb-0.5" style={{ color: "var(--text-muted)" }}>End (sec)</label>
+                    <input type="number" step="0.1" min="0" value={trimEnd}
+                      onChange={(e) => setTrimEnd(e.target.value)}
+                      className="w-20 px-2 py-1 rounded border text-xs outline-none" style={iStyle}
+                      placeholder="30.0" />
+                  </div>
+                  <button onClick={() => trimMut.mutate()}
+                    disabled={!trimStart || !trimEnd || trimMut.isPending}
+                    className="px-3 py-1 rounded text-xs text-white disabled:opacity-50"
+                    style={{ background: "var(--accent)" }}>
+                    {trimMut.isPending ? "Trimming..." : "Create Trim"}
+                  </button>
+                  {trimMut.isError && <span className="text-xs" style={{ color: "var(--red, #f44)" }}>Failed</span>}
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -131,6 +307,118 @@ function EditableField({ label, value, onChange, type = "text", options, placeho
   );
 }
 
+function SongTabsSection({ songId }: { songId: number }) {
+  const queryClient = useQueryClient();
+  const [selectedTabId, setSelectedTabId] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const { data: tabs = [] } = useQuery({
+    queryKey: ["tabs", songId],
+    queryFn: () => api.tabs.list(songId),
+  });
+
+  // Auto-select primary or first tab
+  const activeTab = tabs.find(t => t.id === selectedTabId) || tabs.find(t => t.is_primary) || tabs[0];
+
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => api.tabs.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tabs", songId] });
+      setSelectedTabId(null);
+    },
+  });
+
+  const setPrimaryMut = useMutation({
+    mutationFn: (id: number) => api.tabs.update(id, { is_primary: true }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tabs", songId] }),
+  });
+
+  const uploadFiles = async (files: FileList | File[]) => {
+    setUploadError(null);
+    for (const file of Array.from(files)) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("song_id", String(songId));
+      formData.append("label", file.name.replace(/\.[^.]+$/, ""));
+      formData.append("instrument", "guitar");
+      try {
+        const res = await fetch("/api/tabs", { method: "POST", body: formData });
+        if (!res.ok) {
+          const text = await res.text();
+          setUploadError(text);
+          return;
+        }
+      } catch (e) {
+        setUploadError(String(e));
+        return;
+      }
+    }
+    queryClient.invalidateQueries({ queryKey: ["tabs", songId] });
+  };
+
+  return (
+    <div className="mb-4">
+      <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+        <FileMusic size={14} /> Tabs ({tabs.length})
+      </h4>
+
+      {/* Tab list + upload drop zone */}
+      <div className="flex flex-wrap gap-2 mb-2">
+        {tabs.map(tab => (
+          <div key={tab.id}
+            className={`flex items-center gap-1 px-2 py-1 rounded border text-xs cursor-pointer ${activeTab?.id === tab.id ? "ring-1" : ""}`}
+            style={{
+              borderColor: "var(--border)",
+              background: activeTab?.id === tab.id ? "var(--bg-hover)" : "var(--bg)",
+            }}
+            onClick={() => setSelectedTabId(tab.id)}>
+            <FileMusic size={10} style={{ color: tab.is_primary ? "var(--accent)" : "var(--text-muted)" }} />
+            <span className="font-medium">{tab.label || tab.original_filename}</span>
+            {tab.instrument && <span style={{ color: "var(--text-muted)" }}>({tab.instrument})</span>}
+            {tab.is_primary && <span style={{ color: "var(--accent)" }}>★</span>}
+            {!tab.is_primary && (
+              <button onClick={(e) => { e.stopPropagation(); setPrimaryMut.mutate(tab.id); }}
+                className="ml-1 opacity-50 hover:opacity-100" title="Make primary">
+                ☆
+              </button>
+            )}
+            <button onClick={(e) => { e.stopPropagation(); if (confirm("Delete tab?")) deleteMut.mutate(tab.id); }}
+              className="ml-1 opacity-50 hover:opacity-100" style={{ color: "var(--text-muted)" }}>
+              <X size={10} />
+            </button>
+          </div>
+        ))}
+
+        <label
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files); }}
+          className="flex items-center gap-1 px-2 py-1 rounded border border-dashed text-xs cursor-pointer"
+          style={{
+            borderColor: dragOver ? "var(--accent)" : "var(--border)",
+            background: dragOver ? "rgba(139,92,246,0.08)" : "transparent",
+            color: "var(--text-muted)",
+          }}>
+          <Upload size={10} />
+          <span>Drop .gp/.gp5/.gpx or click</span>
+          <input type="file" multiple accept=".gp,.gp3,.gp4,.gp5,.gpx,.gp7" className="hidden"
+            onChange={(e) => { if (e.target.files) uploadFiles(e.target.files); }} />
+        </label>
+      </div>
+
+      {uploadError && (
+        <p className="text-xs mb-2" style={{ color: "var(--red, #f44)" }}>{uploadError}</p>
+      )}
+
+      {/* Active tab viewer */}
+      {activeTab && (
+        <TabViewer fileUrl={api.tabs.fileUrl(activeTab.id)} />
+      )}
+    </div>
+  );
+}
+
 function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => void }) {
   const { data: song } = useQuery({
     queryKey: ["song", songId],
@@ -140,7 +428,7 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
   const [editingLyrics, setEditingLyrics] = useState(false);
   const [lyricsText, setLyricsText] = useState("");
   const [newTag, setNewTag] = useState("");
-  const [panelWidth, setPanelWidth] = useState(520);
+  const [panelWidth, setPanelWidth] = useState(Math.round(window.innerWidth / 2));
   const [dragging, setDragging] = useState(false);
 
   const invalidate = () => {
@@ -178,7 +466,7 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
     setDragging(true);
     const onMove = (e: MouseEvent) => {
       const w = window.innerWidth - e.clientX;
-      setPanelWidth(Math.max(380, Math.min(900, w)));
+      setPanelWidth(Math.max(380, Math.min(window.innerWidth * 0.8, w)));
     };
     const onUp = () => { setDragging(false); window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
     window.addEventListener("mousemove", onMove);
@@ -204,7 +492,7 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
           className="text-lg font-bold bg-transparent border-b outline-none w-full pb-1 mb-1"
           style={{ borderColor: "var(--border)", color: "var(--text)" }}
           key={`title-${song.id}-${song.title}`} />
-        <input defaultValue={song.artist || ""} placeholder="Artist (for covers)"
+        <input defaultValue={song.artist || ""} placeholder="Artist"
           onBlur={(e) => save("artist", e.target.value)}
           className="text-sm bg-transparent border-b outline-none w-full pb-1"
           style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}
@@ -312,6 +600,9 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
         )}
       </div>
 
+      {/* Guitar Pro tabs */}
+      <SongTabsSection songId={songId} />
+
       {/* All recordings — mini Library table filtered to this song */}
       {song.audio_files.length > 0 && (
         <div className="mb-4">
@@ -342,19 +633,28 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
 }
 
 export default function Songs({ songType, title }: { songType: string; title: string }) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [project, setProject] = useState("all");
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const selectedId = searchParams.get("song") ? Number(searchParams.get("song")) : null;
+  const setSelectedId = (id: number | null) => {
+    if (id) setSearchParams({ song: String(id) });
+    else setSearchParams({});
+  };
   const [showCreate, setShowCreate] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newArtist, setNewArtist] = useState("");
+  const [sortKey, setSortKey] = useState("title");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const queryClient = useQueryClient();
   const params: Record<string, string> = { type: songType };
   if (project !== "all") params.project = project;
   if (statusFilter) params.status = statusFilter;
   if (search) params.search = search;
+  if (showDeleted) params.include_deleted = "true";
 
   const { data: songs = [], isLoading } = useQuery({
     queryKey: ["songs", params],
@@ -375,7 +675,7 @@ export default function Songs({ songType, title }: { songType: string; title: st
   const createMut = useMutation({
     mutationFn: () => api.songs.create({
       title: newTitle,
-      artist: songType === "cover" ? newArtist || null : null,
+      artist: newArtist || null,
       type: songType,
       status: songType === "idea" ? "captured" : "idea",
     }),
@@ -396,6 +696,30 @@ export default function Songs({ songType, title }: { songType: string; title: st
   };
 
   const statuses = STATUSES_BY_TYPE[songType] || STATUSES_BY_TYPE.cover;
+
+  const toggleSort = (key: string) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
+  };
+
+  const sorted = [...songs].sort((a, b) => {
+    let cmp = 0;
+    if (sortKey === "title") cmp = a.title.localeCompare(b.title);
+    else if (sortKey === "artist") cmp = (a.artist || "").localeCompare(b.artist || "");
+    else if (sortKey === "project") cmp = (a.project || "").localeCompare(b.project || "");
+    else if (sortKey === "status") cmp = (a.status || "").localeCompare(b.status || "");
+    else if (sortKey === "key") cmp = (a.key || "").localeCompare(b.key || "");
+    else if (sortKey === "takes") cmp = (a.take_count || 0) - (b.take_count || 0);
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  const SortTh = ({ k, children, className = "" }: { k: string; children: React.ReactNode; className?: string }) => (
+    <th className={`px-4 py-3 font-medium cursor-pointer select-none ${className}`}
+      style={{ color: sortKey === k ? "var(--accent)" : "var(--text-muted)" }}
+      onClick={() => toggleSort(k)}>
+      {children}{sortKey === k && <span className="ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>}
+    </th>
+  );
 
   const inputStyle2 = { borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" };
 
@@ -420,15 +744,13 @@ export default function Songs({ songType, title }: { songType: string; title: st
               placeholder={songType === "cover" ? "Song title..." : songType === "idea" ? "Idea name..." : "Song title..."}
               className="w-full px-3 py-2 rounded-lg border text-sm outline-none" style={inputStyle2} />
           </div>
-          {songType === "cover" && (
-            <div className="flex-1">
-              <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Artist</label>
-              <input value={newArtist} onChange={(e) => setNewArtist(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && newTitle.trim()) createMut.mutate(); }}
-                placeholder="Original artist..."
-                className="w-full px-3 py-2 rounded-lg border text-sm outline-none" style={inputStyle2} />
-            </div>
-          )}
+          <div className="flex-1">
+            <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Artist</label>
+            <input value={newArtist} onChange={(e) => setNewArtist(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && newTitle.trim()) createMut.mutate(); }}
+              placeholder="Artist..."
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none" style={inputStyle2} />
+          </div>
           <button onClick={() => createMut.mutate()} disabled={!newTitle.trim()}
             className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
             style={{ background: "var(--accent)" }}>Create</button>
@@ -457,6 +779,10 @@ export default function Songs({ songType, title }: { songType: string; title: st
           <option value="">All Statuses</option>
           {statuses.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
         </select>
+        <label className="self-center flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: "var(--text-muted)" }}>
+          <input type="checkbox" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} />
+          Show deleted
+        </label>
         <span className="self-center text-sm" style={{ color: "var(--text-muted)" }}>{songs.length} songs</span>
       </div>
 
@@ -465,19 +791,19 @@ export default function Songs({ songType, title }: { songType: string; title: st
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: "var(--bg-card)" }}>
-                <th className="text-left px-4 py-3 font-medium" style={{ color: "var(--text-muted)" }}>Song</th>
-                {songType === "cover" && <th className="text-left px-4 py-3 font-medium" style={{ color: "var(--text-muted)" }}>Artist</th>}
-                <th className="text-left px-4 py-3 font-medium" style={{ color: "var(--text-muted)" }}>Project</th>
-                <th className="text-left px-4 py-3 font-medium" style={{ color: "var(--text-muted)" }}>Status</th>
-                <th className="text-center px-4 py-3 font-medium" style={{ color: "var(--text-muted)" }}>Key</th>
-                <th className="text-center px-4 py-3 font-medium" style={{ color: "var(--text-muted)" }}>Takes</th>
+                <SortTh k="title" className="text-left">Song</SortTh>
+                {songType === "cover" && <SortTh k="artist" className="text-left">Artist</SortTh>}
+                <SortTh k="project" className="text-left">Project</SortTh>
+                <SortTh k="status" className="text-left">Status</SortTh>
+                <SortTh k="key" className="text-center">Key</SortTh>
+                <SortTh k="takes" className="text-center">Takes</SortTh>
                 {songType === "idea" && <th className="text-center px-4 py-3 font-medium" style={{ color: "var(--text-muted)" }}>Actions</th>}
               </tr>
             </thead>
             <tbody>
-              {songs.map((song) => (
+              {sorted.map((song) => (
                 <tr key={song.id} className="border-t cursor-pointer transition-colors"
-                  style={{ borderColor: "var(--border)" }}
+                  style={{ borderColor: "var(--border)", opacity: song.status === "deleted" ? 0.4 : 1 }}
                   onClick={() => setSelectedId(song.id)}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
