@@ -11,14 +11,22 @@ from app.routers import analytics, apple_music, audio_files, backup, bootstrap_r
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
-    # Auto-backup database on every startup
+    # Auto-backup runs in a background thread so startup isn't blocked.
+    # On iCloud-backed filesystems the DB copy can take seconds; doing it
+    # synchronously slows every reload.
     try:
+        import threading
         from app.services.backup import backup_database
         if settings.db_path.exists():
-            path = backup_database()
-            print(f"Auto-backup: {path}")
+            def _bg():
+                try:
+                    path = backup_database()
+                    print(f"Auto-backup: {path}")
+                except Exception as e:
+                    print(f"Auto-backup failed (non-fatal): {e}")
+            threading.Thread(target=_bg, daemon=True).start()
     except Exception as e:
-        print(f"Auto-backup failed (non-fatal): {e}")
+        print(f"Auto-backup scheduling failed: {e}")
     yield
 
 

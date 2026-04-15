@@ -29,13 +29,20 @@ def list_sessions(
     if project:
         q = q.filter(PracticeSession.project == project)
     sessions = q.order_by(PracticeSession.date.desc()).all()
+    if not sessions:
+        return []
+    counts = dict(
+        db.query(
+            AudioFile.session_id,
+            func.count(func.distinct(func.coalesce(AudioFile.video_path, AudioFile.file_path))),
+        )
+        .filter(AudioFile.session_id.in_([s.id for s in sessions]))
+        .group_by(AudioFile.session_id).all()
+    )
     result = []
     for s in sessions:
-        take_count = db.query(
-            func.count(func.distinct(func.coalesce(AudioFile.video_path, AudioFile.file_path)))
-        ).filter(AudioFile.session_id == s.id).scalar()
         sr = SessionRead.model_validate(s)
-        sr.take_count = take_count
+        sr.take_count = counts.get(s.id, 0)
         result.append(sr)
     return result
 

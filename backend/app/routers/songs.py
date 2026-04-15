@@ -19,6 +19,52 @@ from app.schemas.take import TakeRead
 router = APIRouter(prefix="/api/songs", tags=["songs"])
 
 
+def _songs_to_read_bulk(songs: list[Song], db: Session) -> list[SongRead]:
+    """Build SongRead list with a handful of aggregate queries instead of N+1."""
+    if not songs:
+        return []
+    ids = [s.id for s in songs]
+
+    # One-shot aggregates
+    af_counts = dict(
+        db.query(AudioFile.song_id, func.count(AudioFile.id))
+        .filter(AudioFile.song_id.in_(ids))
+        .group_by(AudioFile.song_id).all()
+    )
+    apple_agg = {
+        sid: (int(plays or 0), last)
+        for sid, plays, last in db.query(
+            ListeningHistory.linked_song_id,
+            func.sum(ListeningHistory.play_count),
+            func.max(ListeningHistory.last_played_at),
+        )
+        .filter(ListeningHistory.linked_song_id.in_(ids))
+        .group_by(ListeningHistory.linked_song_id).all()
+    }
+    # Tags are already eager-loaded via the Song.tags relationship (default lazy).
+    # Access via song.tags in the loop; ensure the relationship is loaded up-front.
+    results: list[SongRead] = []
+    for song in songs:
+        take_count = af_counts.get(song.id, 0)
+        plays, last = apple_agg.get(song.id, (0, None))
+        results.append(SongRead(
+            id=song.id, title=song.title, artist=song.artist, type=song.type,
+            project=song.project, status=song.status, key=song.key,
+            tempo_bpm=song.tempo_bpm, tuning=song.tuning, vibe=song.vibe,
+            lyrics=song.lyrics, notes=song.notes,
+            times_practiced=song.times_practiced,
+            reference_audio_file_id=song.reference_audio_file_id,
+            promoted_from_id=song.promoted_from_id,
+            created_at=song.created_at, updated_at=song.updated_at,
+            has_audio=take_count > 0,
+            take_count=take_count,
+            tags=[t.name for t in song.tags],
+            apple_play_count=plays,
+            apple_last_played=last,
+        ))
+    return results
+
+
 def _song_to_read(song: Song, db: Session) -> SongRead:
     has_audio = db.query(AudioFile.id).filter(AudioFile.song_id == song.id).first() is not None
     take_count = db.query(func.count(AudioFile.id)).filter(AudioFile.song_id == song.id).scalar()
@@ -83,7 +129,7 @@ def list_songs(
     if tag:
         q = q.filter(Song.tags.any(Tag.name == tag))
     songs = q.order_by(Song.times_practiced.desc(), Song.title).all()
-    return [_song_to_read(s, db) for s in songs]
+    return _songs_to_read_bulk(songs, db)
 
 
 @router.post("", response_model=SongRead)
