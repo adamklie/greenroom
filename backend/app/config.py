@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     def database_url(self) -> str:
         return f"sqlite:///{self.db_path}"
 
-    model_config = {"env_prefix": "GREENROOM_"}
+    model_config = {"env_prefix": "GREENROOM_", "env_file": ".env", "extra": "ignore"}
 
 
 settings = Settings()

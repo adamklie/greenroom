@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import AudioFile, PracticeSession, Tag, Take
+from app.schemas.audio_file import AudioFileRead
 from app.schemas.session import SessionDetail, SessionRead
 from app.schemas.take import TakeRead, TakeUpdate
 
@@ -53,9 +54,26 @@ def get_session(session_id: int, db: Session = Depends(get_db)):
     if not session:
         raise HTTPException(404, "Session not found")
     takes = db.query(Take).filter(Take.session_id == session_id).all()
+    audio_files = (
+        db.query(AudioFile)
+        .filter(AudioFile.session_id == session_id)
+        .order_by(AudioFile.start_time)
+        .all()
+    )
     sr = SessionRead.model_validate(session)
-    sr.take_count = len(takes)
-    return SessionDetail(**sr.model_dump(), takes=[_take_to_read(t) for t in takes])
+    sr.take_count = len(audio_files) or len(takes)
+    af_reads = []
+    for af in audio_files:
+        r = AudioFileRead.model_validate(af)
+        r.song_title = af.song.title if af.song else None
+        r.song_artist = af.song.artist if af.song else None
+        r.session_date = str(session.date)
+        af_reads.append(r)
+    return SessionDetail(
+        **sr.model_dump(),
+        takes=[_take_to_read(t) for t in takes],
+        audio_files=af_reads,
+    )
 
 
 @router.get("/takes/best", response_model=list[TakeRead])

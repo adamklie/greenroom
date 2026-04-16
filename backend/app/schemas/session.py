@@ -4,6 +4,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel
 
+from app.schemas.audio_file import AudioFileRead
 from app.schemas.take import TakeRead
 
 
@@ -21,3 +22,4 @@ class SessionRead(BaseModel):
 
 class SessionDetail(SessionRead):
     takes: list[TakeRead] = []
+    audio_files: list[AudioFileRead] = []

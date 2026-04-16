@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, type Session, type Take } from "../api/client";
-import { ChevronDown, ChevronRight, Star, Video } from "lucide-react";
+import { api, type Session, type AudioFile } from "../api/client";
+import { ChevronDown, ChevronRight, Star, Video, FileAudio } from "lucide-react";
 
 const RATING_DIMENSIONS = [
   { key: "rating_overall", label: "Overall" },
@@ -27,34 +27,29 @@ function StarRating({ value, onChange, size = 14 }: { value: number | null; onCh
   );
 }
 
-function MultiRating({ take }: { take: Take }) {
+function AudioFileRating({ af }: { af: AudioFile }) {
   const [expanded, setExpanded] = useState(false);
   const queryClient = useQueryClient();
   const mutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => api.takes.update(take.id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["session"] });
-      queryClient.invalidateQueries({ queryKey: ["best-takes"] });
-    },
+    mutationFn: (data: Record<string, unknown>) => api.audioFiles.update(af.id, data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["session"] }),
   });
 
   return (
     <div>
-      {/* Compact: just overall */}
       <div className="flex items-center gap-2">
         <span className="text-xs w-12" style={{ color: "var(--text-muted)" }}>Overall</span>
-        <StarRating value={take.rating_overall} onChange={(r) => mutation.mutate({ rating_overall: r })} />
+        <StarRating value={af.rating_overall} onChange={(r) => mutation.mutate({ rating_overall: r })} />
         <button onClick={() => setExpanded(!expanded)} className="text-xs ml-2" style={{ color: "var(--accent)" }}>
           {expanded ? "Less" : "More"}
         </button>
       </div>
-      {/* Expanded: all dimensions */}
       {expanded && (
         <div className="mt-2 space-y-1 pl-0">
           {RATING_DIMENSIONS.slice(1).map(({ key, label }) => (
             <div key={key} className="flex items-center gap-2">
               <span className="text-xs w-12" style={{ color: "var(--text-muted)" }}>{label}</span>
-              <StarRating value={take[key] as number | null}
+              <StarRating value={(af as Record<string, unknown>)[key] as number | null}
                 onChange={(r) => mutation.mutate({ [key]: r })} size={12} />
             </div>
           ))}
@@ -64,33 +59,32 @@ function MultiRating({ take }: { take: Take }) {
   );
 }
 
-function TakeCard({ take }: { take: Take }) {
+function RecordingCard({ af }: { af: AudioFile }) {
+  const isVideo = af.file_type && ["mp4", "mov", "m4v"].includes(af.file_type);
   return (
     <div className="rounded-lg p-4 border" style={{ background: "var(--bg)", borderColor: "var(--border)" }}>
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-sm">{take.song_title || take.clip_name}</span>
-          {take.video_path && <Video size={14} style={{ color: "var(--text-muted)" }} />}
-          {take.tags.map((t) => (
-            <span key={t} className="px-1.5 py-0.5 rounded text-xs"
-              style={{ background: "var(--bg-hover)", color: "var(--accent)" }}>
-              {t}
-            </span>
-          ))}
+          <span className="font-medium text-sm">{af.song_title || af.clip_name || af.file_path.split("/").pop()}</span>
+          {isVideo ? <Video size={14} style={{ color: "var(--text-muted)" }} /> : <FileAudio size={14} style={{ color: "var(--text-muted)" }} />}
+          <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}>
+            {af.file_type}
+          </span>
         </div>
         <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-          {take.start_time && take.end_time ? `${take.start_time} - ${take.end_time}` : ""}
+          {af.start_time && af.end_time ? `${af.start_time} - ${af.end_time}` : ""}
         </span>
       </div>
-      {take.audio_path && (
+      {isVideo ? (
+        <video controls className="w-full rounded mb-2" style={{ maxHeight: 200 }}>
+          <source src={api.media.audioFileUrl(af.id)} />
+        </video>
+      ) : (
         <audio controls className="w-full h-8 mb-2" style={{ filter: "invert(1) hue-rotate(180deg)" }}>
-          <source src={api.media.takeAudioUrl(take.id)} />
+          <source src={api.media.audioFileUrl(af.id)} />
         </audio>
       )}
-      {!take.audio_path && (
-        <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>No audio export</p>
-      )}
-      <MultiRating take={take} />
+      <AudioFileRating af={af} />
     </div>
   );
 }
@@ -110,13 +104,13 @@ function SessionCard({ session }: { session: Session }) {
           {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
           <div>
             <div className="font-semibold">{session.date}</div>
-            <div className="text-xs" style={{ color: "var(--text-muted)" }}>{session.take_count} takes</div>
+            <div className="text-xs" style={{ color: "var(--text-muted)" }}>{session.take_count} recordings</div>
           </div>
         </div>
       </button>
       {expanded && detail && (
         <div className="px-5 pb-5 space-y-3">
-          {detail.takes.map((take) => <TakeCard key={take.id} take={take} />)}
+          {detail.audio_files.map((af) => <RecordingCard key={af.id} af={af} />)}
         </div>
       )}
     </div>
