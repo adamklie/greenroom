@@ -9,6 +9,16 @@ router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 
 REPO = "adamklie/greenroom"
 
+# Map UI categories to labels that exist in the repo. "feedback" has no direct
+# label equivalent — leave it unlabeled. "feature" maps to the standard
+# "enhancement" label.
+CATEGORY_LABELS = {
+    "feedback": [],
+    "bug": ["bug"],
+    "feature": ["enhancement"],
+    "question": ["question"],
+}
+
 
 class FeedbackCreate(BaseModel):
     title: str
@@ -20,23 +30,23 @@ class FeedbackCreate(BaseModel):
 @router.post("")
 def create_feedback(data: FeedbackCreate):
     """Create a GitHub issue from user feedback."""
-    labels = [data.category]
+    labels = list(CATEGORY_LABELS.get(data.category, []))
     if data.priority == "high":
         labels.append("priority:high")
 
     body = f"{data.description}\n\n---\n_Submitted via Greenroom app ({data.priority} priority)_"
 
+    cmd = [
+        "gh", "issue", "create",
+        "--repo", REPO,
+        "--title", data.title,
+        "--body", body,
+    ]
+    if labels:
+        cmd += ["--label", ",".join(labels)]
+
     try:
-        result = subprocess.run(
-            [
-                "gh", "issue", "create",
-                "--repo", REPO,
-                "--title", data.title,
-                "--body", body,
-                "--label", ",".join(labels),
-            ],
-            capture_output=True, text=True, timeout=15,
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
 
         if result.returncode == 0:
             # Parse issue URL from output
