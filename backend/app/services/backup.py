@@ -295,9 +295,10 @@ def export_annotations(db: Session) -> dict:
         "tags": [{"name": t.name, "category": t.category} for t in db.query(Tag).all()],
     }
 
-    # Also save to file
-    export_dir = BACKUP_DIR
-    export_dir.mkdir(parents=True, exist_ok=True)
+    # Also save a timestamped copy into the vault exports dir. The sync router
+    # additionally writes `annotations_latest.json` for the canonical pointer.
+    settings.ensure_vault_layout()
+    export_dir = settings.vault_exports_dir
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     export_path = export_dir / f"annotations_{timestamp}.json"
     export_path.write_text(json.dumps(export, indent=2))
