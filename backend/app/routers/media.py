@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import AudioFile, Take
+from app.services.vault import resolve_audio_path
 
 router = APIRouter(prefix="/api/media", tags=["media"])
 
@@ -112,7 +113,10 @@ def stream_audio_file(audio_file_id: int, request: Request, db: Session = Depend
     af = db.query(AudioFile).get(audio_file_id)
     if not af:
         raise HTTPException(404, "Audio file not found")
-    return _resolve_and_serve(af.file_path, "audio", request)
+    full = resolve_audio_path(af)
+    if not full.exists():
+        raise HTTPException(404, "Audio file not found on disk")
+    return _serve_with_range(full, request)
 
 
 @router.get("/file/{file_path:path}")

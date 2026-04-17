@@ -22,20 +22,25 @@ A music career manager for aspiring musicians. Track your repertoire, rate pract
 - Python 3.11+
 - Node.js 18+
 
+### Recommended layout
+
+- Repo (code + live DB): `~/greenroom` — **not in iCloud**, backed up via GitHub
+- Vault (music files, DB backups, annotation exports): `~/Library/Mobile Documents/com~apple~CloudDocs/greenroom/` — auto-created on first run, iCloud-synced
+
+See [docs/STORAGE.md](docs/STORAGE.md) for the full picture.
+
 ### Setup
 
 ```bash
+# Clone to ~/greenroom (outside iCloud)
+git clone https://github.com/adamklie/greenroom ~/greenroom
+cd ~/greenroom
+
 # Install backend dependencies
-cd backend
-pip install -e ".[dev]"
+cd backend && pip install -e ".[dev]"
 
 # Install frontend dependencies
-cd ../frontend
-npm install
-
-# Bootstrap the database (scans your music directory)
-cd ..
-make bootstrap
+cd ../frontend && npm install
 ```
 
 ### Run

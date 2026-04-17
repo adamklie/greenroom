@@ -1,128 +1,114 @@
-# Storage & Backup Strategy
+# Storage & Backup
 
-Last updated: 2026-04-09
+Last updated: 2026-04-17
 
-## Overview
+How Greenroom stores your music files, database, and annotation exports, and where each layer is backed up.
 
-Your music data has two layers with very different backup needs:
+## The three layers
 
-| Layer | Size | Changes | Value | Backup Strategy |
-|-------|------|---------|-------|----------------|
-| **Annotations** (ratings, lyrics, tags, notes, setlists) | ~1 MB | Frequently | Irreplaceable | Git-tracked JSON + DB auto-backup |
-| **Audio/video files** | 20-200 GB | Rarely (once created) | Replaceable from source | iCloud Drive sync |
+| Layer | Lives where | Synced / backed up by |
+|---|---|---|
+| **Code** (repo + live DB) | `~/greenroom/` (local disk) | GitHub — `git push` |
+| **Music vault** (canonical audio/video) | `~/Library/Mobile Documents/com~apple~CloudDocs/greenroom/files/` (iCloud) | iCloud Drive |
+| **DB backups + annotation exports** | `~/.../com~apple~CloudDocs/greenroom/backups/` and `/exports/` (iCloud) | iCloud Drive |
 
-## What's Protected
+Source files you drag into the app (from `~/Downloads`, phone imports, Logic exports, etc.) are **not tracked**. Once Greenroom has copied them into the vault, you're free to move or delete the source.
 
-### Annotations (Git-tracked)
-- `exports/annotations_latest.json` — all songs, ratings, lyrics, tags, setlists
-- Updated via `make export` or the Dashboard "Export JSON" button
-- Git-tracked so every version is in your commit history
-- **This is the most important file.** If you lost everything else, you could rebuild from this.
+## Vault layout
 
-### Database (Auto-backup)
-- `greenroom.db` backed up to `backups/` on every app startup
-- Last 10 backups kept (timestamped)
-- Manual backup: `make backup` or Dashboard "Backup DB" button
-- Restore: Dashboard or `POST /api/backup/restore/{filename}`
+The vault is a single flat directory. Every imported file is stored as `{identifier}.{ext}` where `identifier` is the `AF{hash}` id assigned at import time:
 
-### File Integrity (Content hashing)
-- Every audio file gets a SHA256 fingerprint stored in the DB
-- If a file is moved/renamed, "Check & Heal" finds it by content hash
-- Run `make hash` after adding new files, or Dashboard "Hash Files"
-
-## Audio/Video File Storage
-
-### Current: Local Filesystem
 ```
-~/Desktop/music/           ← 20GB, all music files
-~/Desktop/music/greenroom/ ← App code + database + exports
+~/Library/Mobile Documents/com~apple~CloudDocs/greenroom/
+├── files/
+│   ├── AF12AB34CD.m4a
+│   ├── AF0023AC08.mp3
+│   ├── AFE9C7481F.mp3
+│   └── ...
+├── backups/
+│   ├── greenroom_20260417_142301.db
+│   └── ...  (rolling window of 10)
+└── exports/
+    └── annotations_latest.json
 ```
 
-### Recommended: iCloud Drive ($2.99/month for 200GB)
+Why flat + identifier-named:
+- The canonical path is fully derivable from the DB (`identifier` + `file_type`). Restoring the DB from a backup is all you need to regain access to every file.
+- No filesystem organization drift. If a song's project/type/artist changes, nothing on disk has to move.
+- Import is idempotent — re-importing the same file resolves to the same vault path.
 
-**Migration steps:**
-1. Open System Settings → Apple Account → iCloud → iCloud Drive → turn ON
-2. Upgrade to 200GB plan if needed ($2.99/month)
-3. Move your music folder into iCloud Drive:
+## Path resolution
+
+`AudioFile.file_path` stores just the vault filename (e.g. `AF12AB34CD.mp3`). The resolver in `backend/app/services/vault.py` prefers the vault path (`vault_dir/files/{identifier}.{ext}`), falling back to the legacy `file_path` format for rows that haven't been migrated yet.
+
+Once migration is complete, the fallback path isn't exercised and can be removed.
+
+## Import flow (drag-drop)
+
+`POST /api/upload` on the Import page:
+
+1. Browser uploads the file into a tempfile.
+2. If the upload is a video, ffmpeg extracts m4a audio into a second tempfile.
+3. A fresh `AF{hash}` identifier is generated from the filename + timestamp.
+4. The file is copied into `vault/files/{identifier}.{ext}`.
+5. An `AudioFile` row is inserted with `file_path = "{identifier}.{ext}"`.
+6. Tempfiles are deleted. The browser's upload is never retained outside the vault.
+
+## Streaming
+
+`GET /api/media/audio/{id}` loads the `AudioFile` row, resolves the vault path, and streams with HTTP `Range` support (so audio scrubbing works in the browser). The server never exposes raw filesystem paths to the client — only the numeric id.
+
+## Database backup
+
+Two triggers:
+
+- **Auto (debounced):** every DB commit schedules a backup 30 seconds in the future (see `services/auto_backup.py`). A burst of writes collapses into a single backup.
+- **Manual:** the Sync page's "After Practice" / "Weekly" buttons + `POST /api/backup/create`.
+
+Backups land in `vault_dir/backups/` as `greenroom_YYYYMMDD_HHMMSS.db`. The last 10 are kept; older ones are pruned. Because the vault is iCloud-synced, every backup ends up in the cloud automatically.
+
+## Annotation export
+
+`vault_dir/exports/annotations_latest.json` holds a portable JSON of every song, rating, lyric, tag, and setlist. This is regenerated by the Sync page and can be used to rebuild the annotation layer from scratch.
+
+## Disaster recovery
+
+On a new machine:
+
+1. Sign into iCloud. Wait for `greenroom/` to sync down.
+2. Clone the repo: `git clone https://github.com/adamklie/greenroom ~/greenroom`.
+3. Install deps (`make setup` or the equivalent).
+4. Copy the newest DB backup into place:
    ```bash
-   mv ~/Desktop/music ~/Library/Mobile\ Documents/com~apple~CloudDocs/music
-   ln -s ~/Library/Mobile\ Documents/com~apple~CloudDocs/music ~/Desktop/music
+   cp ~/Library/Mobile\ Documents/com~apple~CloudDocs/greenroom/backups/greenroom_*.db \
+      ~/greenroom/greenroom.db
    ```
-4. Update Greenroom config if needed (the symlink should make this transparent)
+   (pick the most recent by timestamp)
+5. Start the app. Every `AudioFile` resolves against the vault; every path works because every file was named by identifier.
 
-**What this gives you:**
-- All files automatically synced to iCloud
-- Accessible from your iPhone (listen to recordings on the go)
-- 30-day version history on all files (Apple handles this)
-- If your Mac dies, everything is in the cloud
+If the live DB is corrupted but the machine is otherwise fine, either copy a backup in place by hand or use the Backup → Restore UI (which snapshots the current state first, then swaps in the chosen backup).
 
-**Important:** The symlink (`ln -s`) means `~/Desktop/music` still works — the app doesn't need any config changes.
+## What's *not* backed up
 
-### Alternative: Backblaze B2 (~$1/month)
-If you prefer cheaper storage or want a second backup:
-```bash
-# Install b2 CLI
-pip install b2
+- `~/greenroom/node_modules/` — reinstall with `npm install`
+- `~/greenroom/backend/.venv/` — recreate with `pip install -r requirements.txt`
+- `~/greenroom/__pycache__/`, `.pyc` — regenerated on import
+- The **live** `~/greenroom/greenroom.db` — protected by the rolling backups in the vault, not by git
 
-# Create bucket (one-time)
-b2 authorize-account YOUR_KEY_ID YOUR_APP_KEY
-b2 create-bucket greenroom-music allPrivate
+## Future
 
-# Sync (run periodically or via cron)
-b2 sync ~/Desktop/music b2://greenroom-music
-```
+- Restore-from-backup UI in Settings (button + dropdown of vault backups)
+- Adaptive import: point the app at an arbitrary folder, have it classify and bulk-import into the vault
+- Apple's "Optimize Mac Storage" can evict the local copy of vault files that haven't been opened recently — they'll be re-downloaded on demand. Handy for keeping the local footprint small.
 
-## Routine Maintenance
+## Config knobs
 
-### After every practice session:
-1. Process GoPro videos in the app
-2. Rate your takes
-3. `make export` to update the git-tracked JSON
+All three paths are configurable via environment variables (with the `GREENROOM_` prefix):
 
-### Weekly:
-1. `git add exports/ && git commit -m "weekly annotation export"` 
-2. `git push`
+| Env var | Default | Purpose |
+|---|---|---|
+| `GREENROOM_VAULT_DIR` | `~/Library/Mobile Documents/com~apple~CloudDocs/greenroom` | iCloud vault root |
+| `GREENROOM_MUSIC_DIR` | parent of repo (legacy) | Source-file resolution during migration |
+| `GREENROOM_DB_PATH` | `<repo>/greenroom.db` | Live DB |
 
-### Monthly:
-1. `make hash` to fingerprint any new files
-2. Check Dashboard "Data Protection" card for broken links
-3. Verify iCloud sync is current (System Settings → iCloud → check storage)
-
-## Disaster Recovery
-
-### Scenario: Accidentally deleted a file
-1. Check iCloud Drive "Recently Deleted" (30-day window)
-2. Or: Dashboard → "Check & Heal" to find it if moved
-
-### Scenario: Database corrupted
-1. Dashboard → Backup → Restore from latest backup
-2. Or: Copy from `backups/greenroom_YYYYMMDD_HHMMSS.db` → `greenroom.db`
-
-### Scenario: Lost everything (new Mac)
-1. Sign into iCloud → files sync back
-2. Clone git repo → `make setup`
-3. Import `exports/annotations_latest.json` (TODO: build import from JSON)
-4. `make bootstrap` to re-scan filesystem
-5. All annotations restored, all files present
-
-### Scenario: File was moved, app shows broken link
-1. Dashboard → "Hash Files" (if not already hashed)
-2. Dashboard → "Check & Heal" → auto-fixes paths using content hash
-3. If still broken: the file was deleted, check iCloud Recently Deleted
-
-## What's NOT Backed Up (and shouldn't be)
-- `node_modules/` — reinstall with `npm install`
-- `__pycache__/` — regenerated automatically
-- `greenroom.db` in git — too large, changes too often (use exports instead)
-- `.venv/` — recreate with `pip install`
-
----
-
-<!-- PENDING MERGE from VISION.md 2026-04-16 — integrate during STORAGE.md review -->
-
-## File Storage (from VISION.md)
-
-- **Primary:** Local filesystem (`~/Desktop/music/`)
-- **Backup:** Cloud (TBD — iCloud, GCS, or Backblaze)
-- **Future:** Cloud-primary for multi-device access
-- **Paths:** Relative to music_dir in database, portable across machines
+Set these in a `.env` file at the repo root or export them before running.

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import AudioFile, Take
+from app.services.vault import resolve_audio_path
 
 
 @dataclass
@@ -44,9 +45,10 @@ def health_check(db: Session) -> list[BrokenLink]:
     """Find all database records pointing to files that don't exist on disk."""
     broken: list[BrokenLink] = []
 
-    # Check audio_files
+    # Check audio_files (vault-first: resolve_audio_path prefers the vault
+    # path by identifier, falls back to legacy file_path)
     for af in db.query(AudioFile).all():
-        full = resolve_path(af.file_path)
+        full = resolve_audio_path(af)
         if not full.exists():
             song_title = af.song.title if af.song else None
             broken.append(BrokenLink(
