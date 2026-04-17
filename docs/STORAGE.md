@@ -115,3 +115,14 @@ b2 sync ~/Desktop/music b2://greenroom-music
 - `__pycache__/` — regenerated automatically
 - `greenroom.db` in git — too large, changes too often (use exports instead)
 - `.venv/` — recreate with `pip install`
+
+---
+
+<!-- PENDING MERGE from VISION.md 2026-04-16 — integrate during STORAGE.md review -->
+
+## File Storage (from VISION.md)
+
+- **Primary:** Local filesystem (`~/Desktop/music/`)
+- **Backup:** Cloud (TBD — iCloud, GCS, or Backblaze)
+- **Future:** Cloud-primary for multi-device access
+- **Paths:** Relative to music_dir in database, portable across machines

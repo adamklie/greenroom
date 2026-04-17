@@ -277,3 +277,27 @@ Planned social media content.
 | notes | text | no | Internal notes |
 | created_at | datetime | auto | |
 | updated_at | datetime | auto | |
+
+---
+
+<!-- PENDING MERGE from VISION.md 2026-04-16 — integrate during SCHEMAS.md review -->
+
+## Song Types & Status Flows
+
+```
+Cover:    idea → learning → rehearsed → polished → recorded → released
+Original: idea → draft → arranged → rehearsed → recorded → released
+Idea:     captured → developing → promoted (graduates to original)
+```
+
+## Annotation System
+
+**Ratings (per take, 1-5 stars):**
+Overall, Vocals, Guitar, Drums, Tone, Timing, Energy
+
+**Tags (on songs and takes):**
+Predefined: needs-work, good-take, false-start, best-take, demo, final-mix, live-ready, needs-lyrics, needs-arrangement, crowd-pleaser, setlist-candidate, archived
+Custom: user-created, any string
+
+**Structured fields (per song):**
+Key, Tempo (BPM), Tuning, Vibe
