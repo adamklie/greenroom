@@ -9,6 +9,14 @@ For each row in audio_files:
 The original source file is left alone — the user can move/delete it
 afterward, since the vault copy is now canonical.
 
+Integrity: every copy is size-verified (dst size must equal src size).
+iCloud offloads files to cloud-only; reading an un-materialized file can
+return 0 bytes silently. A size mismatch triggers a retry with backoff.
+
+Idempotent: re-running the script skips copies where the vault already
+contains a file of the correct size. If a previous run left a 0-byte or
+otherwise-wrong copy, this run deletes and re-copies it.
+
 Usage:
     python -m scripts.migrate_to_vault             # dry-run (default)
     python -m scripts.migrate_to_vault --execute   # actually copy + update DB
@@ -21,6 +29,7 @@ from __future__ import annotations
 import argparse
 import shutil
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -35,6 +44,15 @@ from app.models.audio_file import generate_identifier  # noqa: E402
 from app.services.backup import backup_database  # noqa: E402
 from app.services.vault import vault_path_for  # noqa: E402
 
+# Eagerly load auto_backup. database.py's after_commit listener lazy-imports
+# it, but on very long migrations the first commit can be hours in, and if
+# the repo lives in iCloud that import may time out. Pre-loading it keeps
+# the module resident regardless of how long we run.
+import app.services.auto_backup  # noqa: E402, F401
+
+
+COPY_ATTEMPTS = 3
+
 
 @dataclass
 class Plan:
@@ -43,6 +61,7 @@ class Plan:
     target: Path
     identifier: str
     file_type: str
+    action: str  # "copy" (target missing or bad), "skip" (target already good), "dberror" (source 0 bytes)
     note: str = ""
 
 
@@ -66,8 +85,34 @@ def _ensure_identifier(af: AudioFile) -> str:
     return generate_identifier(seed)
 
 
+def _copy_with_verify(src: Path, dst: Path, expected_size: int,
+                      max_attempts: int = COPY_ATTEMPTS) -> None:
+    """Copy src to dst. Verify dst size == expected_size. Retry on mismatch.
+
+    iCloud files can return 0 bytes if macOS hasn't materialized them yet;
+    on mismatch we delete the bad dst and retry with exponential backoff.
+    """
+    last_err: str | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            shutil.copy2(src, dst)
+            actual = dst.stat().st_size
+            if actual == expected_size:
+                return
+            last_err = (f"size mismatch: expected {expected_size:,} bytes, "
+                        f"got {actual:,} (attempt {attempt}/{max_attempts})")
+            dst.unlink(missing_ok=True)
+        except Exception as e:  # noqa: BLE001
+            last_err = f"{type(e).__name__}: {e}"
+            if dst.exists():
+                dst.unlink(missing_ok=True)
+        if attempt < max_attempts:
+            time.sleep(2 * attempt)  # 2s, 4s backoff
+    raise RuntimeError(f"copy failed after {max_attempts} attempts: {last_err}")
+
+
 def plan_migration() -> tuple[list[Plan], list[tuple[int, str]]]:
-    """Return (plans, skipped). Skipped entries note why each was skipped."""
+    """Build the migration plan by examining current DB + vault state."""
     plans: list[Plan] = []
     skipped: list[tuple[int, str]] = []
 
@@ -77,9 +122,28 @@ def plan_migration() -> tuple[list[Plan], list[tuple[int, str]]]:
                 skipped.append((af.id, "no file_path"))
                 continue
 
+            # Already migrated in a previous run? Detect via file_path matching
+            # the canonical vault-name pattern. If the row points at
+            # "AF<id>.<ext>" and that file exists in the vault, we're done —
+            # no source to re-copy from (it may have been moved/deleted).
+            if af.identifier and af.file_type:
+                vault_name = f"{af.identifier}.{af.file_type.lstrip('.').lower()}"
+                if af.file_path == vault_name:
+                    vault_copy = settings.vault_files_dir / vault_name
+                    if vault_copy.exists() and vault_copy.stat().st_size > 0:
+                        skipped.append((af.id, "already migrated"))
+                        continue
+                    skipped.append((af.id, f"row claims migrated but vault copy missing/empty: {vault_name}"))
+                    continue
+
             source = _resolve_source(af)
             if not source.exists():
                 skipped.append((af.id, f"source missing: {source}"))
+                continue
+
+            src_size = source.stat().st_size
+            if src_size == 0:
+                skipped.append((af.id, f"source is 0 bytes: {source}"))
                 continue
 
             file_type = _infer_file_type(af, source)
@@ -87,26 +151,36 @@ def plan_migration() -> tuple[list[Plan], list[tuple[int, str]]]:
             target = vault_path_for(identifier, file_type)
 
             if source.resolve() == target.resolve():
-                skipped.append((af.id, "already in vault at canonical path"))
+                skipped.append((af.id, "source already IS the vault path"))
                 continue
 
+            # Decide what to do about existing vault copies
+            action = "copy"
             note = ""
             if target.exists():
-                note = "target exists (will keep existing vault copy, just update DB)"
+                dst_size = target.stat().st_size
+                if dst_size == src_size:
+                    action = "skip"
+                    note = "vault copy already present and size matches"
+                else:
+                    action = "copy"
+                    note = f"vault copy exists but size is wrong ({dst_size:,} vs {src_size:,}) — will re-copy"
 
             plans.append(Plan(
                 af_id=af.id, source=source, target=target,
-                identifier=identifier, file_type=file_type, note=note,
+                identifier=identifier, file_type=file_type,
+                action=action, note=note,
             ))
 
     return plans, skipped
 
 
-def execute(plans: list[Plan]) -> tuple[int, int, list[str]]:
-    """Returns (copied, db_updated, errors)."""
+def execute(plans: list[Plan]) -> tuple[int, int, int, list[str]]:
+    """Returns (copied, skipped_good, db_updated, errors)."""
     settings.ensure_vault_layout()
 
     copied = 0
+    skipped_good = 0
     updated = 0
     errors: list[str] = []
 
@@ -118,23 +192,30 @@ def execute(plans: list[Plan]) -> tuple[int, int, list[str]]:
                 continue
 
             try:
-                if not plan.target.exists():
-                    shutil.copy2(plan.source, plan.target)
+                if plan.action == "skip":
+                    skipped_good += 1
+                else:
+                    # Re-copy if a bad copy is already there
+                    if plan.target.exists():
+                        plan.target.unlink()
+                    src_size = plan.source.stat().st_size
+                    _copy_with_verify(plan.source, plan.target, src_size)
                     copied += 1
 
                 af.identifier = plan.identifier
                 af.file_type = plan.file_type
                 af.file_path = plan.target.name
                 db.add(af)
+                # Commit per-row so a crash mid-migration loses at most one
+                # row's progress instead of all N.
+                db.commit()
                 updated += 1
             except Exception as e:  # noqa: BLE001
-                errors.append(f"AF{plan.af_id}: {e}")
+                errors.append(f"AF{plan.af_id} ({plan.source.name}): {e}")
                 db.rollback()
                 continue
 
-        db.commit()
-
-    return copied, updated, errors
+    return copied, skipped_good, updated, errors
 
 
 def main() -> int:
@@ -149,8 +230,12 @@ def main() -> int:
     print(f"Music dir: {settings.music_dir}")
     print(f"DB:        {settings.db_path}")
     print()
-    print(f"Planned migrations: {len(plans)}")
-    print(f"Skipped:            {len(skipped)}")
+
+    to_copy = [p for p in plans if p.action == "copy"]
+    already_good = [p for p in plans if p.action == "skip"]
+    print(f"Planned copies:         {len(to_copy)}")
+    print(f"Already in vault (ok):  {len(already_good)}")
+    print(f"Skipped (source issue): {len(skipped)}")
 
     if skipped:
         print("\nSkipped rows (first 20):")
@@ -159,13 +244,13 @@ def main() -> int:
         if len(skipped) > 20:
             print(f"  ... and {len(skipped) - 20} more")
 
-    if plans:
-        print("\nFirst 10 planned moves:")
-        for plan in plans[:10]:
+    if to_copy:
+        print("\nFirst 10 planned copies:")
+        for plan in to_copy[:10]:
             suffix = f" ({plan.note})" if plan.note else ""
             print(f"  AF id={plan.af_id}: {plan.source.name} -> {plan.target.name}{suffix}")
-        if len(plans) > 10:
-            print(f"  ... and {len(plans) - 10} more")
+        if len(to_copy) > 10:
+            print(f"  ... and {len(to_copy) - 10} more")
 
     if not args.execute:
         print("\nDry-run only. Re-run with --execute to apply.")
@@ -180,9 +265,10 @@ def main() -> int:
     print(f"  DB backup: {backup_path}")
 
     print("Applying migration...")
-    copied, updated, errors = execute(plans)
-    print(f"  Copied to vault: {copied}")
-    print(f"  DB rows updated: {updated}")
+    copied, skipped_good, updated, errors = execute(plans)
+    print(f"  Copied to vault:      {copied}")
+    print(f"  Kept (already good):  {skipped_good}")
+    print(f"  DB rows updated:      {updated}")
     if errors:
         print(f"  Errors ({len(errors)}):")
         for err in errors:
