@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { MessageSquare, Bug, Lightbulb, HelpCircle, ExternalLink, Check } from "lucide-react";
+import { MessageSquare, Bug, Lightbulb, HelpCircle, ExternalLink, Check, AlertCircle } from "lucide-react";
 
 const CATEGORIES = [
   { value: "feedback", label: "Feedback", icon: MessageSquare, color: "var(--accent)" },
@@ -17,20 +17,29 @@ export default function Feedback() {
   const [category, setCategory] = useState("feedback");
   const [priority, setPriority] = useState("normal");
   const [submitted, setSubmitted] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const submitMut = useMutation({
-    mutationFn: () => fetch("/api/feedback", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, description, category, priority }),
-    }).then(r => r.json()),
+    mutationFn: async () => {
+      const r = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, description, category, priority }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    },
+    onMutate: () => { setError(null); setSubmitted(null); },
     onSuccess: (data) => {
       if (data.ok) {
         setSubmitted(data.url);
         setTitle("");
         setDescription("");
+      } else {
+        setError(data.error || "Failed to create issue");
       }
     },
+    onError: (e: Error) => setError(e.message),
   });
 
   const { data: issuesData } = useQuery({
@@ -102,6 +111,13 @@ export default function Feedback() {
               className="underline flex items-center gap-1" style={{ color: "var(--accent)" }}>
               View on GitHub <ExternalLink size={12} />
             </a>
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-3 flex items-start gap-2 text-sm" style={{ color: "var(--red)" }}>
+            <AlertCircle size={16} className="mt-0.5 shrink-0" />
+            <span className="break-all">{error}</span>
           </div>
         )}
       </div>

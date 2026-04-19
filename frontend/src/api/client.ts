@@ -372,7 +372,6 @@ export const api = {
     weekly: () => post<{
       steps: { step: string; status: string; detail: string | Record<string, number> }[];
     }>(`${BASE}/sync/weekly`, {}),
-    gitPush: () => post<{ ok: boolean; detail: string }>(`${BASE}/sync/git-push`, {}),
   },
   backup: {
     create: () => post<{ ok: boolean; path: string }>(`${BASE}/backup/create`, {}),

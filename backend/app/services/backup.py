@@ -21,23 +21,28 @@ from app.models import AudioFile, ContentPost, PracticeSession, Setlist, Setlist
 from app.services.file_manager import resolve_path
 
 
-BACKUP_DIR = settings.music_dir / "greenroom" / "backups"
 MAX_BACKUPS = 10  # Keep last N database backups
+
+
+def _backup_dir() -> Path:
+    """Vault-backed backup directory, created on demand."""
+    settings.ensure_vault_layout()
+    return settings.vault_backups_dir
 
 
 # --- Database Backup ---
 
 def backup_database() -> str:
     """Create a timestamped backup of greenroom.db. Returns backup path."""
-    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    backup_dir = _backup_dir()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = BACKUP_DIR / f"greenroom_{timestamp}.db"
+    backup_path = backup_dir / f"greenroom_{timestamp}.db"
 
     shutil.copy2(settings.db_path, backup_path)
 
     # Prune old backups
-    backups = sorted(BACKUP_DIR.glob("greenroom_*.db"), reverse=True)
+    backups = sorted(backup_dir.glob("greenroom_*.db"), reverse=True)
     for old in backups[MAX_BACKUPS:]:
         old.unlink()
 
@@ -46,9 +51,10 @@ def backup_database() -> str:
 
 def list_backups() -> list[dict]:
     """List available database backups."""
-    if not BACKUP_DIR.exists():
+    backup_dir = settings.vault_backups_dir
+    if not backup_dir.exists():
         return []
-    backups = sorted(BACKUP_DIR.glob("greenroom_*.db"), reverse=True)
+    backups = sorted(backup_dir.glob("greenroom_*.db"), reverse=True)
     return [{
         "filename": b.name,
         "path": str(b),
@@ -59,7 +65,7 @@ def list_backups() -> list[dict]:
 
 def restore_backup(backup_filename: str) -> str:
     """Restore a database backup. Creates a backup of current state first."""
-    backup_path = BACKUP_DIR / backup_filename
+    backup_path = settings.vault_backups_dir / backup_filename
     if not backup_path.exists():
         raise FileNotFoundError(f"Backup not found: {backup_filename}")
 
@@ -289,9 +295,10 @@ def export_annotations(db: Session) -> dict:
         "tags": [{"name": t.name, "category": t.category} for t in db.query(Tag).all()],
     }
 
-    # Also save to file
-    export_dir = BACKUP_DIR
-    export_dir.mkdir(parents=True, exist_ok=True)
+    # Also save a timestamped copy into the vault exports dir. The sync router
+    # additionally writes `annotations_latest.json` for the canonical pointer.
+    settings.ensure_vault_layout()
+    export_dir = settings.vault_exports_dir
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     export_path = export_dir / f"annotations_{timestamp}.json"
     export_path.write_text(json.dumps(export, indent=2))

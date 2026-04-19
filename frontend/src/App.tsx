@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Routes, Route, NavLink } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Disc3,
@@ -11,7 +10,6 @@ import {
   ListMusic,
   Share2,
   Inbox,
-  RefreshCw,
   Sun,
   Moon,
   TrendingUp,
@@ -64,9 +62,7 @@ function getInitialTheme(): "dark" | "light" {
 }
 
 export default function App() {
-  const [scanning, setScanning] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">(getInitialTheme);
-  const queryClient = useQueryClient();
 
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
@@ -78,16 +74,6 @@ export default function App() {
   if (typeof document !== "undefined") {
     document.documentElement.setAttribute("data-theme", theme);
   }
-
-  const rescan = async () => {
-    setScanning(true);
-    try {
-      await fetch("/api/bootstrap/scan", { method: "POST" });
-      queryClient.invalidateQueries();
-    } finally {
-      setScanning(false);
-    }
-  };
 
   return (
     <div className="flex h-screen">
@@ -121,12 +107,6 @@ export default function App() {
           ))}
         </div>
         <div className="px-3 pb-4 space-y-2">
-          <button onClick={rescan} disabled={scanning}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm border hover:opacity-80 disabled:opacity-50"
-            style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
-            <RefreshCw size={16} className={scanning ? "animate-spin" : ""} />
-            {scanning ? "Scanning..." : "Rescan Files"}
-          </button>
           <button onClick={toggleTheme}
             className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm border hover:opacity-80"
             style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>

@@ -14,13 +14,14 @@ from app.database import get_db
 from app.models import AudioFile, Song
 from app.schemas.audio_file import AudioFileRead, AudioFileUpdate
 from app.services.autosync import compute_organized_path, resolve_path, _cleanup_empty_parent
+from app.services.vault import resolve_audio_path
 
 router = APIRouter(prefix="/api/audio-files", tags=["audio-files"])
 
 
 def _af_to_read(af: AudioFile) -> AudioFileRead:
     """Convert AudioFile model to read schema with joined song + session info."""
-    abs_path = settings.music_dir / af.file_path if af.file_path else None
+    abs_path = resolve_audio_path(af) if af.file_path else None
     return AudioFileRead(
         id=af.id,
         song_id=af.song_id,

@@ -199,3 +199,22 @@ Run `make bootstrap` and check output matches expectations. Investigate any drop
 | .band | GarageBand project | Excluded | Requires manual export |
 | .logicx | Logic Pro project | N/A | Not present on disk |
 | .md | Markdown | Yes | REPERTOIRE.md, ROADMAP.md parsed |
+
+---
+
+<!-- PENDING MERGE from VISION.md 2026-04-16 — integrate during DATA_INGESTION.md review -->
+
+## Data Sources (from VISION.md)
+
+| Source | Format | Ingestion |
+|--------|--------|-----------|
+| GoPro practice videos | MP4 | Session workflow (cut + extract) |
+| Phone voice memos | M4A | Import / drag-drop |
+| Phone video | MOV/MP4 | Import / drag-drop |
+| Logic Pro exports | M4A/WAV | Import / drag-drop |
+| GarageBand projects | .band → M4A | Manual export, then import |
+| Suno AI | M4A/MP3 | Download → import folder |
+| Collaborator (Sural) | M4A/MP3 | Shared → import |
+| Backing tracks | MP3/MP4 | Download → import |
+| Lyrics | Text | Paste in app / Apple Notes import |
+| Reference recordings | MP3/M4A | Download → link to cover |

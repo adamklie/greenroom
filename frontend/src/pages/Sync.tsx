@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { RefreshCw, Check, AlertTriangle, CloudUpload, Music, Shield, HardDrive, FolderTree, ArrowRight } from "lucide-react";
+import { RefreshCw, Check, AlertTriangle, Music, Shield, HardDrive } from "lucide-react";
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
   ok: <Check size={14} style={{ color: "var(--green)" }} />,
@@ -11,13 +11,8 @@ const STATUS_ICON: Record<string, React.ReactNode> = {
 };
 
 const STEP_LABELS: Record<string, string> = {
-  rescan: "Scan for new files",
-  hash: "Fingerprint files",
-  health: "Check file links",
   export: "Export annotations",
   backup: "Backup database",
-  git_commit: "Save to version history",
-  git_push: "Push to cloud",
   summary: "Portfolio summary",
 };
 
@@ -41,123 +36,6 @@ function StepResult({ step }: { step: Step }) {
   );
 }
 
-const TYPE_COLORS: Record<string, string> = { cover: "var(--blue)", original: "var(--green)", idea: "var(--yellow)" };
-
-function ReorganizeSection() {
-  const [showPreview, setShowPreview] = useState(false);
-
-  const { data: preview, refetch } = useQuery({
-    queryKey: ["reorganize-preview"],
-    queryFn: api.reorganize.preview,
-    enabled: showPreview,
-  });
-
-  const executeMut = useMutation({
-    mutationFn: () => api.reorganize.execute(),
-    onSuccess: () => refetch(),
-  });
-
-  return (
-    <div className="rounded-xl p-5 border mb-6" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold flex items-center gap-2">
-          <FolderTree size={18} style={{ color: "var(--accent)" }} />
-          Organize Files
-        </h3>
-        {!showPreview ? (
-          <button onClick={() => setShowPreview(true)}
-            className="px-3 py-1.5 rounded text-sm border hover:opacity-80"
-            style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
-            Preview Changes
-          </button>
-        ) : (
-          <button onClick={() => refetch()}
-            className="px-3 py-1.5 rounded text-sm border hover:opacity-80"
-            style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
-            Refresh
-          </button>
-        )}
-      </div>
-
-      <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
-        Reorganize your files to match the database structure:
-        <strong> Covers/</strong> (by artist), <strong>Originals/</strong> (by title), <strong>Ideas/</strong>
-      </p>
-
-      {!showPreview && (
-        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-          Click "Preview Changes" to see what would move. Nothing happens until you approve.
-        </p>
-      )}
-
-      {preview && (
-        <div>
-          {/* Summary */}
-          <div className="flex gap-4 mb-4 text-sm">
-            <span style={{ color: "var(--accent)" }}><strong>{preview.total_moves}</strong> files to move</span>
-            <span style={{ color: "var(--green)" }}><strong>{preview.already_organized}</strong> already organized</span>
-            {preview.unlinked_files > 0 && (
-              <span style={{ color: "var(--yellow)" }}><strong>{preview.unlinked_files}</strong> unlinked (classify in Triage first)</span>
-            )}
-            {preview.missing_files > 0 && (
-              <span style={{ color: "var(--red)" }}><strong>{preview.missing_files}</strong> missing</span>
-            )}
-          </div>
-
-          {/* Move list */}
-          {preview.moves.length > 0 && (
-            <>
-              <div className="max-h-64 overflow-y-auto space-y-1 mb-4 rounded-lg p-2" style={{ background: "var(--bg)" }}>
-                {preview.moves.map((m) => (
-                  <div key={m.audio_file_id} className="flex items-center gap-2 text-xs py-1">
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: TYPE_COLORS[m.song_type || ""] || "var(--text-muted)" }} />
-                    <span className="truncate flex-1" style={{ color: "var(--text-muted)" }}>
-                      {m.current_path.split("/").pop()}
-                    </span>
-                    <ArrowRight size={12} style={{ color: "var(--text-muted)" }} />
-                    <span className="truncate flex-1 font-medium">
-                      {m.proposed_path}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              <button onClick={() => executeMut.mutate()}
-                disabled={executeMut.isPending}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium text-white disabled:opacity-50"
-                style={{ background: "var(--accent)" }}>
-                <FolderTree size={16} />
-                {executeMut.isPending ? "Organizing..." : `Organize ${preview.total_moves} Files`}
-              </button>
-            </>
-          )}
-
-          {preview.moves.length === 0 && (
-            <div className="flex items-center gap-2 text-sm" style={{ color: "var(--green)" }}>
-              <Check size={16} /> All files are already organized!
-            </div>
-          )}
-
-          {executeMut.data && (
-            <div className="mt-3 p-3 rounded-lg" style={{ background: "var(--bg)" }}>
-              <p className="text-sm" style={{ color: "var(--green)" }}>
-                Moved {executeMut.data.moved} files
-              </p>
-              {executeMut.data.errors.length > 0 && (
-                <div className="mt-1">
-                  {executeMut.data.errors.map((e, i) => (
-                    <p key={i} className="text-xs" style={{ color: "var(--red)" }}>{e}</p>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function Sync() {
   const [lastAction, setLastAction] = useState<string | null>(null);
 
@@ -171,50 +49,34 @@ export default function Sync() {
     onSuccess: () => setLastAction("weekly"),
   });
 
-  const pushMut = useMutation({
-    mutationFn: api.sync.gitPush,
-  });
-
   const isRunning = afterPracticeMut.isPending || weeklyMut.isPending;
   const results = afterPracticeMut.data?.steps || weeklyMut.data?.steps || [];
-  const hasUnpushed = results.some(s => s.step === "git_push" && s.status === "warning");
 
   return (
     <div className="max-w-2xl">
       <h2 className="text-2xl font-bold mb-2">Sync & Backup</h2>
       <p className="text-sm mb-8" style={{ color: "var(--text-muted)" }}>
-        Keep your music library safe and in sync
+        Export annotations and snapshot the database to iCloud
       </p>
 
-      {/* How it works */}
       <div className="rounded-xl p-5 border mb-6" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
         <h3 className="font-semibold mb-3">How your data is protected</h3>
         <div className="space-y-3 text-sm">
           <div className="flex items-start gap-3">
             <HardDrive size={18} className="mt-0.5 flex-shrink-0" style={{ color: "var(--blue)" }} />
             <div>
-              <strong>Your audio & video files</strong> are in iCloud Drive. Apple syncs them automatically.
-              <span style={{ color: "var(--text-muted)" }}> You don't need to do anything for this.</span>
+              <strong>Audio &amp; video files</strong> live in the iCloud vault. Apple syncs them automatically across devices.
             </div>
           </div>
           <div className="flex items-start gap-3">
             <Shield size={18} className="mt-0.5 flex-shrink-0" style={{ color: "var(--green)" }} />
             <div>
-              <strong>Your annotations</strong> (ratings, lyrics, tags, notes) are in the local database.
-              <span style={{ color: "var(--text-muted)" }}> These need to be backed up — that's what the buttons below do.</span>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <CloudUpload size={18} className="mt-0.5 flex-shrink-0" style={{ color: "var(--accent)" }} />
-            <div>
-              <strong>Git push</strong> sends your annotation backup to GitHub for safekeeping.
-              <span style={{ color: "var(--text-muted)" }}> This is your off-site backup.</span>
+              <strong>Annotations</strong> (ratings, lyrics, tags, notes) live in the local database. The buttons below snapshot them into iCloud so a fresh machine can restore everything.
             </div>
           </div>
         </div>
       </div>
 
-      {/* Action buttons */}
       <div className="grid grid-cols-1 gap-4 mb-6">
         <button onClick={() => afterPracticeMut.mutate()}
           disabled={isRunning}
@@ -228,7 +90,7 @@ export default function Sync() {
               <div>
                 <div className="font-semibold">After Practice</div>
                 <div className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  Scan new files, fingerprint, export annotations, backup database
+                  Export annotations + backup DB
                 </div>
               </div>
             </div>
@@ -249,7 +111,7 @@ export default function Sync() {
               <div>
                 <div className="font-semibold">Weekly Check</div>
                 <div className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  Everything above + check for broken links, portfolio summary
+                  Snapshot + portfolio summary
                 </div>
               </div>
             </div>
@@ -259,57 +121,24 @@ export default function Sync() {
         </button>
       </div>
 
-      {/* Results */}
       {results.length > 0 && (
         <div className="rounded-xl p-5 border mb-6" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
           <h3 className="font-semibold mb-3">Results</h3>
           <div className="divide-y" style={{ borderColor: "var(--border)" }}>
             {results.map((step, i) => <StepResult key={i} step={step} />)}
           </div>
-
-          {/* Git push button */}
-          {hasUnpushed && (
-            <div className="mt-4 pt-4 border-t" style={{ borderColor: "var(--border)" }}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium">Unpushed changes</div>
-                  <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Push to GitHub to complete your off-site backup
-                  </div>
-                </div>
-                <button onClick={() => pushMut.mutate()}
-                  disabled={pushMut.isPending}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
-                  style={{ background: "var(--accent)" }}>
-                  <CloudUpload size={14} />
-                  {pushMut.isPending ? "Pushing..." : "Push to GitHub"}
-                </button>
-              </div>
-              {pushMut.data && (
-                <p className="text-xs mt-2" style={{ color: pushMut.data.ok ? "var(--green)" : "var(--red)" }}>
-                  {pushMut.data.detail}
-                </p>
-              )}
-            </div>
-          )}
         </div>
       )}
 
-      {/* Reorganize files */}
-      <ReorganizeSection />
-
-      {/* Storage tips */}
       <div className="rounded-xl p-5 border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
         <h3 className="font-semibold mb-3">Free up disk space</h3>
         <div className="text-sm space-y-2" style={{ color: "var(--text-muted)" }}>
-          <p>Your music files are now synced to iCloud. To free up local disk space:</p>
+          <p>Vault files live in iCloud Drive. To free up local disk:</p>
           <ol className="list-decimal list-inside space-y-1">
-            <li><strong>System Settings → Apple Account → iCloud → Optimize Mac Storage</strong> — Apple will automatically remove local copies of files you haven't opened recently, keeping them in the cloud</li>
-            <li><strong>Right-click any file in Finder → "Remove Download"</strong> — manually offload specific large files (GoPro videos you've already processed are good candidates)</li>
-            <li>Files show a cloud icon (☁️) in Finder when they're offloaded — they download again instantly when you open them</li>
+            <li><strong>System Settings → Apple Account → iCloud → Optimize Mac Storage</strong> — Apple evicts local copies of files you haven't opened recently</li>
+            <li><strong>Right-click any file in Finder → "Remove Download"</strong> — manually offload large items (old GoPro raws, rarely-played backing tracks)</li>
+            <li>Offloaded files show a cloud icon in Finder; they download on demand when the app asks for them</li>
           </ol>
-          <p className="mt-2"><strong>Safe to offload:</strong> Old GoPro raw files you've already cut into clips, backing tracks you rarely play, old session recordings.</p>
-          <p><strong>Keep local:</strong> Files you're actively working with, anything you need offline.</p>
         </div>
       </div>
     </div>
