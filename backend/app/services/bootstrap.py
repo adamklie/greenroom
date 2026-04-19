@@ -6,7 +6,6 @@ Run via: python -m app.services.bootstrap
 from __future__ import annotations
 
 import re
-from datetime import datetime
 
 from sqlalchemy.orm import Session as DBSession
 
@@ -79,7 +78,13 @@ def bootstrap_tags(db: DBSession) -> None:
 
 
 def bootstrap_songs(db: DBSession) -> dict[str, Song]:
-    """Parse REPERTOIRE.md and insert/update songs. Returns normalized name → Song map."""
+    """Parse REPERTOIRE.md and insert NEW songs. Returns normalized name → Song map.
+
+    REPERTOIRE.md is a seed, not a source of truth. If a Song row already
+    exists for a given (title, project), this function leaves it untouched —
+    ongoing edits to artist / type / status / notes happen in the UI and
+    would otherwise be clobbered on the next bootstrap.
+    """
     repertoire_path = settings.music_dir / "REPERTOIRE.md"
     if not repertoire_path.exists():
         print("  REPERTOIRE.md not found, skipping")
@@ -95,13 +100,9 @@ def bootstrap_songs(db: DBSession) -> dict[str, Song]:
         existing = db.query(Song).filter_by(title=p.title, project=p.project).first()
 
         if existing:
-            existing.artist = p.artist
-            existing.is_original = p.is_original
-            existing.type = song_type
-            existing.status = p.status
-            existing.times_practiced = p.times_practiced
-            existing.notes = p.notes
-            existing.updated_at = datetime.now()
+            # Song already exists — preserve every field the user may have
+            # edited. We still include it in the returned map so later
+            # bootstrap phases (sessions, media) can still match clips to it.
             songs_by_norm[norm] = existing
         else:
             song = Song(
@@ -147,8 +148,13 @@ def bootstrap_sessions(db: DBSession, songs_by_norm: dict[str, Song]) -> tuple[i
             ).first()
 
             if existing_take:
-                existing_take.video_path = pt.video_path
-                existing_take.audio_path = pt.audio_path
+                # Don't overwrite video_path / audio_path — the user may have
+                # moved files via the file manager, and re-scanning should
+                # never revert that. Only fill fields that are currently null.
+                if not existing_take.video_path:
+                    existing_take.video_path = pt.video_path
+                if not existing_take.audio_path:
+                    existing_take.audio_path = pt.audio_path
                 if not existing_take.song_id:
                     matched = _match_clip_to_song(pt.clip_name, songs_by_norm)
                     if matched:

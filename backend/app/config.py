@@ -50,7 +50,7 @@ class Settings(BaseSettings):
         for d in (self.vault_files_dir, self.vault_backups_dir, self.vault_exports_dir):
             d.mkdir(parents=True, exist_ok=True)
 
-    model_config = {"env_prefix": "GREENROOM_"}
+    model_config = {"env_prefix": "GREENROOM_", "env_file": ".env", "extra": "ignore"}
 
 
 settings = Settings()

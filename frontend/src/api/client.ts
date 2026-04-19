@@ -185,6 +185,7 @@ export interface Session {
 
 export interface SessionDetail extends Session {
   takes: Take[];
+  audio_files: AudioFile[];
 }
 
 export interface TagItem {

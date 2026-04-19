@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, engine
-from app.routers import analytics, apple_music, audio_files, backup, bootstrap_router, content, dashboard, dedup, feedback, filebrowser, files, gopro, media, options, recommendations, reorganize, sessions, setlists, songs, sync, tabs as tabs_router, tags, trash, trim, triage, upload
+from app.routers import analytics, apple_music, audio_files, backup, content, dashboard, dedup, feedback, filebrowser, files, gopro, media, options, recommendations, reorganize, sessions, setlists, songs, sync, tabs as tabs_router, tags, trash, trim, triage, upload
 
 
 @asynccontextmanager
@@ -65,7 +65,6 @@ app.include_router(feedback.router)
 app.include_router(trim.router)
 app.include_router(tabs_router.router)
 app.include_router(dedup.router)
-app.include_router(bootstrap_router.router)
 
 
 @app.get("/api/health")

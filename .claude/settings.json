@@ -1,0 +1,77 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(/Users/adamklie/**)",
+      "Edit(/Users/adamklie/Library/Mobile Documents/com~apple~CloudDocs/music/greenroom/**)",
+      "Edit(/Users/adamklie/Desktop/music/greenroom/**)",
+      "Edit(/Users/adamklie/greenroom/**)",
+      "Write(/Users/adamklie/Library/Mobile Documents/com~apple~CloudDocs/music/greenroom/**)",
+      "Write(/Users/adamklie/Desktop/music/greenroom/**)",
+      "Write(/Users/adamklie/greenroom/**)",
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(pip *)",
+      "Bash(pip3 *)",
+      "Bash(uv *)",
+      "Bash(pytest *)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(make *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(find *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(mkdir *)",
+      "Bash(rm *)",
+      "Bash(chmod *)",
+      "Bash(du *)",
+      "Bash(grep *)",
+      "Bash(sort *)",
+      "Bash(cut *)",
+      "Bash(awk *)",
+      "Bash(sed *)",
+      "Bash(tar *)",
+      "Bash(unzip *)",
+      "Bash(echo *)",
+      "Bash(sqlite3 *)",
+      "Bash(ffmpeg *)",
+      "Bash(ffprobe *)",
+      "Bash(curl *)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-large-files.sh\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/validate-python.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
