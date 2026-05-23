@@ -309,14 +309,6 @@ export const api = {
       json<{ ok: boolean }>(`${BASE}/tabs/${id}`, { method: "DELETE" }),
     fileUrl: (id: number) => `${BASE}/tabs/${id}/file`,
   },
-  sync: {
-    afterPractice: () => post<{
-      steps: { step: string; status: string; detail: string | Record<string, number> }[];
-    }>(`${BASE}/sync/after-practice`, {}),
-    weekly: () => post<{
-      steps: { step: string; status: string; detail: string | Record<string, number> }[];
-    }>(`${BASE}/sync/weekly`, {}),
-  },
   backup: {
     create: () => post<{ ok: boolean; path: string }>(`${BASE}/backup/create`, {}),
     list: () => json<{ backups: { filename: string; path: string; size_mb: number; created: string }[] }>(`${BASE}/backup/list`),

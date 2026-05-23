@@ -12,7 +12,6 @@ import {
   TrendingUp,
   Scissors,
   Upload,
-  CloudUpload,
   FileText,
   Settings2,
   MessageSquare,
@@ -24,7 +23,6 @@ import SetlistBuilder from "./pages/SetlistBuilder";
 import Progress from "./pages/Progress";
 import ProcessSession from "./pages/ProcessSession";
 import Import from "./pages/Import";
-import Sync from "./pages/Sync";
 import Library from "./pages/Library";
 import Settings from "./pages/Settings";
 import Feedback from "./pages/Feedback";
@@ -40,7 +38,6 @@ const navItems = [
   { to: "/progress", icon: TrendingUp, label: "Progress" },
   { to: "/setlists", icon: ListMusic, label: "Setlists" },
   { to: "/import", icon: Upload, label: "Import" },
-  { to: "/sync", icon: CloudUpload, label: "Sync" },
   { to: "/feedback", icon: MessageSquare, label: "Feedback" },
   { to: "/settings", icon: Settings2, label: "Settings" },
 ];
@@ -119,7 +116,6 @@ export default function App() {
           <Route path="/progress" element={<Progress />} />
           <Route path="/setlists" element={<SetlistBuilder />} />
           <Route path="/import" element={<Import />} />
-          <Route path="/sync" element={<Sync />} />
           <Route path="/feedback" element={<Feedback />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
