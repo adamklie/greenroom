@@ -341,29 +341,6 @@ export default function Import() {
         </>
       )}
 
-      {pendingFiles.length === 0 && (
-        <div className="rounded-xl p-5 border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
-          <h3 className="font-semibold mb-2">Import Sources</h3>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="p-3 rounded-lg" style={{ background: "var(--bg)" }}>
-              <strong>Phone recordings</strong>
-              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>AirDrop voice memos or videos from your phone, then drag here</p>
-            </div>
-            <div className="p-3 rounded-lg" style={{ background: "var(--bg)" }}>
-              <strong>Logic Pro / GarageBand</strong>
-              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Export as m4a or wav, then drag the file here</p>
-            </div>
-            <div className="p-3 rounded-lg" style={{ background: "var(--bg)" }}>
-              <strong>Suno AI</strong>
-              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Download from suno.com, drag here, select "Suno AI" as source</p>
-            </div>
-            <div className="p-3 rounded-lg" style={{ background: "var(--bg)" }}>
-              <strong>Collaborator files</strong>
-              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Tracks from Sural, Joe, or others — drag and assign to the right project</p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
