@@ -13,6 +13,7 @@ import {
   Scissors,
   Upload,
   FileText,
+  Database,
   Settings2,
   MessageSquare,
 } from "lucide-react";
@@ -24,6 +25,7 @@ import Progress from "./pages/Progress";
 import ProcessSession from "./pages/ProcessSession";
 import Import from "./pages/Import";
 import Library from "./pages/Library";
+import Schemas from "./pages/Schemas";
 import Settings from "./pages/Settings";
 import Feedback from "./pages/Feedback";
 
@@ -39,6 +41,7 @@ const navItems = [
   { to: "/setlists", icon: ListMusic, label: "Setlists" },
   { to: "/import", icon: Upload, label: "Import" },
   { to: "/feedback", icon: MessageSquare, label: "Feedback" },
+  { to: "/schemas", icon: Database, label: "Schemas" },
   { to: "/settings", icon: Settings2, label: "Settings" },
 ];
 
@@ -117,6 +120,7 @@ export default function App() {
           <Route path="/setlists" element={<SetlistBuilder />} />
           <Route path="/import" element={<Import />} />
           <Route path="/feedback" element={<Feedback />} />
+          <Route path="/schemas" element={<Schemas />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
