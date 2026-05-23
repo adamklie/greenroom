@@ -219,6 +219,9 @@ export interface Setlist {
 // --- API ---
 
 export const api = {
+  health: {
+    get: () => json<{ status: string; app: string; version: string }>(`${BASE}/health`),
+  },
   dashboard: {
     get: () => json<DashboardResponse>(`${BASE}/dashboard`),
   },
