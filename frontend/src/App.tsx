@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Routes, Route, NavLink } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Routes, Route, NavLink, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Disc3,
@@ -16,6 +17,7 @@ import {
   Database,
   Settings2,
   MessageSquare,
+  LogOut,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import Songs from "./pages/Songs";
@@ -28,6 +30,9 @@ import Library from "./pages/Library";
 import Schemas from "./pages/Schemas";
 import Settings from "./pages/Settings";
 import Feedback from "./pages/Feedback";
+import Login from "./auth/Login";
+import { useCurrentUser } from "./auth/useCurrentUser";
+import { api, setForbiddenHandler } from "./api/client";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -52,14 +57,54 @@ function getInitialTheme(): "dark" | "light" {
   return "dark";
 }
 
-export default function App() {
+/**
+ * Lightweight 403 toast — registered as the global forbidden handler on
+ * mount. Shows for 4 seconds when any mutate call returns 403, so viewers
+ * get a hint that the action is blocked without a full modal.
+ */
+function ForbiddenToast() {
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setForbiddenHandler((msg) => {
+      setMessage(msg);
+      setTimeout(() => setMessage(null), 4000);
+    });
+    return () => setForbiddenHandler(null);
+  }, []);
+
+  if (!message) return null;
+  return (
+    <div
+      className="fixed bottom-6 right-6 z-50 rounded-lg border px-4 py-3 text-sm shadow-lg"
+      style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}
+    >
+      {message}
+    </div>
+  );
+}
+
+function AppShell() {
   const [theme, setTheme] = useState<"dark" | "light">(getInitialTheme);
+  const { user } = useCurrentUser();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
     document.documentElement.setAttribute("data-theme", next);
     localStorage.setItem("greenroom-theme", next);
+  };
+
+  const onLogout = async () => {
+    try {
+      await api.auth.logout();
+    } catch {
+      // best-effort
+    }
+    queryClient.removeQueries({ queryKey: ["auth", "me"] });
+    navigate("/login");
   };
 
   if (typeof document !== "undefined") {
@@ -112,6 +157,27 @@ export default function App() {
           ))}
         </div>
         <div className="px-3 pb-4 space-y-2">
+          {user && (
+            <div className="rounded-lg border px-3 py-2 text-xs"
+              style={{ borderColor: "var(--border)" }}>
+              <div className="truncate" style={{ color: "var(--text-muted)" }}>
+                {user.email}
+              </div>
+              <div className="flex items-center justify-between mt-1">
+                <span className="uppercase tracking-wide"
+                  style={{ color: "var(--accent)" }}>
+                  {user.role}
+                </span>
+                <button onClick={onLogout}
+                  className="flex items-center gap-1 hover:opacity-80"
+                  style={{ color: "var(--text-muted)" }}
+                  title="Log out">
+                  <LogOut size={12} />
+                  Log out
+                </button>
+              </div>
+            </div>
+          )}
           <button onClick={toggleTheme}
             className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm border hover:opacity-80"
             style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
@@ -139,5 +205,27 @@ export default function App() {
         </Routes>
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  const { user, isLoading } = useCurrentUser();
+
+  // While the very first /me call is in flight, show nothing. The query is
+  // fast (single DB lookup) so flashing the login screen between mount and
+  // resolution would be jarring.
+  if (isLoading) return null;
+
+  return (
+    <>
+      <ForbiddenToast />
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="*"
+          element={user ? <AppShell /> : <Login />}
+        />
+      </Routes>
+    </>
   );
 }
