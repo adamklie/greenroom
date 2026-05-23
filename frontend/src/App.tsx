@@ -6,9 +6,7 @@ import {
   PenTool,
   Lightbulb,
   CalendarDays,
-  Music,
   ListMusic,
-  Share2,
   Inbox,
   Sun,
   Moon,
@@ -24,9 +22,7 @@ import Dashboard from "./pages/Dashboard";
 import Songs from "./pages/Songs";
 import Sessions from "./pages/Sessions";
 import SetlistBuilder from "./pages/SetlistBuilder";
-import ContentPlanner from "./pages/ContentPlanner";
 import Triage from "./pages/Triage";
-import Discover from "./pages/Discover";
 import Progress from "./pages/Progress";
 import ProcessSession from "./pages/ProcessSession";
 import Import from "./pages/Import";
@@ -123,10 +119,8 @@ export default function App() {
           <Route path="/sessions" element={<Sessions />} />
           <Route path="/process" element={<ProcessSession />} />
           <Route path="/library" element={<Library />} />
-          <Route path="/discover" element={<Discover />} />
           <Route path="/progress" element={<Progress />} />
           <Route path="/setlists" element={<SetlistBuilder />} />
-          <Route path="/content" element={<ContentPlanner />} />
           <Route path="/import" element={<Import />} />
           <Route path="/triage" element={<Triage />} />
           <Route path="/sync" element={<Sync />} />

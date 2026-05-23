@@ -208,20 +208,6 @@ export interface TriageItem {
   audio_file_id: number | null;
 }
 
-export interface ContentPost {
-  id: number;
-  title: string;
-  song_id: number | null;
-  take_id: number | null;
-  platform: string | null;
-  post_type: string | null;
-  scheduled_date: string | null;
-  status: string;
-  caption: string | null;
-  notes: string | null;
-  song_title: string | null;
-}
-
 export interface SetlistItem {
   id: number;
   song_id: number;
@@ -304,12 +290,6 @@ export const api = {
     update: (id: number, data: Record<string, unknown>) => patch<Setlist>(`${BASE}/setlists/${id}`, data),
     delete: (id: number) => json<{ ok: boolean }>(`${BASE}/setlists/${id}`, { method: "DELETE" }),
   },
-  content: {
-    list: () => json<ContentPost[]>(`${BASE}/content/posts`),
-    create: (data: Record<string, unknown>) => post<ContentPost>(`${BASE}/content/posts`, data),
-    update: (id: number, data: Record<string, unknown>) =>
-      patch<ContentPost>(`${BASE}/content/posts/${id}`, data),
-  },
   options: {
     list: (category?: string) => {
       const qs = category ? `?category=${category}` : "";
@@ -336,14 +316,6 @@ export const api = {
     extractAudio: (id: number) =>
       post<AudioFile>(`${BASE}/audio-files/${id}/extract-audio`, {}),
   },
-  reorganize: {
-    preview: () => json<{
-      moves: { audio_file_id: number; song_id: number | null; song_title: string | null; song_artist: string | null; song_type: string | null; current_path: string; proposed_path: string; reason: string }[];
-      already_organized: number; missing_files: number; unlinked_files: number; total_moves: number;
-    }>(`${BASE}/reorganize/preview`),
-    execute: (moveIds?: number[]) =>
-      post<{ moved: number; skipped: number; errors: string[] }>(`${BASE}/reorganize/execute`, { move_ids: moveIds ?? null }),
-  },
   tabs: {
     list: (songId?: number) => {
       const qs = songId !== undefined ? `?song_id=${songId}` : "";
@@ -355,15 +327,6 @@ export const api = {
     delete: (id: number) =>
       json<{ ok: boolean }>(`${BASE}/tabs/${id}`, { method: "DELETE" }),
     fileUrl: (id: number) => `${BASE}/tabs/${id}/file`,
-  },
-  dedup: {
-    duplicates: (fuzzy = false) => json<{
-      key: string;
-      entries: { id: number; title: string; artist: string | null; type: string | null; status: string | null; project: string | null; audio_count: number; take_count: number; notes: string | null }[];
-    }[]>(`${BASE}/dedup/duplicates${fuzzy ? "?fuzzy=true" : ""}`),
-    merge: (keepId: number, mergeIds: number[]) =>
-      post<{ ok: boolean; kept: { id: number; title: string }; merged_audio: number; merged_takes: number; deleted_songs: { id: number; title: string }[] }>(
-        `${BASE}/dedup/merge`, { keep_id: keepId, merge_ids: mergeIds }),
   },
   sync: {
     afterPractice: () => post<{
@@ -429,31 +392,6 @@ export const api = {
       session_id: number; date: string; take_count: number; matched_takes: number; avg_overall: number | null;
     }[]>(`${BASE}/analytics/session-summary`),
     statusFunnel: () => json<{ status: string; count: number }[]>(`${BASE}/analytics/status-funnel`),
-  },
-  appleMusic: {
-    ingestDump: (path: string, wipe = false) =>
-      post<Record<string, unknown>>(`${BASE}/apple-music/ingest-dump`, { path, wipe }),
-    linkSongs: () => post<Record<string, number>>(`${BASE}/apple-music/link-songs`, {}),
-    stats: (includeAllGenres = false) => json<{
-      imported: boolean; total_tracks?: number; total_plays?: number;
-      total_listen_hours?: number; excluded_genres?: string[];
-      top_artists?: { artist: string; plays: number; tracks: number }[];
-      top_genres?: { genre: string; plays: number }[];
-    }>(`${BASE}/apple-music/stats?include_all_genres=${includeAllGenres}`),
-    suggestions: (limit = 20, includeAllGenres = false) =>
-      json<{
-        title: string; artist: string; album: string | null; genre: string | null;
-        play_count: number; total_play_ms: number; last_played_at: string | null;
-        duration_seconds: number | null;
-      }[]>(
-        `${BASE}/apple-music/suggestions?limit=${limit}&include_all_genres=${includeAllGenres}`
-      ),
-  },
-  recommendations: {
-    list: () => json<{
-      category: string; priority: string; title: string; detail: string;
-      song_id: number | null; song_title: string | null; data: Record<string, unknown>;
-    }[]>(`${BASE}/recommendations`),
   },
   files: {
     healthCheck: () => json<{
