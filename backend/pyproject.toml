@@ -1,7 +1,7 @@
 [project]
 name = "greenroom"
 version = "0.1.0"
-description = "Music career manager for aspiring musicians"
+description = "Song record-keeping for musicians"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
@@ -24,6 +24,10 @@ dev = [
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["alembic*", "tests*", "scripts*"]
 
 [tool.ruff]
 line-length = 100

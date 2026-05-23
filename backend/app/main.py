@@ -1,16 +1,25 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
+from alembic import command
+from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.database import Base, engine
 from app.routers import analytics, audio_files, backup, dashboard, feedback, filebrowser, files, gopro, media, options, sessions, setlists, songs, tabs as tabs_router, tags, trash, trim, upload
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    # Apply pending Alembic migrations on startup. For first-time setup on
+    # a brand-new DB this creates every table. For an existing DB that was
+    # initially built by Base.metadata.create_all (pre-Alembic), run
+    # `python scripts/stamp_baseline.py` once to mark it as already-at-head
+    # — otherwise this would try to re-create existing tables and fail.
+    alembic_ini = Path(__file__).resolve().parent.parent / "alembic.ini"
+    cfg = Config(str(alembic_ini))
+    command.upgrade(cfg, "head")
     # Auto-backup runs in a background thread so startup isn't blocked.
     # On iCloud-backed filesystems the DB copy can take seconds; doing it
     # synchronously slows every reload.
