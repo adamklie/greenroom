@@ -2,9 +2,11 @@
   "permissions": {
     "allow": [
       "Read(/Users/adamklie/**)",
+      "Edit(/Users/adamklie/code/greenroom/**)",
       "Edit(/Users/adamklie/Library/Mobile Documents/com~apple~CloudDocs/music/greenroom/**)",
       "Edit(/Users/adamklie/Desktop/music/greenroom/**)",
       "Edit(/Users/adamklie/greenroom/**)",
+      "Write(/Users/adamklie/code/greenroom/**)",
       "Write(/Users/adamklie/Library/Mobile Documents/com~apple~CloudDocs/music/greenroom/**)",
       "Write(/Users/adamklie/Desktop/music/greenroom/**)",
       "Write(/Users/adamklie/greenroom/**)",
