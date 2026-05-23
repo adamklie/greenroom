@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_editor, require_viewer
 from app.database import get_db
 from app.services.file_manager import (
     consolidate_all_external,
@@ -39,7 +40,7 @@ class ConsolidateResponse(BaseModel):
 
 
 @router.get("/health", response_model=HealthCheckResponse)
-def check_health(db: Session = Depends(get_db)):
+def check_health(db: Session = Depends(get_db), _user=Depends(require_viewer)):
     """Check for broken file links in the database."""
     broken = health_check(db)
     return HealthCheckResponse(
@@ -52,7 +53,7 @@ def check_health(db: Session = Depends(get_db)):
 
 
 @router.post("/audio/{audio_file_id}/move", response_model=dict)
-def move_file(audio_file_id: int, req: MoveRequest, db: Session = Depends(get_db)):
+def move_file(audio_file_id: int, req: MoveRequest, db: Session = Depends(get_db), _user=Depends(require_editor)):
     """Move an audio file to a new location. Updates DB atomically."""
     try:
         af = move_audio_file(db, audio_file_id, req.new_path)
@@ -62,7 +63,7 @@ def move_file(audio_file_id: int, req: MoveRequest, db: Session = Depends(get_db
 
 
 @router.post("/audio/{audio_file_id}/consolidate", response_model=dict)
-def consolidate_one(audio_file_id: int, db: Session = Depends(get_db)):
+def consolidate_one(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
     """Move a single file from external location into the organized music directory."""
     try:
         new_path = consolidate_file(db, audio_file_id)
@@ -72,7 +73,7 @@ def consolidate_one(audio_file_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/consolidate-all", response_model=ConsolidateResponse)
-def consolidate_all(db: Session = Depends(get_db)):
+def consolidate_all(db: Session = Depends(get_db), _user=Depends(require_editor)):
     """Move ALL external files into the organized music directory."""
     result = consolidate_all_external(db)
     return ConsolidateResponse(

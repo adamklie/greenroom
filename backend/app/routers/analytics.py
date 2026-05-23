@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, case
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_viewer
 from app.database import get_db
 from app.models import PracticeSession, Song, Take
 
@@ -13,7 +14,7 @@ RATING_DIMS = ["overall", "vocals", "guitar", "drums", "tone", "timing", "energy
 
 
 @router.get("/practice-frequency")
-def practice_frequency(db: Session = Depends(get_db)):
+def practice_frequency(db: Session = Depends(get_db), _user=Depends(require_viewer)):
     """Practice sessions per week/month for heatmap-style chart."""
     sessions = (
         db.query(PracticeSession.date, func.count(Take.id).label("take_count"))
@@ -30,6 +31,7 @@ def rating_trends(
     song_id: int | None = Query(None),
     dimension: str = Query("overall"),
     db: Session = Depends(get_db),
+    _user=Depends(require_viewer),
 ):
     """Rating values over time for a song or across all songs."""
     rating_col = getattr(Take, f"rating_{dimension}", Take.rating_overall)
@@ -56,7 +58,7 @@ def rating_trends(
 
 
 @router.get("/skill-radar")
-def skill_radar(db: Session = Depends(get_db)):
+def skill_radar(db: Session = Depends(get_db), _user=Depends(require_viewer)):
     """Average rating per dimension — for radar/spider chart."""
     dims = {}
     for dim in RATING_DIMS:
@@ -73,7 +75,7 @@ def skill_radar(db: Session = Depends(get_db)):
 
 
 @router.get("/song-progress")
-def song_progress(db: Session = Depends(get_db)):
+def song_progress(db: Session = Depends(get_db), _user=Depends(require_viewer)):
     """Per-song practice stats — times practiced, latest session, avg rating."""
     results = (
         db.query(
@@ -104,7 +106,7 @@ def song_progress(db: Session = Depends(get_db)):
 
 
 @router.get("/session-summary")
-def session_summary(db: Session = Depends(get_db)):
+def session_summary(db: Session = Depends(get_db), _user=Depends(require_viewer)):
     """Per-session summary with song count and rating averages."""
     sessions = (
         db.query(
@@ -130,7 +132,7 @@ def session_summary(db: Session = Depends(get_db)):
 
 
 @router.get("/status-funnel")
-def status_funnel(db: Session = Depends(get_db)):
+def status_funnel(db: Session = Depends(get_db), _user=Depends(require_viewer)):
     """Songs at each status stage — shows the pipeline."""
     all_statuses = [
         "idea", "captured", "learning", "developing", "draft",

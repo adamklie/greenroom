@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_editor, require_viewer
 from app.database import get_db
 from app.services.gopro_processor import (
     ClipMarker,
@@ -42,13 +43,13 @@ class ProcessRequest(BaseModel):
 
 
 @router.get("/list-videos")
-def get_video_list(directory: str):
+def get_video_list(directory: str, _user=Depends(require_viewer)):
     files = list_video_files(directory)
     return {"files": files, "directory": directory}
 
 
 @router.post("/analyze")
-def analyze(req: AnalyzeRequest):
+def analyze(req: AnalyzeRequest, _user=Depends(require_editor)):
     """Analyze video using energy-based gap detection."""
     try:
         result = analyze_video(
@@ -84,7 +85,7 @@ def analyze(req: AnalyzeRequest):
 
 
 @router.post("/process")
-def process(req: ProcessRequest, db: Session = Depends(get_db)):
+def process(req: ProcessRequest, db: Session = Depends(get_db), _user=Depends(require_editor)):
     """Process marked clips."""
     try:
         session_date = date.fromisoformat(req.session_date)

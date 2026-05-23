@@ -2,8 +2,10 @@
 
 import subprocess
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from app.auth.deps import require_editor, require_viewer
 
 router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 
@@ -28,7 +30,7 @@ class FeedbackCreate(BaseModel):
 
 
 @router.post("")
-def create_feedback(data: FeedbackCreate):
+def create_feedback(data: FeedbackCreate, _user=Depends(require_editor)):
     """Create a GitHub issue from user feedback."""
     labels = list(CATEGORY_LABELS.get(data.category, []))
     if data.priority == "high":
@@ -63,7 +65,7 @@ def create_feedback(data: FeedbackCreate):
 
 
 @router.get("/issues")
-def list_issues():
+def list_issues(_user=Depends(require_viewer)):
     """List open GitHub issues for the repo."""
     try:
         result = subprocess.run(

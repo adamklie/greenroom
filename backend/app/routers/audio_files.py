@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.audio_file import generate_identifier
 
+from app.auth.deps import require_editor, require_viewer
 from app.config import settings
 from app.database import get_db
 from app.models import AudioFile, Song
@@ -70,6 +71,7 @@ def list_audio_files(
     search: str | None = Query(None),
     include_deleted: bool = Query(False),
     db: Session = Depends(get_db),
+    _user=Depends(require_viewer),
 ):
     """List all audio files with optional filters. Hides role='deleted' unless include_deleted=true."""
     q = db.query(AudioFile).filter(AudioFile.is_stem == False)  # noqa: E712
@@ -101,7 +103,7 @@ def list_audio_files(
 
 
 @router.get("/{audio_file_id}", response_model=AudioFileRead)
-def get_audio_file(audio_file_id: int, db: Session = Depends(get_db)):
+def get_audio_file(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(require_viewer)):
     af = db.query(AudioFile).get(audio_file_id)
     if not af:
         raise HTTPException(404, "Audio file not found")
@@ -109,7 +111,7 @@ def get_audio_file(audio_file_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/{audio_file_id}", response_model=AudioFileRead)
-def update_audio_file(audio_file_id: int, data: AudioFileUpdate, db: Session = Depends(get_db)):
+def update_audio_file(audio_file_id: int, data: AudioFileUpdate, db: Session = Depends(get_db), _user=Depends(require_editor)):
     """Update audio file metadata. If song_id changes, file auto-moves."""
     af = db.query(AudioFile).get(audio_file_id)
     if not af:
@@ -132,7 +134,7 @@ def update_audio_file(audio_file_id: int, data: AudioFileUpdate, db: Session = D
 
 
 @router.delete("/{audio_file_id}")
-def delete_audio_file(audio_file_id: int, db: Session = Depends(get_db)):
+def delete_audio_file(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
     """Soft-delete: move file to _trash/."""
     af = db.query(AudioFile).get(audio_file_id)
     if not af:
@@ -163,7 +165,7 @@ FFMPEG = "/Users/adamklie/opt/ffmpeg" if Path("/Users/adamklie/opt/ffmpeg").exis
 
 
 @router.post("/{audio_file_id}/extract-audio", response_model=AudioFileRead)
-def extract_audio(audio_file_id: int, db: Session = Depends(get_db)):
+def extract_audio(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
     """Create an audio (m4a) sibling for a video AudioFile."""
     af = db.query(AudioFile).get(audio_file_id)
     if not af:

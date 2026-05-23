@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_editor, require_viewer
 from app.config import settings
 from app.database import get_db
 from app.models import Song, SongTab
@@ -25,7 +26,7 @@ def _resolve_tab_path(file_path: str) -> Path:
 
 
 @router.get("", response_model=list[SongTabRead])
-def list_tabs(song_id: int | None = Query(None), db: Session = Depends(get_db)):
+def list_tabs(song_id: int | None = Query(None), db: Session = Depends(get_db), _user=Depends(require_viewer)):
     q = db.query(SongTab)
     if song_id is not None:
         q = q.filter(SongTab.song_id == song_id)
@@ -33,7 +34,7 @@ def list_tabs(song_id: int | None = Query(None), db: Session = Depends(get_db)):
 
 
 @router.get("/{tab_id}", response_model=SongTabRead)
-def get_tab(tab_id: int, db: Session = Depends(get_db)):
+def get_tab(tab_id: int, db: Session = Depends(get_db), _user=Depends(require_viewer)):
     tab = db.query(SongTab).get(tab_id)
     if not tab:
         raise HTTPException(404, "Tab not found")
@@ -41,7 +42,7 @@ def get_tab(tab_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{tab_id}/file")
-def serve_tab_file(tab_id: int, db: Session = Depends(get_db)):
+def serve_tab_file(tab_id: int, db: Session = Depends(get_db), _user=Depends(require_viewer)):
     """Serve the raw .gp/.gp5/.gpx file for AlphaTab to parse."""
     tab = db.query(SongTab).get(tab_id)
     if not tab:
@@ -65,6 +66,7 @@ async def upload_tab(
     is_primary: bool = Form(False),
     notes: str | None = Form(None),
     db: Session = Depends(get_db),
+    _user=Depends(require_editor),
 ):
     """Upload a Guitar Pro tab file and link it to a song."""
     if not file.filename:
@@ -117,7 +119,7 @@ async def upload_tab(
 
 
 @router.patch("/{tab_id}", response_model=SongTabRead)
-def update_tab(tab_id: int, data: SongTabUpdate, db: Session = Depends(get_db)):
+def update_tab(tab_id: int, data: SongTabUpdate, db: Session = Depends(get_db), _user=Depends(require_editor)):
     tab = db.query(SongTab).get(tab_id)
     if not tab:
         raise HTTPException(404, "Tab not found")
@@ -137,7 +139,7 @@ def update_tab(tab_id: int, data: SongTabUpdate, db: Session = Depends(get_db)):
 
 
 @router.delete("/{tab_id}")
-def delete_tab(tab_id: int, db: Session = Depends(get_db)):
+def delete_tab(tab_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
     tab = db.query(SongTab).get(tab_id)
     if not tab:
         raise HTTPException(404, "Tab not found")

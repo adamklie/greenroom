@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_editor, require_viewer
 from app.database import get_db
 from app.services.backup import (
     auto_heal_paths,
@@ -17,20 +18,20 @@ router = APIRouter(prefix="/api/backup", tags=["backup"])
 
 
 @router.post("/create")
-def create_backup():
+def create_backup(_user=Depends(require_editor)):
     """Create a database backup now."""
     path = backup_database()
     return {"ok": True, "path": path}
 
 
 @router.get("/list")
-def get_backups():
+def get_backups(_user=Depends(require_viewer)):
     """List available backups."""
     return {"backups": list_backups()}
 
 
 @router.post("/restore/{filename}")
-def restore(filename: str):
+def restore(filename: str, _user=Depends(require_editor)):
     """Restore a backup. Current DB is backed up first."""
     try:
         path = restore_backup(filename)
@@ -40,21 +41,21 @@ def restore(filename: str):
 
 
 @router.post("/hash-files")
-def hash_files(db: Session = Depends(get_db)):
+def hash_files(db: Session = Depends(get_db), _user=Depends(require_editor)):
     """Compute SHA256 hashes for all audio files (for auto-heal)."""
     stats = hash_all_files(db)
     return stats
 
 
 @router.post("/auto-heal")
-def heal(db: Session = Depends(get_db)):
+def heal(db: Session = Depends(get_db), _user=Depends(require_editor)):
     """Find broken file paths and fix them using content hashes."""
     stats = auto_heal_paths(db)
     return stats
 
 
 @router.post("/export")
-def export(db: Session = Depends(get_db)):
+def export(db: Session = Depends(get_db), _user=Depends(require_editor)):
     """Export all annotations as JSON."""
     result = export_annotations(db)
     return {"ok": True, "path": result["path"],
