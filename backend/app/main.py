@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -5,6 +6,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.auth.router import router as auth_router
@@ -44,7 +46,7 @@ app = FastAPI(title="Greenroom", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5175", "http://localhost:5176"],
+    allow_origins=[o.strip() for o in settings.allowed_origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,3 +76,14 @@ app.include_router(tabs_router.router)
 @app.get("/api/health")
 def health():
     return {"status": "ok", "app": "greenroom", "version": "0.2.0"}
+
+
+# Serve the built React SPA from `/` when a static directory is configured.
+# Mounted last so every `/api/*` route above takes priority. `html=True`
+# makes unknown sub-paths (e.g. /sessions, /library) fall back to index.html
+# so client-side routing works on hard refresh. When `static_dir` is empty
+# or missing (local dev where Vite serves the frontend separately), we skip
+# the mount entirely.
+_static_dir = settings.static_dir
+if _static_dir and os.path.isdir(_static_dir):
+    app.mount("/", StaticFiles(directory=_static_dir, html=True), name="static")
