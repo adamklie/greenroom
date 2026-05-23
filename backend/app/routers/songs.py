@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import AudioFile, LyricsVersion, Song, Tag, Take
-from app.models.listening import ListeningHistory
 from app.schemas.audio_file import AudioFileRead, AudioFileUpdate
 from app.schemas.audio_file import AudioFileRead
 from app.schemas.lyrics_version import LyricsUpdate, LyricsVersionRead
@@ -31,22 +30,11 @@ def _songs_to_read_bulk(songs: list[Song], db: Session) -> list[SongRead]:
         .filter(AudioFile.song_id.in_(ids))
         .group_by(AudioFile.song_id).all()
     )
-    apple_agg = {
-        sid: (int(plays or 0), last)
-        for sid, plays, last in db.query(
-            ListeningHistory.linked_song_id,
-            func.sum(ListeningHistory.play_count),
-            func.max(ListeningHistory.last_played_at),
-        )
-        .filter(ListeningHistory.linked_song_id.in_(ids))
-        .group_by(ListeningHistory.linked_song_id).all()
-    }
     # Tags are already eager-loaded via the Song.tags relationship (default lazy).
     # Access via song.tags in the loop; ensure the relationship is loaded up-front.
     results: list[SongRead] = []
     for song in songs:
         take_count = af_counts.get(song.id, 0)
-        plays, last = apple_agg.get(song.id, (0, None))
         results.append(SongRead(
             id=song.id, title=song.title, artist=song.artist, type=song.type,
             project=song.project, status=song.status, key=song.key,
@@ -59,8 +47,6 @@ def _songs_to_read_bulk(songs: list[Song], db: Session) -> list[SongRead]:
             has_audio=take_count > 0,
             take_count=take_count,
             tags=[t.name for t in song.tags],
-            apple_play_count=plays,
-            apple_last_played=last,
         ))
     return results
 
@@ -69,14 +55,6 @@ def _song_to_read(song: Song, db: Session) -> SongRead:
     has_audio = db.query(AudioFile.id).filter(AudioFile.song_id == song.id).first() is not None
     take_count = db.query(func.count(AudioFile.id)).filter(AudioFile.song_id == song.id).scalar()
     tag_names = [t.name for t in song.tags]
-    apple_play_count, apple_last_played = (
-        db.query(
-            func.coalesce(func.sum(ListeningHistory.play_count), 0),
-            func.max(ListeningHistory.last_played_at),
-        )
-        .filter(ListeningHistory.linked_song_id == song.id)
-        .first()
-    )
     return SongRead(
         id=song.id,
         title=song.title,
@@ -98,8 +76,6 @@ def _song_to_read(song: Song, db: Session) -> SongRead:
         has_audio=has_audio,
         take_count=take_count,
         tags=tag_names,
-        apple_play_count=int(apple_play_count or 0),
-        apple_last_played=apple_last_played,
     )
 
 
