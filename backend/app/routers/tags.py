@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_editor, require_viewer
 from app.database import get_db
 from app.models import Tag
 from app.schemas.tag import TagCreate, TagRead
@@ -12,6 +13,7 @@ router = APIRouter(prefix="/api/tags", tags=["tags"])
 def list_tags(
     category: str | None = Query(None),
     db: Session = Depends(get_db),
+    _user=Depends(require_viewer),
 ):
     q = db.query(Tag)
     if category:
@@ -20,7 +22,7 @@ def list_tags(
 
 
 @router.post("", response_model=TagRead)
-def create_tag(data: TagCreate, db: Session = Depends(get_db)):
+def create_tag(data: TagCreate, db: Session = Depends(get_db), _user=Depends(require_editor)):
     tag = Tag(name=data.name, category=data.category, color=data.color, is_predefined=False)
     db.add(tag)
     db.commit()

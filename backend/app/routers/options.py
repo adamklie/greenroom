@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_editor, require_viewer
 from app.database import get_db
 from app.models.option import DEFAULT_OPTIONS, Option
 
@@ -27,7 +28,7 @@ class OptionCreate(BaseModel):
 
 
 @router.get("", response_model=list[OptionRead])
-def list_options(category: str | None = Query(None), db: Session = Depends(get_db)):
+def list_options(category: str | None = Query(None), db: Session = Depends(get_db), _user=Depends(require_viewer)):
     """List options, optionally filtered by category."""
     # Seed defaults if table is empty or missing defaults
     existing_count = db.query(Option).filter_by(is_default=True).count()
@@ -47,7 +48,7 @@ def list_options(category: str | None = Query(None), db: Session = Depends(get_d
 
 
 @router.post("", response_model=OptionRead)
-def create_option(data: OptionCreate, db: Session = Depends(get_db)):
+def create_option(data: OptionCreate, db: Session = Depends(get_db), _user=Depends(require_editor)):
     """Add a new option value."""
     existing = db.query(Option).filter_by(category=data.category, value=data.value).first()
     if existing:
@@ -66,7 +67,7 @@ def create_option(data: OptionCreate, db: Session = Depends(get_db)):
 
 
 @router.delete("/{option_id}")
-def delete_option(option_id: int, db: Session = Depends(get_db)):
+def delete_option(option_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
     opt = db.query(Option).get(option_id)
     if not opt:
         raise HTTPException(404, "Option not found")

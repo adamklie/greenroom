@@ -2,7 +2,9 @@
 
 from pathlib import Path
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+
+from app.auth.deps import require_viewer
 
 router = APIRouter(prefix="/api/browse", tags=["filebrowser"])
 
@@ -10,7 +12,7 @@ VIDEO_EXTS = {".mp4", ".MP4", ".mov", ".MOV"}
 
 
 @router.get("")
-def browse_directory(path: str = Query(default="~")):
+def browse_directory(path: str = Query(default="~"), _user=Depends(require_viewer)):
     """List contents of a directory. Returns folders and video files."""
     dir_path = Path(path).expanduser().resolve()
 

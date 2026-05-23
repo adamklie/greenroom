@@ -3,6 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.auth.deps import require_editor, require_viewer
 from app.database import get_db
 from app.models import Setlist, SetlistItem, Song
 from app.schemas.setlist import (
@@ -45,13 +46,13 @@ def _setlist_to_read(setlist: Setlist, db: Session) -> SetlistRead:
 
 
 @router.get("", response_model=list[SetlistRead])
-def list_setlists(db: Session = Depends(get_db)):
+def list_setlists(db: Session = Depends(get_db), _user=Depends(require_viewer)):
     setlists = db.query(Setlist).order_by(Setlist.updated_at.desc()).all()
     return [_setlist_to_read(s, db) for s in setlists]
 
 
 @router.post("", response_model=SetlistRead)
-def create_setlist(data: SetlistCreate, db: Session = Depends(get_db)):
+def create_setlist(data: SetlistCreate, db: Session = Depends(get_db), _user=Depends(require_editor)):
     setlist = Setlist(name=data.name, description=data.description, config=data.config)
     db.add(setlist)
     db.flush()
@@ -71,7 +72,7 @@ def create_setlist(data: SetlistCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/{setlist_id}", response_model=SetlistRead)
-def get_setlist(setlist_id: int, db: Session = Depends(get_db)):
+def get_setlist(setlist_id: int, db: Session = Depends(get_db), _user=Depends(require_viewer)):
     setlist = db.query(Setlist).get(setlist_id)
     if not setlist:
         raise HTTPException(404, "Setlist not found")
@@ -79,7 +80,7 @@ def get_setlist(setlist_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/{setlist_id}", response_model=SetlistRead)
-def update_setlist(setlist_id: int, data: SetlistUpdate, db: Session = Depends(get_db)):
+def update_setlist(setlist_id: int, data: SetlistUpdate, db: Session = Depends(get_db), _user=Depends(require_editor)):
     setlist = db.query(Setlist).get(setlist_id)
     if not setlist:
         raise HTTPException(404, "Setlist not found")
@@ -110,7 +111,7 @@ def update_setlist(setlist_id: int, data: SetlistUpdate, db: Session = Depends(g
 
 
 @router.delete("/{setlist_id}")
-def delete_setlist(setlist_id: int, db: Session = Depends(get_db)):
+def delete_setlist(setlist_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
     setlist = db.query(Setlist).get(setlist_id)
     if not setlist:
         raise HTTPException(404, "Setlist not found")
