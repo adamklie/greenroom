@@ -112,3 +112,30 @@ All three paths are configurable via environment variables (with the `GREENROOM_
 | `GREENROOM_DB_PATH` | `<repo>/greenroom.db` | Live DB |
 
 Set these in a `.env` file at the repo root or export them before running.
+
+## Storage backends
+
+`backend/app/services/vault.py` routes all reads/writes through a small
+`VaultBackend` protocol so the storage layer can move off the iCloud vault
+later without rewriting every caller:
+
+| Backend | Selected when | Status |
+|---|---|---|
+| `LocalVaultBackend` | `MEDIA_BACKEND=local` (default) | Production. Writes to `vault_files_dir`. |
+| `CloudVaultBackend` | `MEDIA_BACKEND=r2` | Stub. Every method raises `NotImplementedError`. Wiring (boto3, upload, range-stream) lands in a later deployment phase. |
+
+Selecting the backend is a single env var:
+
+| Env var | Default | Purpose |
+|---|---|---|
+| `GREENROOM_MEDIA_BACKEND` | `local` | Storage backend: `local` or `r2` |
+| `GREENROOM_R2_ACCOUNT_ID` | `""` | Placeholder for future R2 implementation; currently unused. |
+| `GREENROOM_R2_ACCESS_KEY_ID` | `""` | Placeholder; unused. |
+| `GREENROOM_R2_SECRET_ACCESS_KEY` | `""` | Placeholder; unused. |
+| `GREENROOM_R2_BUCKET` | `""` | Placeholder; unused. |
+
+To add a new backend, write a class implementing the four `VaultBackend`
+methods (`path_for`, `resolve`, `ingest`, `exists`) and extend
+`get_backend()` to dispatch on the new `media_backend` value. The public
+module functions (`vault_path_for`, `resolve_audio_path`, `ingest_into_vault`)
+are thin wrappers and don't need to change.
