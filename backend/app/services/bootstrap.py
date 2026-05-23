@@ -128,6 +128,51 @@ def bootstrap_sessions(db: DBSession, songs_by_norm: dict[str, Song]) -> tuple[i
     session_count = 0
     take_count = 0
 
+    from pathlib import Path as _Path
+    from app.models.audio_file import generate_identifier as _gen_identifier
+    from datetime import datetime as _dt
+
+    def _ensure_audio_file_for_take(take: Take, session: PracticeSession) -> None:
+        """Mirror a Take row into audio_files when an extracted clip exists on disk.
+
+        Phase 4 of the AudioFile unification (per docs/AUDIOFILE_UNIFICATION.md):
+        the Sessions page reads audio_files only, so every session clip needs
+        a parallel audio_file row pointing at the same on-disk file.
+
+        Idempotent: skips when an audio_file with the same file_path exists, and
+        patches session_id when an existing row was linked to the wrong session.
+        """
+        if not take.video_path:
+            return  # cuts.txt stub without an extracted file yet
+        existing = db.query(AudioFile).filter_by(file_path=take.video_path).first()
+        if existing:
+            if take.session_id is not None and existing.session_id != take.session_id:
+                existing.session_id = take.session_id
+            return
+        af = AudioFile(
+            song_id=take.song_id,
+            file_path=take.video_path,
+            file_type=_Path(take.video_path).suffix.lstrip(".").lower() or "mp4",
+            identifier=_gen_identifier(_Path(take.video_path).name, _dt.utcnow().isoformat()),
+            source="gopro",
+            role="practice_clip",
+            session_id=session.id,
+            clip_name=take.clip_name,
+            source_file=take.source_video,
+            start_time=take.start_time,
+            end_time=take.end_time,
+            video_path=take.video_path,
+            rating_overall=take.rating_overall,
+            rating_vocals=take.rating_vocals,
+            rating_guitar=take.rating_guitar,
+            rating_drums=take.rating_drums,
+            rating_tone=take.rating_tone,
+            rating_timing=take.rating_timing,
+            rating_energy=take.rating_energy,
+            notes=take.notes,
+        )
+        db.add(af)
+
     for ps in parsed_sessions:
         existing = db.query(PracticeSession).filter_by(folder_path=ps.folder_path).first()
         if existing:
@@ -159,6 +204,7 @@ def bootstrap_sessions(db: DBSession, songs_by_norm: dict[str, Song]) -> tuple[i
                     matched = _match_clip_to_song(pt.clip_name, songs_by_norm)
                     if matched:
                         existing_take.song_id = matched.id
+                _ensure_audio_file_for_take(existing_take, session)
             else:
                 matched = _match_clip_to_song(pt.clip_name, songs_by_norm)
                 take = Take(
@@ -172,6 +218,8 @@ def bootstrap_sessions(db: DBSession, songs_by_norm: dict[str, Song]) -> tuple[i
                     audio_path=pt.audio_path,
                 )
                 db.add(take)
+                db.flush()
+                _ensure_audio_file_for_take(take, session)
                 take_count += 1
 
     return session_count, take_count
