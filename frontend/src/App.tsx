@@ -71,11 +71,25 @@ export default function App() {
       <nav className="w-56 flex-shrink-0 flex flex-col border-r"
         style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
         <div className="px-5 py-5">
-          <h1 className="text-xl font-bold" style={{ color: "var(--accent)" }}>
-            Greenroom
-          </h1>
+          <div className="flex items-center gap-2">
+            <svg viewBox="0 0 48 48" width="22" height="22" style={{ color: "var(--accent)" }} aria-hidden="true">
+              <rect x="8" y="14" width="32" height="30" rx="1.5"
+                    fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round"/>
+              <line x1="24" y1="16" x2="24" y2="42"
+                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+              <circle cx="33" cy="29" r="1.3" fill="currentColor"/>
+              <g fill="currentColor">
+                <ellipse cx="20" cy="10" rx="3" ry="2.4" transform="rotate(-22 20 10)"/>
+                <rect x="22" y="2" width="1.6" height="10"/>
+                <path d="M 22.8 2 Q 28 3 26.8 8 Q 25.5 5 22.8 6 Z"/>
+              </g>
+            </svg>
+            <h1 className="text-xl font-bold" style={{ color: "var(--accent)" }}>
+              Greenroom
+            </h1>
+          </div>
           <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-            Music Portfolio Builder
+            Song record keeping
           </p>
         </div>
         <div className="flex-1 px-3 space-y-1 overflow-y-auto">
