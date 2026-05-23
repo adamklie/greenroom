@@ -61,6 +61,19 @@ class Settings(BaseSettings):
     # public-facing origin the frontend is served from.
     public_url: str = "http://localhost:5175"
 
+    # --- Deployment (Phase 3b) ---
+    # Directory of pre-built React static assets to serve at `/`. Empty (the
+    # default) skips the static mount — local dev runs Vite separately on
+    # :5173/:5175, so the backend doesn't need to serve the SPA. In the
+    # container image this points at /app/static (set by the Dockerfile).
+    static_dir: str = ""
+
+    # Comma-separated allow-list of origins for CORS. Default covers the
+    # ports `dev.sh` and the Makefile spin up. In production deployments
+    # this is overridden via GREENROOM_ALLOWED_ORIGINS to include the
+    # public domain (e.g. https://greenroom.example.com).
+    allowed_origins: str = "http://localhost:5173,http://localhost:5175,http://localhost:5176"
+
     @property
     def database_url(self) -> str:
         return f"sqlite:///{self.db_path}"
