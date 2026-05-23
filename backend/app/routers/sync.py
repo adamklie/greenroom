@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.models import AudioFile, PracticeSession, Song, Take, TriageItem
+from app.models import AudioFile, PracticeSession, Song, Take
 from app.services.backup import backup_database, export_annotations, list_backups
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
@@ -82,7 +82,6 @@ def weekly_check(db: Session = Depends(get_db)):
         "takes": db.query(func.count(Take.id)).scalar(),
         "audio_files": db.query(func.count(AudioFile.id)).scalar(),
         "rated_takes": db.query(func.count(Take.id)).filter(Take.rating_overall.isnot(None)).scalar(),
-        "triage_pending": db.query(func.count(TriageItem.id)).filter(TriageItem.status == "pending").scalar(),
     }
     steps.append({"step": "summary", "status": "ok", "detail": counts})
 

@@ -6,7 +6,6 @@ from app.models.activity import ActivityLog
 from app.models.setlist import Setlist, SetlistItem
 from app.models.tag import Tag, song_tags, take_tags, audio_file_tags, PREDEFINED_TAGS
 from app.models.lyrics_version import LyricsVersion
-from app.models.triage import TriageItem
 from app.models.option import Option, DEFAULT_OPTIONS
 from app.models.song_tab import SongTab
 
@@ -24,6 +23,5 @@ __all__ = [
     "audio_file_tags",
     "PREDEFINED_TAGS",
     "LyricsVersion",
-    "TriageItem",
     "SongTab",
 ]

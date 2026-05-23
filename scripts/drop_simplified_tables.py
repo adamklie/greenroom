@@ -12,6 +12,7 @@ Tables dropped:
   - apple_playlists        (Apple Music ingest)
   - apple_playlist_tracks  (Apple Music ingest)
   - roadmap_tasks          (dead-code Roadmap model)
+  - triage_queue           (Triage page)
 
 Usage:
   python scripts/drop_simplified_tables.py
@@ -35,6 +36,7 @@ TABLES_TO_DROP = [
     "apple_playlists",
     "apple_playlist_tracks",
     "roadmap_tasks",
+    "triage_queue",
 ]
 
 
