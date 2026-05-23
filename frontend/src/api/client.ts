@@ -1,7 +1,23 @@
 const BASE = "/api";
 
+// 403 toast hook. Set once in App.tsx so any forbidden mutation surfaces a
+// "viewer mode — ask the admin for edit access" message. Kept as a single
+// module-level callback so the fetch wrapper doesn't have to thread it
+// through every call site.
+let forbiddenHandler: ((message: string) => void) | null = null;
+export function setForbiddenHandler(fn: ((message: string) => void) | null) {
+  forbiddenHandler = fn;
+}
+
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+  // credentials: 'include' is critical — without it the browser strips
+  // the greenroom_session cookie and every authed request becomes 401.
+  // Same-origin in dev (proxy) and prod (single server), so 'include' is
+  // safe here.
+  const res = await fetch(url, { credentials: "include", ...init });
+  if (res.status === 403 && forbiddenHandler) {
+    forbiddenHandler("Viewer mode — ask the admin for edit access");
+  }
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json();
 }
@@ -218,9 +234,21 @@ export interface Setlist {
 
 // --- API ---
 
+export interface CurrentUser {
+  id: number;
+  email: string;
+  role: "viewer" | "editor" | "admin";
+}
+
 export const api = {
   health: {
     get: () => json<{ status: string; app: string; version: string }>(`${BASE}/health`),
+  },
+  auth: {
+    me: () => json<CurrentUser>(`${BASE}/auth/me`),
+    requestMagicLink: (email: string) =>
+      post<{ ok: boolean; message: string }>(`${BASE}/auth/request`, { email }),
+    logout: () => post<{ ok: boolean }>(`${BASE}/auth/logout`, {}),
   },
   dashboard: {
     get: () => json<DashboardResponse>(`${BASE}/dashboard`),
