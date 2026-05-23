@@ -8,7 +8,7 @@ import {
 import { TrendingUp, Calendar, Target, BarChart3 } from "lucide-react";
 
 const CHART_COLORS = {
-  accent: "#8b5cf6",
+  accent: "#10b981",
   green: "#22c55e",
   blue: "#3b82f6",
   yellow: "#eab308",

@@ -294,7 +294,7 @@ export default function Import() {
         className="rounded-xl border-2 border-dashed p-12 text-center mb-6 transition-colors"
         style={{
           borderColor: isDragging ? "var(--accent)" : "var(--border)",
-          background: isDragging ? "rgba(139, 92, 246, 0.05)" : "transparent",
+          background: isDragging ? "rgba(16, 185, 129, 0.05)" : "transparent",
         }}
       >
         <Upload size={40} className="mx-auto mb-4" style={{ color: isDragging ? "var(--accent)" : "var(--text-muted)" }} />
