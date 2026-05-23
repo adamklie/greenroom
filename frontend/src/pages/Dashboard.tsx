@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api, type RecentSong, type RecentAudioFile, type RecentSession } from "../api/client";
-import { Music, Radio, Star, Inbox, Disc3, PenTool, Lightbulb, FolderInput, Shield, Download, Hash, Wrench, Target, ArrowRight, Clock, FileAudio, CalendarDays } from "lucide-react";
+import { Music, Radio, Star, Disc3, PenTool, Lightbulb, FolderInput, Shield, Download, Hash, Wrench, Target, ArrowRight, Clock, FileAudio, CalendarDays } from "lucide-react";
 
 function StatCard({ label, value, icon: Icon, color }: {
   label: string; value: number | string; icon: React.ElementType; color: string;
@@ -232,11 +232,10 @@ export default function Dashboard() {
       <FocusSongs />
 
       {/* Top stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
         <StatCard label="Total Songs" value={stats.total_songs} icon={Music} color="var(--accent)" />
         <StatCard label="Practice Sessions" value={stats.total_sessions} icon={Radio} color="var(--blue)" />
         <StatCard label="Unrated Audio" value={stats.unrated_audio_files} icon={Star} color="var(--yellow)" />
-        <StatCard label="Triage Queue" value={stats.triage_pending} icon={Inbox} color="var(--red)" />
       </div>
 
       {/* Recent additions */}

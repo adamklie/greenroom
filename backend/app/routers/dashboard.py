@@ -3,7 +3,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import AudioFile, PracticeSession, Song, Take, TriageItem
+from app.models import AudioFile, PracticeSession, Song, Take
 from app.schemas.dashboard import (
     DashboardResponse,
     DashboardStats,
@@ -36,9 +36,6 @@ def get_dashboard(db: Session = Depends(get_db)):
         AudioFile.rating_overall.is_(None),
         AudioFile.is_stem == False,  # noqa: E712
     ).scalar()
-    triage_pending = db.query(func.count(TriageItem.id)).filter(
-        TriageItem.status == "pending"
-    ).scalar()
 
     stats = DashboardStats(
         total_songs=total_songs,
@@ -50,7 +47,6 @@ def get_dashboard(db: Session = Depends(get_db)):
         songs_by_project=songs_by_project,
         unrated_takes=unrated,
         unrated_audio_files=unrated_audio,
-        triage_pending=triage_pending,
     )
 
     recent_songs_rows = (

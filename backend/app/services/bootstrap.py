@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session as DBSession
 from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.models import (
-    AudioFile, PracticeSession, Song, Tag, Take, TriageItem,
+    AudioFile, PracticeSession, Song, Tag, Take,
     PREDEFINED_TAGS,
 )
 from app.services.markdown_parser import parse_repertoire
@@ -178,10 +178,15 @@ def bootstrap_sessions(db: DBSession, songs_by_norm: dict[str, Song]) -> tuple[i
 
 
 def bootstrap_media(db: DBSession, songs_by_norm: dict[str, Song]) -> tuple[int, int]:
-    """Scan audio files. Returns (matched_count, triage_count)."""
+    """Scan audio files. Returns (matched_count, unlinked_count).
+
+    Unlinked files (no song match) are logged but no longer enqueued — the
+    Triage page was removed in feat/simplify-v2. The user assigns songs via
+    the Library UI directly on the AudioFile row.
+    """
     parsed_files = scan_media(settings.music_dir)
     matched_count = 0
-    triage_count = 0
+    unlinked_count = 0
 
     for pf in parsed_files:
         # Skip stems
@@ -222,17 +227,10 @@ def bootstrap_media(db: DBSession, songs_by_norm: dict[str, Song]) -> tuple[int,
         if matched:
             matched_count += 1
         else:
-            # Add to triage queue
-            existing_triage = db.query(TriageItem).filter_by(file_path=pf.file_path).first()
-            if not existing_triage:
-                db.add(TriageItem(
-                    file_path=pf.file_path,
-                    file_type=pf.file_type,
-                    suggested_source=pf.source,
-                ))
-                triage_count += 1
+            print(f"   unlinked: {orig_name}")
+            unlinked_count += 1
 
-    return matched_count, triage_count
+    return matched_count, unlinked_count
 
 
 def run_bootstrap():
@@ -271,12 +269,11 @@ def run_bootstrap():
         print(f"   {total_sessions} sessions, {total_takes} takes ({matched_takes} matched)")
 
         print("4. Scanning audio files...")
-        matched, triaged = bootstrap_media(db, songs_by_norm)
+        matched, unlinked = bootstrap_media(db, songs_by_norm)
         db.commit()
         total_audio = db.query(AudioFile).count()
-        total_triage = db.query(TriageItem).count()
         print(f"   {total_audio} audio files ({matched} matched)")
-        print(f"   {total_triage} items in triage queue")
+        print(f"   {unlinked} unlinked files (logged, not enqueued)")
 
         print()
         print("Bootstrap complete!")

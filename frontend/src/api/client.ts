@@ -41,7 +41,6 @@ export interface DashboardStats {
   songs_by_status: Record<string, number>;
   songs_by_project: Record<string, number>;
   unrated_takes: number;
-  triage_pending: number;
 }
 
 export interface RecentSong {
