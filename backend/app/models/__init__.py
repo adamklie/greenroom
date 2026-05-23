@@ -8,6 +8,7 @@ from app.models.tag import Tag, song_tags, take_tags, audio_file_tags, PREDEFINE
 from app.models.lyrics_version import LyricsVersion
 from app.models.option import Option, DEFAULT_OPTIONS
 from app.models.song_tab import SongTab
+from app.models.user import User, MagicToken
 
 __all__ = [
     "Song",
@@ -24,4 +25,6 @@ __all__ = [
     "PREDEFINED_TAGS",
     "LyricsVersion",
     "SongTab",
+    "User",
+    "MagicToken",
 ]
