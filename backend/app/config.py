@@ -42,6 +42,25 @@ class Settings(BaseSettings):
     r2_secret_access_key: str = ""
     r2_bucket: str = ""
 
+    # --- Auth (Phase 3a) ---
+    # Master switch. When False (default), all role-guarded routes return a
+    # synthetic admin so the local dev flow (./dev.sh) keeps working without
+    # any login step. Flip to True for real cookie-based enforcement.
+    auth_required: bool = False
+
+    # HS256 signing key for the greenroom_session JWT. Empty string triggers
+    # a random key generated at startup with a warning (non-persistent — every
+    # restart logs everyone out). Set GREENROOM_AUTH_SECRET in prod.
+    auth_secret: str = ""
+
+    # Which MagicLinkEmailer to use. "stub" prints to stdout (good for dev +
+    # for Phase 3a). "resend" is Phase 3d.
+    email_backend: Literal["stub", "resend"] = "stub"
+
+    # Used to construct the magic-link URL in /api/auth/request. Should be the
+    # public-facing origin the frontend is served from.
+    public_url: str = "http://localhost:5175"
+
     @property
     def database_url(self) -> str:
         return f"sqlite:///{self.db_path}"
