@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, engine
-from app.routers import analytics, audio_files, backup, dashboard, feedback, filebrowser, files, gopro, media, options, sessions, setlists, songs, sync, tabs as tabs_router, tags, trash, trim, triage, upload
+from app.routers import analytics, audio_files, backup, dashboard, feedback, filebrowser, files, gopro, media, options, sessions, setlists, songs, sync, tabs as tabs_router, tags, trash, trim, upload
 
 
 @asynccontextmanager
@@ -45,7 +45,6 @@ app.include_router(songs.router)
 app.include_router(audio_files.router)
 app.include_router(sessions.router)
 app.include_router(tags.router)
-app.include_router(triage.router)
 app.include_router(media.router)
 app.include_router(setlists.router)
 app.include_router(files.router)

@@ -7,7 +7,6 @@ import {
   Lightbulb,
   CalendarDays,
   ListMusic,
-  Inbox,
   Sun,
   Moon,
   TrendingUp,
@@ -22,7 +21,6 @@ import Dashboard from "./pages/Dashboard";
 import Songs from "./pages/Songs";
 import Sessions from "./pages/Sessions";
 import SetlistBuilder from "./pages/SetlistBuilder";
-import Triage from "./pages/Triage";
 import Progress from "./pages/Progress";
 import ProcessSession from "./pages/ProcessSession";
 import Import from "./pages/Import";
@@ -42,7 +40,6 @@ const navItems = [
   { to: "/progress", icon: TrendingUp, label: "Progress" },
   { to: "/setlists", icon: ListMusic, label: "Setlists" },
   { to: "/import", icon: Upload, label: "Import" },
-  { to: "/triage", icon: Inbox, label: "Triage" },
   { to: "/sync", icon: CloudUpload, label: "Sync" },
   { to: "/feedback", icon: MessageSquare, label: "Feedback" },
   { to: "/settings", icon: Settings2, label: "Settings" },
@@ -122,7 +119,6 @@ export default function App() {
           <Route path="/progress" element={<Progress />} />
           <Route path="/setlists" element={<SetlistBuilder />} />
           <Route path="/import" element={<Import />} />
-          <Route path="/triage" element={<Triage />} />
           <Route path="/sync" element={<Sync />} />
           <Route path="/feedback" element={<Feedback />} />
           <Route path="/settings" element={<Settings />} />

@@ -195,18 +195,6 @@ export interface TagItem {
   is_predefined: boolean;
 }
 
-export interface TriageItem {
-  id: number;
-  file_path: string;
-  file_type: string | null;
-  discovered_at: string | null;
-  suggested_song_id: number | null;
-  suggested_type: string | null;
-  suggested_source: string | null;
-  status: string;
-  audio_file_id: number | null;
-}
-
 export interface SetlistItem {
   id: number;
   song_id: number;
@@ -275,12 +263,6 @@ export const api = {
       return json<TagItem[]>(`${BASE}/tags${qs}`);
     },
     create: (data: Record<string, unknown>) => post<TagItem>(`${BASE}/tags`, data),
-  },
-  triage: {
-    list: (status = "pending") => json<TriageItem[]>(`${BASE}/triage?status=${status}`),
-    classify: (id: number, data: Record<string, unknown>) =>
-      patch<TriageItem>(`${BASE}/triage/${id}`, data),
-    skip: (id: number) => post<TriageItem>(`${BASE}/triage/${id}/skip`, {}),
   },
   setlists: {
     list: () => json<Setlist[]>(`${BASE}/setlists`),
