@@ -1,9 +1,9 @@
-"""Parse REPERTOIRE.md and ROADMAP.md into structured data."""
+"""Parse REPERTOIRE.md into structured data."""
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -118,58 +118,3 @@ def parse_repertoire(filepath: Path) -> list[ParsedSong]:
             ))
 
     return songs
-
-
-# --- ROADMAP.md parser ---
-
-
-@dataclass
-class ParsedRoadmapTask:
-    phase: int
-    phase_title: str
-    category: str
-    task_text: str
-    completed: bool
-    sort_order: int = 0
-
-
-def parse_roadmap(filepath: Path) -> list[ParsedRoadmapTask]:
-    """Parse ROADMAP.md into a list of roadmap tasks."""
-    text = filepath.read_text()
-    tasks: list[ParsedRoadmapTask] = []
-
-    phase = 0
-    phase_title = ""
-    category = ""
-    sort_order = 0
-
-    for line in text.split("\n"):
-        # Match phase headers: ## Phase 1: Foundation (Months 1-2)
-        phase_match = re.match(r"^## Phase (\d+):\s*(.+)", line)
-        if phase_match:
-            phase = int(phase_match.group(1))
-            phase_title = phase_match.group(2).strip()
-            continue
-
-        # Match category headers: ### Recording & Gear
-        cat_match = re.match(r"^### (.+)", line)
-        if cat_match and phase > 0:
-            category = cat_match.group(1).strip()
-            continue
-
-        # Match checkbox items: - [ ] or - [x]
-        task_match = re.match(r"^- \[([ xX])\] (.+)", line)
-        if task_match and phase > 0:
-            completed = task_match.group(1).lower() == "x"
-            task_text = task_match.group(2).strip()
-            sort_order += 1
-            tasks.append(ParsedRoadmapTask(
-                phase=phase,
-                phase_title=phase_title,
-                category=category,
-                task_text=task_text,
-                completed=completed,
-                sort_order=sort_order,
-            ))
-
-    return tasks

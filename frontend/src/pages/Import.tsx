@@ -294,7 +294,7 @@ export default function Import() {
         className="rounded-xl border-2 border-dashed p-12 text-center mb-6 transition-colors"
         style={{
           borderColor: isDragging ? "var(--accent)" : "var(--border)",
-          background: isDragging ? "rgba(139, 92, 246, 0.05)" : "transparent",
+          background: isDragging ? "rgba(16, 185, 129, 0.05)" : "transparent",
         }}
       >
         <Upload size={40} className="mx-auto mb-4" style={{ color: isDragging ? "var(--accent)" : "var(--text-muted)" }} />
@@ -341,29 +341,6 @@ export default function Import() {
         </>
       )}
 
-      {pendingFiles.length === 0 && (
-        <div className="rounded-xl p-5 border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
-          <h3 className="font-semibold mb-2">Import Sources</h3>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="p-3 rounded-lg" style={{ background: "var(--bg)" }}>
-              <strong>Phone recordings</strong>
-              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>AirDrop voice memos or videos from your phone, then drag here</p>
-            </div>
-            <div className="p-3 rounded-lg" style={{ background: "var(--bg)" }}>
-              <strong>Logic Pro / GarageBand</strong>
-              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Export as m4a or wav, then drag the file here</p>
-            </div>
-            <div className="p-3 rounded-lg" style={{ background: "var(--bg)" }}>
-              <strong>Suno AI</strong>
-              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Download from suno.com, drag here, select "Suno AI" as source</p>
-            </div>
-            <div className="p-3 rounded-lg" style={{ background: "var(--bg)" }}>
-              <strong>Collaborator files</strong>
-              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Tracks from Sural, Joe, or others — drag and assign to the right project</p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

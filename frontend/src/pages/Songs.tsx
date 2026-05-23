@@ -397,7 +397,7 @@ function SongTabsSection({ songId }: { songId: number }) {
           className="flex items-center gap-1 px-2 py-1 rounded border border-dashed text-xs cursor-pointer"
           style={{
             borderColor: dragOver ? "var(--accent)" : "var(--border)",
-            background: dragOver ? "rgba(139,92,246,0.08)" : "transparent",
+            background: dragOver ? "rgba(16,185,129,0.08)" : "transparent",
             color: "var(--text-muted)",
           }}>
           <Upload size={10} />

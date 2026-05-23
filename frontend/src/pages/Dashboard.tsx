@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { api, type Song, type RecentSong, type RecentAudioFile, type RecentSession } from "../api/client";
-import { Music, Radio, Star, Inbox, Disc3, PenTool, Lightbulb, FolderInput, Zap, Shield, Download, Hash, Wrench, Target, ArrowRight, Clock, FileAudio, CalendarDays } from "lucide-react";
+import { api, type RecentSong, type RecentAudioFile, type RecentSession } from "../api/client";
+import { Music, Radio, Star, Disc3, PenTool, Lightbulb, FolderInput, Shield, Download, Hash, Wrench, Target, ArrowRight, Clock, FileAudio, CalendarDays } from "lucide-react";
 
 function StatCard({ label, value, icon: Icon, color }: {
   label: string; value: number | string; icon: React.ElementType; color: string;
@@ -136,82 +136,6 @@ function DataProtectionCard() {
   );
 }
 
-const CATEGORY_ICONS: Record<string, string> = {
-  practice: "🎸", improve: "📈", gig: "🎤", repertoire: "📋", learn: "📚",
-};
-const PRIORITY_COLORS: Record<string, string> = {
-  high: "var(--red)", medium: "var(--yellow)", low: "var(--green)",
-};
-const CATEGORY_ORDER = ["improve", "gig", "practice", "repertoire", "learn"];
-
-function RecommendationsCard() {
-  const [filter, setFilter] = useState("all");
-  const { data: recs = [] } = useQuery({
-    queryKey: ["recommendations"],
-    queryFn: api.recommendations.list,
-  });
-
-  // Group by category, limit practice to top 5
-  const categories = [...new Set(recs.map(r => r.category))];
-  const filtered = filter === "all" ? recs : recs.filter(r => r.category === filter);
-
-  // For "all" view, show top recommendations per category
-  const displayed = filter === "all"
-    ? CATEGORY_ORDER.flatMap(cat => {
-        const catRecs = recs.filter(r => r.category === cat);
-        return cat === "practice" ? catRecs.slice(0, 5) : catRecs.slice(0, 3);
-      })
-    : filtered;
-
-  return (
-    <div className="rounded-xl p-5 border mb-8" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold flex items-center gap-2">
-          <Zap size={18} style={{ color: "var(--accent)" }} />
-          Recommendations ({recs.length})
-        </h3>
-        <div className="flex gap-1">
-          <button onClick={() => setFilter("all")}
-            className="px-2 py-1 rounded text-xs"
-            style={{ background: filter === "all" ? "var(--accent)" : "var(--bg-hover)", color: filter === "all" ? "#fff" : "var(--text-muted)" }}>
-            All
-          </button>
-          {categories.sort((a, b) => CATEGORY_ORDER.indexOf(a) - CATEGORY_ORDER.indexOf(b)).map(cat => (
-            <button key={cat} onClick={() => setFilter(cat)}
-              className="px-2 py-1 rounded text-xs capitalize"
-              style={{ background: filter === cat ? "var(--accent)" : "var(--bg-hover)", color: filter === cat ? "#fff" : "var(--text-muted)" }}>
-              {CATEGORY_ICONS[cat] || "•"} {cat}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-2 max-h-80 overflow-y-auto">
-        {displayed.map((rec, i) => (
-          <div key={i} className="flex items-start gap-3 p-3 rounded-lg" style={{ background: "var(--bg)" }}>
-            <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ background: PRIORITY_COLORS[rec.priority] }} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{rec.title}</span>
-                <span className="text-xs px-1.5 py-0.5 rounded capitalize" style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}>
-                  {rec.category}
-                </span>
-              </div>
-              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{rec.detail}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {filter === "all" && recs.length > displayed.length && (
-        <p className="text-xs mt-3 text-center" style={{ color: "var(--text-muted)" }}>
-          Showing top recommendations. Filter by category to see all {recs.length}.
-        </p>
-      )}
-    </div>
-  );
-}
-
 const STATUS_COLORS: Record<string, string> = {
   idea: "var(--text-muted)", learning: "var(--blue)", rehearsed: "var(--yellow)",
   polished: "var(--blue)", recorded: "var(--green)", released: "var(--accent)",
@@ -308,11 +232,10 @@ export default function Dashboard() {
       <FocusSongs />
 
       {/* Top stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
         <StatCard label="Total Songs" value={stats.total_songs} icon={Music} color="var(--accent)" />
         <StatCard label="Practice Sessions" value={stats.total_sessions} icon={Radio} color="var(--blue)" />
         <StatCard label="Unrated Audio" value={stats.unrated_audio_files} icon={Star} color="var(--yellow)" />
-        <StatCard label="Triage Queue" value={stats.triage_pending} icon={Inbox} color="var(--red)" />
       </div>
 
       {/* Recent additions */}
@@ -351,9 +274,6 @@ export default function Dashboard() {
       <div className="mb-8">
         <DataProtectionCard />
       </div>
-
-      {/* Recommendations */}
-      <RecommendationsCard />
 
       {/* Songs by status */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-8">

@@ -13,7 +13,6 @@ class DashboardStats(BaseModel):
     songs_by_project: dict[str, int]
     unrated_takes: int
     unrated_audio_files: int
-    triage_pending: int
 
 
 class RecentSong(BaseModel):

@@ -17,7 +17,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import AudioFile, ContentPost, PracticeSession, Setlist, SetlistItem, Song, Tag, Take
+from app.models import AudioFile, PracticeSession, Setlist, SetlistItem, Song, Tag, Take
 from app.services.file_manager import resolve_path
 
 
@@ -274,24 +274,11 @@ def export_annotations(db: Session) -> dict:
                        "duration_minutes": i.duration_minutes, "notes": i.notes} for i in items],
         })
 
-    content_data = []
-    for post in db.query(ContentPost).all():
-        content_data.append({
-            "title": post.title,
-            "song_id": post.song_id,
-            "platform": post.platform,
-            "scheduled_date": str(post.scheduled_date) if post.scheduled_date else None,
-            "status": post.status,
-            "caption": post.caption,
-            "notes": post.notes,
-        })
-
     export = {
         "exported_at": datetime.now().isoformat(),
         "songs": songs_data,
         "takes": takes_data,
         "setlists": setlists_data,
-        "content_posts": content_data,
         "tags": [{"name": t.name, "category": t.category} for t in db.query(Tag).all()],
     }
 
