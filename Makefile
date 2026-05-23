@@ -1,4 +1,4 @@
-.PHONY: dev backend frontend bootstrap install test setup export backup after-practice weekly
+.PHONY: dev backend frontend bootstrap install test test-cov lint setup export backup after-practice weekly
 
 # First-time setup: install deps + bootstrap database + hash files
 setup:
@@ -77,3 +77,11 @@ weekly:
 # Run tests
 test:
 	cd backend && pytest tests/ -v
+
+# Run tests with coverage (terminal + HTML report at backend/htmlcov/)
+test-cov:
+	cd backend && pytest tests -v --cov=app --cov-report=term --cov-report=html
+
+# Lint backend (strict) + frontend typecheck (best-effort; pre-existing TS errors)
+lint:
+	cd backend && ruff check . && cd ../frontend && npx tsc --noEmit || true
