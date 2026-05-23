@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings
 
@@ -28,6 +29,18 @@ class Settings(BaseSettings):
 
     # Live SQLite database (next to the app, not in the vault).
     db_path: Path = Path(__file__).resolve().parents[2] / "greenroom.db"
+
+    # Storage backend selection. "local" uses the iCloud vault on disk;
+    # "r2" is a stub for future Cloudflare R2 hosting (not yet wired).
+    media_backend: Literal["local", "r2"] = "local"
+
+    # Placeholders for the future R2 (S3-compatible) backend. Unused while
+    # media_backend == "local". Populated from env vars when cloud hosting
+    # is enabled in a later phase.
+    r2_account_id: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_bucket: str = ""
 
     @property
     def database_url(self) -> str:
