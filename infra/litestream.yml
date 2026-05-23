@@ -1,0 +1,27 @@
+# Litestream replication config.
+#
+# Phase 3d will set these env vars via `fly secrets set`. Until then the
+# entrypoint script skips Litestream entirely (no R2_* vars = no
+# replication), so this file is a template that lives dormant in the
+# image.
+#
+# Choice: replicate to a SEPARATE bucket (R2_DB_BACKUP_BUCKET) from the
+# media bucket (R2_BUCKET). Keeping DB backups in their own bucket means
+# (a) per-bucket retention/versioning settings can differ, (b) accidental
+# `rclone sync` of the media tree can't clobber the DB backups, (c)
+# easier to grant a media-only API token to bulk-upload scripts.
+# Default to "greenroom-db-backups"; override via env if needed.
+
+dbs:
+  - path: ${GREENROOM_DB_PATH}
+    replicas:
+      - type: s3
+        endpoint: https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com
+        bucket: ${R2_DB_BACKUP_BUCKET}
+        path: greenroom-db
+        access-key-id: ${R2_ACCESS_KEY_ID}
+        secret-access-key: ${R2_SECRET_ACCESS_KEY}
+        # 30-day retention covers a typical "I broke something three
+        # weeks ago" recovery window without paying for forever.
+        retention: 720h
+        retention-check-interval: 1h
