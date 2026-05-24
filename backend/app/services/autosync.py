@@ -149,34 +149,47 @@ TRASH_DIR = "_trash"
 
 
 def soft_delete_song(db: Session, song_id: int) -> dict:
-    """Soft-delete a song: move files to _trash/, mark as deleted in DB."""
+    """Soft-delete a song: move files to _trash/, mark as deleted in DB.
+
+    Cloud mode: skip the filesystem move (R2 objects stay in place), mark the
+    audio files as role='deleted', and flag the song as deleted in the DB.
+    """
     song = db.query(Song).get(song_id)
     if not song:
         raise ValueError(f"Song {song_id} not found")
 
-    trash_dir = settings.music_dir / TRASH_DIR
-    trash_dir.mkdir(parents=True, exist_ok=True)
+    from app.services.vault import is_cloud_backend
 
     files_trashed = 0
-    for af in db.query(AudioFile).filter_by(song_id=song.id).all():
-        current_full = resolve_path(af.file_path)
-        if current_full.exists():
-            trash_path = trash_dir / current_full.name
-            # Handle collision in trash
-            if trash_path.exists():
-                stem = trash_path.stem
-                suffix = trash_path.suffix
-                counter = 1
-                while trash_path.exists():
-                    trash_path = trash_dir / f"{stem}_{counter}{suffix}"
-                    counter += 1
-            shutil.move(str(current_full), str(trash_path))
-            af.file_path = str(trash_path.relative_to(settings.music_dir))
+    if is_cloud_backend():
+        # DB-only soft delete: mark each child AF as deleted so list endpoints
+        # hide it. R2 objects are kept (cheap, recoverable).
+        for af in db.query(AudioFile).filter_by(song_id=song.id).all():
+            af.role = "deleted"
             files_trashed += 1
+    else:
+        trash_dir = settings.music_dir / TRASH_DIR
+        trash_dir.mkdir(parents=True, exist_ok=True)
 
-        # Clean up empty parent
-        if current_full.parent.exists():
-            _cleanup_empty_parent(current_full.parent)
+        for af in db.query(AudioFile).filter_by(song_id=song.id).all():
+            current_full = resolve_path(af.file_path)
+            if current_full.exists():
+                trash_path = trash_dir / current_full.name
+                # Handle collision in trash
+                if trash_path.exists():
+                    stem = trash_path.stem
+                    suffix = trash_path.suffix
+                    counter = 1
+                    while trash_path.exists():
+                        trash_path = trash_dir / f"{stem}_{counter}{suffix}"
+                        counter += 1
+                shutil.move(str(current_full), str(trash_path))
+                af.file_path = str(trash_path.relative_to(settings.music_dir))
+                files_trashed += 1
+
+            # Clean up empty parent
+            if current_full.parent.exists():
+                _cleanup_empty_parent(current_full.parent)
 
     # Mark song as deleted with timestamp
     song.status = "deleted"
@@ -187,16 +200,32 @@ def soft_delete_song(db: Session, song_id: int) -> dict:
 
 
 def restore_song(db: Session, song_id: int) -> dict:
-    """Restore a soft-deleted song: move files back, update status."""
+    """Restore a soft-deleted song: move files back, update status.
+
+    Cloud mode: just clear the deletion flags. There's no filesystem move to
+    undo — the R2 objects never went anywhere in the first place.
+    """
     song = db.query(Song).get(song_id)
     if not song or song.status != "deleted":
         raise ValueError(f"Song {song_id} not found or not deleted")
+
+    from app.services.vault import is_cloud_backend
 
     # Restore status to idea (user can reclassify)
     song.status = "idea"
     # Remove deletion note
     if song.notes:
         song.notes = re.sub(r'\n\[Deleted:.*?\]', '', song.notes).strip() or None
+
+    if is_cloud_backend():
+        # Un-soft-delete each child AF.
+        restored = 0
+        for af in db.query(AudioFile).filter_by(song_id=song.id).all():
+            if af.role == "deleted":
+                af.role = None
+                restored += 1
+        db.commit()
+        return {"song_id": song_id, "title": song.title, "files_restored": restored}
 
     # Move files back to organized location
     moves = sync_song_files(db, song)

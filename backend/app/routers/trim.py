@@ -14,7 +14,7 @@ from app.database import get_db
 from app.models import AudioFile
 from app.models.audio_file import generate_identifier
 from app.schemas.audio_file import AudioFileRead
-from app.services.vault import ingest_into_vault, resolve_audio_path
+from app.services.vault import CLOUD_UNSUPPORTED_MESSAGE, ingest_into_vault, is_cloud_backend, resolve_audio_path
 
 router = APIRouter(prefix="/api/audio-files", tags=["trim"])
 
@@ -30,7 +30,15 @@ class TrimRequest(BaseModel):
 
 @router.post("/{audio_file_id}/trim", response_model=AudioFileRead)
 def trim_audio_file(audio_file_id: int, req: TrimRequest, db: Session = Depends(get_db), _user=Depends(require_editor)):
-    """Trim an audio file to a time range, creating a new AudioFile."""
+    """Trim an audio file to a time range, creating a new AudioFile.
+
+    Requires ffmpeg + a filesystem-backed source. In cloud mode the source
+    lives in R2; pulling it through the Fly machine to transcode is not
+    supported yet. Owner can run it from the local environment.
+    """
+    if is_cloud_backend():
+        raise HTTPException(status_code=501, detail=CLOUD_UNSUPPORTED_MESSAGE)
+
     af = db.query(AudioFile).get(audio_file_id)
     if not af:
         raise HTTPException(404, "Audio file not found")

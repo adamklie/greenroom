@@ -180,11 +180,15 @@ def update_song(song_id: int, data: SongUpdate, db: Session = Depends(get_db), _
     db.commit()
     db.refresh(song)
 
-    # Auto-sync: if type/project/title/artist changed, move files to match
+    # Auto-sync: if type/project/title/artist changed, move files to match.
+    # Cloud mode: skip the filesystem move — R2 objects are content-addressed
+    # by identifier and don't live in a human-browsable folder tree.
     if needs_file_sync:
-        from app.services.autosync import sync_song_files
-        moves = sync_song_files(db, song)
-        db.commit()
+        from app.services.vault import is_cloud_backend
+        if not is_cloud_backend():
+            from app.services.autosync import sync_song_files
+            sync_song_files(db, song)
+            db.commit()
 
     return _song_to_read(song, db)
 
@@ -334,28 +338,30 @@ def update_audio_file(audio_file_id: int, data: AudioFileUpdate, db: Session = D
     db.commit()
     db.refresh(af)
 
-    # If linked to a (new) song, move file to that song's organized location
+    # If linked to a (new) song, move file to that song's organized location.
+    # Cloud mode: R2 objects are content-addressed by identifier; no move needed.
     if song_changed and af.song_id:
-        song = db.query(Song).get(af.song_id)
-        if song:
-            from app.services.autosync import compute_organized_path, resolve_path
-            from pathlib import Path
-            import shutil
+        from app.services.vault import is_cloud_backend
+        if not is_cloud_backend():
+            song = db.query(Song).get(af.song_id)
+            if song:
+                from app.services.autosync import compute_organized_path, resolve_path
+                import shutil
 
-            current_full = resolve_path(af.file_path)
-            if current_full.exists():
-                target_rel = compute_organized_path(song, current_full.name)
-                target_full = settings.music_dir / target_rel
+                current_full = resolve_path(af.file_path)
+                if current_full.exists():
+                    target_rel = compute_organized_path(song, current_full.name)
+                    target_full = settings.music_dir / target_rel
 
-                if str(current_full) != str(target_full):
-                    target_full.parent.mkdir(parents=True, exist_ok=True)
-                    if not target_full.exists():
-                        shutil.move(str(current_full), str(target_full))
-                        af.file_path = target_rel
-                        db.commit()
+                    if str(current_full) != str(target_full):
+                        target_full.parent.mkdir(parents=True, exist_ok=True)
+                        if not target_full.exists():
+                            shutil.move(str(current_full), str(target_full))
+                            af.file_path = target_rel
+                            db.commit()
 
-                        # Clean up empty parent
-                        from app.services.autosync import _cleanup_empty_parent
-                        _cleanup_empty_parent(current_full.parent)
+                            # Clean up empty parent
+                            from app.services.autosync import _cleanup_empty_parent
+                            _cleanup_empty_parent(current_full.parent)
 
     return AudioFileRead.model_validate(af)
