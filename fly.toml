@@ -15,7 +15,7 @@
 # `environment:` block.
 
 app = "greenroom-1"
-primary_region = "sea"
+primary_region = "lax"
 
 [build]
   dockerfile = "Dockerfile"
