@@ -1,5 +1,9 @@
 # Greenroom
 
+[![Test](https://github.com/adamklie/greenroom/actions/workflows/test.yml/badge.svg)](https://github.com/adamklie/greenroom/actions/workflows/test.yml)
+
+The badge above reflects the latest `Test` workflow run on `main` — backend pytest plus frontend `tsc && vite build`, both run on every push and on PRs to `main`. Green means the 60-test backend suite passed and the TypeScript build had no type errors at that revision.
+
 A private app for tracking your band's songs, recordings, and practice sessions. Think of it as a digital songbook + recording library + practice diary.
 
 **Production:** <https://greenroom-1.fly.dev> (magic-link sign-in)
