@@ -139,7 +139,7 @@ Audio/video files live in the iCloud vault (local mode) or R2 (cloud) as flat `{
 
 ### The DB is the source of truth for metadata
 
-Ratings, tags, lyrics, notes, song structure — all in the DB. The `exports/annotations_latest.json` and DB backups in the vault are the recovery path. Don't introduce code that relies on re-scanning the filesystem to rebuild metadata.
+Ratings, tags, lyrics, notes, song structure — all in the DB. Recovery paths in order of recency: Litestream WAL replicas in R2 (continuous, 30-day retention), Fly volume daily snapshots, startup snapshots at `/data/vault/backups/` (last 10), and `Settings → Export JSON` in the running app (manual, on-demand). Don't introduce code that relies on re-scanning the filesystem to rebuild metadata.
 
 ---
 

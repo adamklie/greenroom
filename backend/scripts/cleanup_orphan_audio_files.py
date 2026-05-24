@@ -72,16 +72,23 @@ def _list_r2_keys(backend) -> set[str]:
     return keys
 
 
-def find_orphans(db) -> list[AudioFile]:
-    """Return non-stem AudioFile rows whose backing file is missing."""
+def find_orphans(db, include_deleted: bool = False) -> list[AudioFile]:
+    """Return non-stem AudioFile rows whose backing file is missing.
+
+    By default, skips rows already marked role='deleted' (idempotent on
+    re-runs of the soft-delete pass). Pass include_deleted=True for the
+    --hard pass, which also picks up rows whose soft-delete needs to be
+    promoted to a hard delete.
+    """
     backend = get_backend()
-    candidates = (
+    q = (
         db.query(AudioFile)
         .filter(AudioFile.is_stem == False)  # noqa: E712 -- SQLAlchemy needs ==
         .filter(AudioFile.identifier.isnot(None))
-        .filter((AudioFile.role.is_(None)) | (AudioFile.role != "deleted"))
-        .all()
     )
+    if not include_deleted:
+        q = q.filter((AudioFile.role.is_(None)) | (AudioFile.role != "deleted"))
+    candidates = q.all()
 
     # Cloud path: one listing instead of N head_objects (which would otherwise
     # take 600+ round-trips and bust the `fly machine exec` timeout).
@@ -122,13 +129,25 @@ def main() -> int:
         action="store_true",
         help="Skip the interactive confirmation prompt.",
     )
+    parser.add_argument(
+        "--hard",
+        action="store_true",
+        help=(
+            "Permanently DELETE the rows (and CASCADE clean their tag "
+            "links) instead of soft-deleting. Also picks up rows already "
+            "marked role='deleted' so a previous --soft pass can be "
+            "promoted to hard. Use with caution — undo requires re-ingest."
+        ),
+    )
     args = parser.parse_args()
 
     db = SessionLocal()
     try:
-        orphans = find_orphans(db)
+        orphans = find_orphans(db, include_deleted=args.hard)
         backend_name = "r2" if is_cloud_backend() else "local"
+        mode = "HARD" if args.hard else "soft"
         print(f"Backend: {backend_name}")
+        print(f"Mode: {mode}")
         print(f"Orphans found: {len(orphans)}")
         for af in orphans:
             print(f"  id={af.id}  identifier={af.identifier}  file_path={af.file_path}")
@@ -139,21 +158,36 @@ def main() -> int:
         if args.list_only:
             return 0
 
+        verb = "PERMANENTLY DELETE" if args.hard else "Soft-delete"
         if not args.yes and not args.dry_run:
-            reply = input(f"Soft-delete {len(orphans)} row(s)? [y/N] ").strip().lower()
+            reply = input(f"{verb} {len(orphans)} row(s)? [y/N] ").strip().lower()
             if reply not in ("y", "yes"):
                 print("Aborted.")
                 return 1
 
-        for af in orphans:
-            af.role = "deleted"
+        if args.hard:
+            # Null out any songs.reference_audio_file_id pointing at a row
+            # we're about to drop. audio_file_tags CASCADEs already.
+            orphan_ids = [af.id for af in orphans]
+            from sqlalchemy import update
+            from app.models import Song
+            db.execute(
+                update(Song)
+                .where(Song.reference_audio_file_id.in_(orphan_ids))
+                .values(reference_audio_file_id=None)
+            )
+            for af in orphans:
+                db.delete(af)
+        else:
+            for af in orphans:
+                af.role = "deleted"
 
         if args.dry_run:
             db.rollback()
-            print(f"DRY RUN: would have soft-deleted {len(orphans)} row(s). Rolled back.")
+            print(f"DRY RUN: would have {verb.lower()}d {len(orphans)} row(s). Rolled back.")
         else:
             db.commit()
-            print(f"Soft-deleted {len(orphans)} row(s).")
+            print(f"{verb}d {len(orphans)} row(s).")
         return 0
     finally:
         db.close()
