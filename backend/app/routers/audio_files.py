@@ -23,6 +23,17 @@ router = APIRouter(prefix="/api/audio-files", tags=["audio-files"])
 def _af_to_read(af: AudioFile) -> AudioFileRead:
     """Convert AudioFile model to read schema with joined song + session info."""
     abs_path = resolve_audio_path(af) if af.file_path else None
+    # CloudVaultBackend returns a PurePosixPath (the R2 object key, not a
+    # local filesystem path), which does NOT have .exists(). Calling
+    # .exists() on it raises AttributeError and crashes the whole list
+    # endpoint. We trust R2 has the object; if it doesn't, the actual
+    # play attempt will surface that (307 redirect → R2 404). A HEAD-per-
+    # row in cloud mode would be one round-trip per file × 611 rows ×
+    # every page load — not worth it.
+    file_exists = (
+        abs_path.exists() if abs_path is not None and hasattr(abs_path, "exists")
+        else abs_path is not None
+    )
     return AudioFileRead(
         id=af.id,
         song_id=af.song_id,
@@ -58,7 +69,7 @@ def _af_to_read(af: AudioFile) -> AudioFileRead:
         song_artist=af.song.artist if af.song else None,
         song_type=af.song.type if af.song else None,
         session_date=str(af.session.date) if af.session else None,
-        file_exists=abs_path.exists() if abs_path else False,
+        file_exists=file_exists,
     )
 
 
