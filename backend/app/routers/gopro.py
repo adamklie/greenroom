@@ -15,6 +15,7 @@ from app.services.gopro_processor import (
     list_video_files,
     process_session,
 )
+from app.services.vault import CLOUD_UNSUPPORTED_MESSAGE, is_cloud_backend
 
 router = APIRouter(prefix="/api/gopro", tags=["gopro"])
 
@@ -44,13 +45,22 @@ class ProcessRequest(BaseModel):
 
 @router.get("/list-videos")
 def get_video_list(directory: str, _user=Depends(require_viewer)):
+    """List video files in a local directory. Not meaningful in cloud mode —
+    the Fly machine has no GoPro source library mounted."""
+    if is_cloud_backend():
+        raise HTTPException(status_code=501, detail=CLOUD_UNSUPPORTED_MESSAGE)
     files = list_video_files(directory)
     return {"files": files, "directory": directory}
 
 
 @router.post("/analyze")
 def analyze(req: AnalyzeRequest, _user=Depends(require_editor)):
-    """Analyze video using energy-based gap detection."""
+    """Analyze video using energy-based gap detection.
+
+    Requires local file access + ffmpeg. Not supported in cloud mode.
+    """
+    if is_cloud_backend():
+        raise HTTPException(status_code=501, detail=CLOUD_UNSUPPORTED_MESSAGE)
     try:
         result = analyze_video(
             req.video_path,
@@ -86,7 +96,13 @@ def analyze(req: AnalyzeRequest, _user=Depends(require_editor)):
 
 @router.post("/process")
 def process(req: ProcessRequest, db: Session = Depends(get_db), _user=Depends(require_editor)):
-    """Process marked clips."""
+    """Process marked clips.
+
+    Requires local file access + ffmpeg. Not supported in cloud mode.
+    """
+    if is_cloud_backend():
+        raise HTTPException(status_code=501, detail=CLOUD_UNSUPPORTED_MESSAGE)
+
     try:
         session_date = date.fromisoformat(req.session_date)
     except ValueError:

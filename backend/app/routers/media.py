@@ -93,6 +93,14 @@ def _resolve_and_serve(rel_path: str | None, kind: str, request: Request) -> Str
     return _serve_with_range(full, request)
 
 
+# NOTE: Take-based endpoints below use raw `audio_path`/`video_path` strings
+# from the DB rather than the vault backend. They are not cloud-mode aware:
+# in cloud deployment they will 404 because the Fly machine has no music_dir
+# mounted. This is intentional — Takes are the legacy model being phased out
+# in favor of AudioFile (see project_audiofile_unification.md). Cloud support
+# for these is out of scope for the robustness sweep.
+
+
 @router.get("/take/{take_id}/audio")
 def stream_take_audio(take_id: int, request: Request, db: Session = Depends(get_db), _user=Depends(require_viewer)):
     take = db.query(Take).get(take_id)

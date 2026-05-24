@@ -15,7 +15,7 @@ from app.database import get_db
 from app.models import AudioFile, Song
 from app.schemas.audio_file import AudioFileRead, AudioFileUpdate
 from app.services.autosync import compute_organized_path, resolve_path, _cleanup_empty_parent
-from app.services.vault import resolve_audio_path
+from app.services.vault import CLOUD_UNSUPPORTED_MESSAGE, is_cloud_backend, resolve_audio_path
 
 router = APIRouter(prefix="/api/audio-files", tags=["audio-files"])
 
@@ -146,10 +146,24 @@ def update_audio_file(audio_file_id: int, data: AudioFileUpdate, db: Session = D
 
 @router.delete("/{audio_file_id}")
 def delete_audio_file(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
-    """Soft-delete: move file to _trash/."""
+    """Soft-delete: in local mode, move the file to _trash/; in cloud mode,
+    flip role='deleted' in the DB only.
+
+    Cloud-mode rationale: R2 objects are content-addressed by identifier and
+    cheap to keep around — there's no per-row filesystem to clean up. A future
+    iteration could move the object to a `_trash/` prefix in R2 for symmetry,
+    but for now the row's `role='deleted'` filter is sufficient to hide it
+    from every list endpoint.
+    """
     af = db.query(AudioFile).get(audio_file_id)
     if not af:
         raise HTTPException(404, "Audio file not found")
+
+    if is_cloud_backend():
+        # Soft delete: DB-only. The R2 object stays (recoverable).
+        af.role = "deleted"
+        db.commit()
+        return {"ok": True, "id": audio_file_id, "mode": "cloud-soft-delete"}
 
     current_full = resolve_path(af.file_path)
     if current_full.exists():
@@ -177,7 +191,16 @@ FFMPEG = "/Users/adamklie/opt/ffmpeg" if Path("/Users/adamklie/opt/ffmpeg").exis
 
 @router.post("/{audio_file_id}/extract-audio", response_model=AudioFileRead)
 def extract_audio(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
-    """Create an audio (m4a) sibling for a video AudioFile."""
+    """Create an audio (m4a) sibling for a video AudioFile.
+
+    Requires local ffmpeg + filesystem access. In cloud mode, the source video
+    lives in R2 — pulling 1+ GB through the Fly machine just to transcode is
+    not the right architecture. Return 501 so the frontend can present a
+    friendly message and the owner can run the transcode locally.
+    """
+    if is_cloud_backend():
+        raise HTTPException(status_code=501, detail=CLOUD_UNSUPPORTED_MESSAGE)
+
     af = db.query(AudioFile).get(audio_file_id)
     if not af:
         raise HTTPException(404, "Audio file not found")
@@ -232,7 +255,15 @@ def extract_audio(audio_file_id: int, db: Session = Depends(get_db), _user=Depen
 
 
 def _auto_move_file(af: AudioFile, db: Session):
-    """Move file to match its song's organized location."""
+    """Move file to match its song's organized location.
+
+    No-op in cloud mode: the R2 key is content-addressed by `identifier`, so
+    re-assigning a song doesn't change where the bytes live. Local mode
+    organizes under `Covers/`, `Originals/`, etc. for human browsability.
+    """
+    if is_cloud_backend():
+        return
+
     current_full = resolve_path(af.file_path)
     if not current_full.exists():
         return

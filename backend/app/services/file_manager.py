@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import AudioFile, Take
-from app.services.vault import resolve_audio_path
+from app.services.vault import is_cloud_backend, resolve_audio_path
 
 
 @dataclass
@@ -42,7 +42,17 @@ def resolve_path(file_path: str) -> Path:
 
 
 def health_check(db: Session) -> list[BrokenLink]:
-    """Find all database records pointing to files that don't exist on disk."""
+    """Find all database records pointing to files that don't exist on disk.
+
+    Cloud mode: returns an empty list. Calling .exists() on the PurePosixPath
+    returned by CloudVaultBackend.resolve() crashes with AttributeError, and a
+    HEAD-per-row probe of R2 would be expensive and not particularly useful
+    (R2 is the source of truth — any missing object is a much louder failure
+    at play time, with the 307 redirect surfacing a 404).
+    """
+    if is_cloud_backend():
+        return []
+
     broken: list[BrokenLink] = []
 
     # Check audio_files (vault-first: resolve_audio_path prefers the vault

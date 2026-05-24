@@ -161,6 +161,26 @@ class CloudVaultBackend:
 _backend: VaultBackend | None = None
 
 
+def is_cloud_backend() -> bool:
+    """True when media files live in object storage (R2), not on the local filesystem.
+
+    Routes that perform filesystem mutations (move-to-trash, ffmpeg, auto-move on
+    metadata change) must branch on this and either degrade gracefully (no-op),
+    return 501, or operate purely on the DB. The Protocol's `resolve()` returns
+    a `PurePosixPath` (an R2 object key) in cloud mode — calling `.exists()` /
+    `.stat()` / `.parent.mkdir()` on it crashes with AttributeError.
+
+    Single source of truth: compare `settings.media_backend` here, nowhere else.
+    """
+    return settings.media_backend != "local"
+
+
+CLOUD_UNSUPPORTED_MESSAGE = (
+    "This action isn't available in the cloud deployment yet. "
+    "Ask the owner to run it from the local environment."
+)
+
+
 def get_backend() -> VaultBackend:
     """Return the active vault backend, lazily instantiated.
 

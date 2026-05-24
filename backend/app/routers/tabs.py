@@ -12,6 +12,7 @@ from app.config import settings
 from app.database import get_db
 from app.models import Song, SongTab
 from app.schemas.song_tab import SongTabRead, SongTabUpdate
+from app.services.vault import CLOUD_UNSUPPORTED_MESSAGE, is_cloud_backend
 
 router = APIRouter(prefix="/api/tabs", tags=["tabs"])
 
@@ -68,7 +69,14 @@ async def upload_tab(
     db: Session = Depends(get_db),
     _user=Depends(require_editor),
 ):
-    """Upload a Guitar Pro tab file and link it to a song."""
+    """Upload a Guitar Pro tab file and link it to a song.
+
+    Cloud mode: not supported yet — tab files would need their own R2
+    integration parallel to the audio vault. Use the local environment for now.
+    """
+    if is_cloud_backend():
+        raise HTTPException(status_code=501, detail=CLOUD_UNSUPPORTED_MESSAGE)
+
     if not file.filename:
         raise HTTPException(400, "No filename")
 
@@ -140,6 +148,14 @@ def update_tab(tab_id: int, data: SongTabUpdate, db: Session = Depends(get_db), 
 
 @router.delete("/{tab_id}")
 def delete_tab(tab_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
+    """Delete a tab.
+
+    Cloud mode: not supported yet — symmetric with the upload restriction.
+    Use the local environment to add or remove tabs.
+    """
+    if is_cloud_backend():
+        raise HTTPException(status_code=501, detail=CLOUD_UNSUPPORTED_MESSAGE)
+
     tab = db.query(SongTab).get(tab_id)
     if not tab:
         raise HTTPException(404, "Tab not found")
