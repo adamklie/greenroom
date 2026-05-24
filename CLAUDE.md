@@ -68,14 +68,15 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ## Project Docs
 
-Authoritative references for this repo. Read the relevant one before making non-trivial changes in its area.
+Authoritative references for this repo. Start at [docs/README.md](docs/README.md) — the index. Then read the relevant page before making non-trivial changes in its area.
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system map, request flow walkthroughs, boot sequence
+- [docs/README.md](docs/README.md) — index / table of contents
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system map, request flows, boot sequence, storage layout, auth model
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md) — what each page does, workflows, backups
 - [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) — 10-min walkthrough for showing the app
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Fly + R2 + Resend setup runbook
-- [docs/VISION.md](docs/VISION.md) — product goals, scope, target user
-- [docs/SCHEMAS.md](docs/SCHEMAS.md) — DB schema, SQLAlchemy models, API shapes
-- [docs/STORAGE.md](docs/STORAGE.md) — filesystem layout, backups, exports
+- [docs/SCHEMAS.md](docs/SCHEMAS.md) — DB schema, SQLAlchemy models
 - [docs/DATA_INGESTION.md](docs/DATA_INGESTION.md) — ingestion scripts and data flow
+- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — workflow, PR cycle, principles
+- [docs/STYLE.md](docs/STYLE.md) — how to write docs in this repo
 - [docs/AUDIOFILE_UNIFICATION.md](docs/AUDIOFILE_UNIFICATION.md) — Take → AudioFile refactor

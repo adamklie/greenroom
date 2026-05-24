@@ -281,8 +281,8 @@ Dockerfile                      — two-stage: node:20-alpine builds the SPA, py
 fly.toml                        — Fly app config (region lax, 1 GB VM, /data mount, non-secret env)
 docker-compose.yml              — local-parity stack with bind mount instead of Fly volume
 docs/DEPLOYMENT.md              — fly secrets + first-deploy runbook
-docs/AUTH.md                    — magic-link flow detail
-docs/STORAGE.md                 — vault layout (predates cloud backend; still useful for local mode)
+docs/SCHEMAS.md                 — table-by-table SQLAlchemy reference
+docs/DATA_INGESTION.md          — how source files become AudioFile rows
 ```
 
 ---
@@ -345,6 +345,57 @@ point inside the retention window. Kept apart from the media bucket so
 without giving them DB access, (c) retention/versioning can differ per
 bucket.
 
+### Local-mode vault (dev)
+
+When `GREENROOM_MEDIA_BACKEND=local` (the default for `./dev.sh`), media
+lives on disk in the iCloud-synced vault rather than R2:
+
+```
+~/Library/Mobile Documents/com~apple~CloudDocs/greenroom/
+├── files/
+│   ├── AF12AB34CD.m4a
+│   ├── AFE9C7481F.mp3
+│   └── ...
+├── backups/
+│   └── greenroom_YYYYMMDD_HHMMSS.db  (rolling window of 10)
+└── exports/
+    └── annotations_latest.json
+```
+
+Why flat + identifier-named: the canonical path is fully derivable from
+the DB (`identifier` + `file_type`). Restoring the DB is all you need
+to regain access to every file. Import is idempotent — re-importing
+the same file resolves to the same vault path. Apple's "Optimize Mac
+Storage" can evict the local copy of files you haven't opened recently;
+they're re-downloaded on demand.
+
+### DB backup triggers (local mode)
+
+Two paths kick a backup into `vault_dir/backups/`:
+
+- **Auto (debounced):** every DB commit schedules a backup 30 seconds
+  in the future (see `services/auto_backup.py`). A burst of writes
+  collapses into a single backup.
+- **Manual:** `POST /api/backup/create` (Settings page button).
+
+The last 10 are kept; older are pruned. Because the vault is
+iCloud-synced, every backup ends up in the cloud automatically. Cloud
+deployments don't use this path — Litestream replicates the WAL
+continuously to R2 (see above).
+
+### Disaster recovery (local mode, new machine)
+
+1. Sign into iCloud. Wait for `greenroom/` to sync down.
+2. `git clone https://github.com/adamklie/greenroom ~/code/greenroom`.
+3. Install deps (`make setup`).
+4. Copy the newest DB backup into place:
+   ```bash
+   cp ~/Library/Mobile\ Documents/com~apple~CloudDocs/greenroom/backups/greenroom_*.db \
+      ~/code/greenroom/backend/greenroom.db
+   ```
+   (pick the most recent by timestamp)
+5. Start the app. Every `AudioFile` resolves against the vault.
+
 ---
 
 ## 6. Auth model
@@ -393,6 +444,38 @@ local/dev) makes every gate return a synthetic admin user
 (`id=0, email='dev@local', role='admin'`). Production has it set to
 `true` via `fly.toml`.
 
+### Adding a user
+
+There is no signup flow — admin-invite-only. To add the first admin:
+
+```bash
+cd backend
+python scripts/create_admin.py aklie@ucsd.edu
+```
+
+If the email already exists in `users`, its role is promoted to admin.
+Otherwise the script inserts a new row. To add other users until the
+admin UI lands, insert into `users` directly:
+
+```sql
+INSERT INTO users (email, role) VALUES ('teammate@example.com', 'editor');
+```
+
+### Stub emailer (dev)
+
+While `GREENROOM_EMAIL_BACKEND=stub` (the default in dev), the magic
+link is printed to the backend's stdout instead of sent. Copy the URL,
+paste in the browser, you're in:
+
+```
+=== MAGIC LINK for aklie@ucsd.edu ===
+http://localhost:5175/api/auth/exchange?token=...
+=== expires in 15 minutes ===
+```
+
+The `resend` backend (cloud) wires the same `MagicLinkEmailer` interface
+to Resend's HTTP API. See `backend/app/auth/email.py`.
+
 ---
 
 ## 7. Common operational gotchas
@@ -416,6 +499,5 @@ local/dev) makes every gate return a synthetic admin user
 
 - [`USER_GUIDE.md`](USER_GUIDE.md) — what each page does, common workflows, what to do if something looks broken.
 - [`DEPLOYMENT.md`](DEPLOYMENT.md) — fly secrets, first-deploy steps, image build details, rclone bulk-upload command.
-- [`AUTH.md`](AUTH.md) — magic-link flow, role table, adding users via `scripts/create_admin.py`.
-- [`STORAGE.md`](STORAGE.md) — historical doc covering the local-iCloud vault layout; cloud paths above supersede it.
 - [`SCHEMAS.md`](SCHEMAS.md) — table-by-table SQLAlchemy reference.
+- [`DATA_INGESTION.md`](DATA_INGESTION.md) — how source files become AudioFile rows.

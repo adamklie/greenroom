@@ -62,7 +62,7 @@ alembic show <revision>   # print a specific migration
 - **SQLite ALTER TABLE limitations.** `env.py` enables `render_as_batch=True`, which makes Alembic emit copy-rebuild-rename instead of `ALTER COLUMN`. Most cases work transparently; complex multi-constraint changes may still need manual scripting.
 - **Server-side defaults.** If a model sets `server_default=text("...")`, double-check the generated migration carries it; sometimes autogenerate omits defaults on existing-column changes.
 - **Don't edit a migration after it has been applied to any DB.** Add a new follow-up migration instead. The applied revision is recorded in `alembic_version`; editing in-place desyncs every existing DB.
-- **Backups before structural changes.** A backup is automatically scheduled on commit (see [STORAGE.md](STORAGE.md)). For a hand-edited migration, also trigger a manual backup via the Sync page before running `alembic upgrade head`.
+- **Backups before structural changes.** A backup is automatically scheduled on commit (see [ARCHITECTURE.md § DB backup triggers](ARCHITECTURE.md#db-backup-triggers-local-mode)). For a hand-edited migration, also trigger a manual backup before running `alembic upgrade head`.
 
 ## Recovery
 
