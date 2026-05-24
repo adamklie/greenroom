@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { api, type Song, type AudioFile } from "../api/client";
-import { Search, X, Play, Music, Tag, ArrowUpRight, Star, Plus, Trash2, ChevronDown, ChevronRight, Scissors, FileMusic, Upload } from "lucide-react";
+import { Search, X, Play, Music, Tag, ArrowUpRight, Plus, Trash2, ChevronDown, ChevronRight, Scissors, FileMusic, Upload } from "lucide-react";
 import { TabViewer } from "../components/TabViewer";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -233,7 +233,7 @@ function SongAudioFileRow({ af, onUpdate }: { af: AudioFile; onUpdate: () => voi
                 {RATING_FIELDS.map(({ key, label }) => (
                   <div key={key} className="flex items-center justify-between">
                     <span className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</span>
-                    <StarPicker value={(af as Record<string, unknown>)[key] as number | null}
+                    <StarPicker value={(af as unknown as Record<string, unknown>)[key] as number | null}
                       onChange={(n) => save(key, n)} size={9} />
                   </div>
                 ))}

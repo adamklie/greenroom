@@ -235,7 +235,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
         <StatCard label="Total Songs" value={stats.total_songs} icon={Music} color="var(--accent)" />
         <StatCard label="Practice Sessions" value={stats.total_sessions} icon={Radio} color="var(--blue)" />
-        <StatCard label="Unrated Audio" value={stats.unrated_audio_files} icon={Star} color="var(--yellow)" />
+        <StatCard label="Unrated Takes" value={stats.unrated_takes} icon={Star} color="var(--yellow)" />
       </div>
 
       {/* Recent additions */}

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { Search, Star, FileAudio, FileVideo, Columns3, Trash2, Plus, X } from "lucide-react";
+import { Search, FileAudio, FileVideo, Columns3, Trash2, Plus, X } from "lucide-react";
 
 const SOURCE_OPTIONS = ["", "phone", "logic_pro", "garageband", "suno_ai", "collaborator", "download", "gopro", "unknown"];
 const ROLE_OPTIONS = ["", "recording", "demo", "reference", "backing_track", "final_mix", "stem"];
@@ -89,8 +89,7 @@ function StarRating({ value, onChange }: { value: number | null; onChange: (v: n
   );
 }
 
-function InlineSongPicker({ audioFileId, currentSongId, songs, onSave, onSongCreated }: {
-  audioFileId: number;
+function InlineSongPicker({ currentSongId, songs, onSave, onSongCreated }: {
   currentSongId: number | null;
   songs: { id: number; title: string; artist: string | null; type: string }[];
   onSave: (songId: number | null) => void;
@@ -438,7 +437,6 @@ export default function Library() {
                     if (k === "song") return (
                       <td key={k} className="px-3 py-2">
                         <InlineSongPicker
-                          audioFileId={af.id}
                           currentSongId={af.song_id}
                           songs={songs}
                           onSave={(songId) => save(af.id, "song_id", songId)}

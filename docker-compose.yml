@@ -1,0 +1,35 @@
+# docker-compose for local parity with the deployed image.
+#
+# `docker compose up` builds the multi-stage Dockerfile and runs the
+# resulting container with:
+#   - ./local-data           → /data         (persistent state: DB + vault)
+#   - iCloud music dir       → /data/music_cache  (read-only — never let
+#                              the container write back into iCloud)
+#
+# No R2 creds are exported, so entrypoint.sh runs uvicorn directly with
+# no Litestream replication. Auth is off (AUTH_REQUIRED=false) so this
+# matches dev.sh behaviour exactly: open http://localhost:8080 and the
+# SPA renders as if you were signed in.
+
+services:
+  greenroom:
+    build: .
+    container_name: greenroom
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persistent state for the container. Gitignored.
+      - ./local-data:/data
+      # Read-only mount of the canonical iCloud music dir. The path is
+      # specific to the developer's machine; adjust here if yours differs.
+      - "${HOME}/Library/Mobile Documents/com~apple~CloudDocs/music:/data/music_cache:ro"
+    environment:
+      GREENROOM_DB_PATH: /data/greenroom.db
+      GREENROOM_VAULT_DIR: /data/vault
+      GREENROOM_MUSIC_DIR: /data/music_cache
+      GREENROOM_STATIC_DIR: /app/static
+      GREENROOM_MEDIA_BACKEND: local
+      GREENROOM_AUTH_REQUIRED: "false"
+      GREENROOM_AUTH_SECRET: dev-secret-change-me
+      GREENROOM_EMAIL_BACKEND: stub
+      # No R2_* → entrypoint.sh skips Litestream replication.
