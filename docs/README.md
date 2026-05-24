@@ -27,11 +27,6 @@ See the [main README](../README.md) for stack, costs, and quick start.
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System map, request flows, boot sequence, code layout. Read first. |
 | [SCHEMAS.md](SCHEMAS.md) | Table-by-table SQLAlchemy reference. |
-| [DATA_INGESTION.md](DATA_INGESTION.md) | How source files become AudioFile rows. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | PR cycle, principles, Explore → Plan → Code → Test. |
 | [STYLE.md](STYLE.md) | How to write docs in this repo. |
-
-## Active refactor
-
-[AUDIOFILE_UNIFICATION.md](AUDIOFILE_UNIFICATION.md) — Take → AudioFile migration. Phases 1–3 done; Phase 4 (drop Take) open. Read before touching practice-session code.
 </content>

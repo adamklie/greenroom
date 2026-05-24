@@ -22,8 +22,7 @@ AudioFile.session_id  (clips from that session)
 
 `AudioFile` is canonical. Practice clips are AudioFiles with `session_id` and
 `recorded_at` set; solo recordings, Suno output, collabs are AudioFiles with
-those fields null. See [AUDIOFILE_UNIFICATION.md](AUDIOFILE_UNIFICATION.md)
-for the migration history.
+those fields null. The legacy `Take` table is deprecated (see below).
 
 ---
 
@@ -234,10 +233,11 @@ Predefined list above; users can add custom strings.
 
 ### Take (`takes`)
 
-The Take table is **deprecated**. Phase 4 of [AUDIOFILE_UNIFICATION.md](AUDIOFILE_UNIFICATION.md)
-will drop it. Practice clips are now `AudioFile` rows with `session_id` set;
-the Library + Sessions tabs read from `AudioFile` only. The Take model still
-exists (`models/take.py`) because a handful of legacy routers / services
-reference it — those callers will be cleaned up alongside the table drop.
+The Take table is **deprecated** and no longer read or written by the app —
+practice clips are `AudioFile` rows with `session_id` set; Library + Sessions
+read from `AudioFile` only. The `takes` table and `models/take.py` still
+exist for now because a handful of legacy callers reference them; both will
+be dropped together when the legacy callers are removed. Until then the table
+is vestigial and harmless.
 
 Don't add new code that reads or writes `Take`. Use `AudioFile`.

@@ -40,12 +40,10 @@ Start at the index: [docs/README.md](docs/README.md).
 | [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | 10-min walkthrough for showing the app to a new user |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System map, request flows, boot sequence, storage layout, auth model |
 | [docs/SCHEMAS.md](docs/SCHEMAS.md) | DB schema, SQLAlchemy model reference |
-| [docs/DATA_INGESTION.md](docs/DATA_INGESTION.md) | Ingestion scripts and data flow |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Fly + R2 + Resend setup, secrets, runbook |
 | [docs/MIGRATIONS.md](docs/MIGRATIONS.md) | Alembic conventions, applying schema changes |
 | [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Principles, PR cycle, Explore → Plan → Code → Test |
 | [docs/STYLE.md](docs/STYLE.md) | Style guide for writing docs in this repo |
-| [docs/AUDIOFILE_UNIFICATION.md](docs/AUDIOFILE_UNIFICATION.md) | Ongoing refactor: Take → AudioFile |
 | [docs/REMOVED.md](docs/REMOVED.md) | Features cut during simplification and why |
 
 ## Quick Start — Local Dev

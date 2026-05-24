@@ -135,9 +135,9 @@ def bootstrap_sessions(db: DBSession, songs_by_norm: dict[str, Song]) -> tuple[i
     def _ensure_audio_file_for_take(take: Take, session: PracticeSession) -> None:
         """Mirror a Take row into audio_files when an extracted clip exists on disk.
 
-        Phase 4 of the AudioFile unification (per docs/AUDIOFILE_UNIFICATION.md):
-        the Sessions page reads audio_files only, so every session clip needs
-        a parallel audio_file row pointing at the same on-disk file.
+        The Sessions page reads audio_files only, so every session clip needs
+        a parallel audio_file row pointing at the same on-disk file. (Take is
+        the legacy model; AudioFile is canonical — see SCHEMAS.md.)
 
         Idempotent: skips when an audio_file with the same file_path exists, and
         patches session_id when an existing row was linked to the wrong session.

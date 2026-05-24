@@ -282,7 +282,6 @@ fly.toml                        — Fly app config (region lax, 1 GB VM, /data m
 docker-compose.yml              — local-parity stack with bind mount instead of Fly volume
 docs/DEPLOYMENT.md              — fly secrets + first-deploy runbook
 docs/SCHEMAS.md                 — table-by-table SQLAlchemy reference
-docs/DATA_INGESTION.md          — how source files become AudioFile rows
 ```
 
 ---
@@ -500,4 +499,3 @@ to Resend's HTTP API. See `backend/app/auth/email.py`.
 - [`USER_GUIDE.md`](USER_GUIDE.md) — what each page does, common workflows, what to do if something looks broken.
 - [`DEPLOYMENT.md`](DEPLOYMENT.md) — fly secrets, first-deploy steps, image build details, rclone bulk-upload command.
 - [`SCHEMAS.md`](SCHEMAS.md) — table-by-table SQLAlchemy reference.
-- [`DATA_INGESTION.md`](DATA_INGESTION.md) — how source files become AudioFile rows.

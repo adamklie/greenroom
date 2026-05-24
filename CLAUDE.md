@@ -76,7 +76,5 @@ Authoritative references for this repo. Start at [docs/README.md](docs/README.md
 - [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) — 10-min walkthrough for showing the app
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Fly + R2 + Resend setup runbook
 - [docs/SCHEMAS.md](docs/SCHEMAS.md) — DB schema, SQLAlchemy models
-- [docs/DATA_INGESTION.md](docs/DATA_INGESTION.md) — ingestion scripts and data flow
 - [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — workflow, PR cycle, principles
 - [docs/STYLE.md](docs/STYLE.md) — how to write docs in this repo
-- [docs/AUDIOFILE_UNIFICATION.md](docs/AUDIOFILE_UNIFICATION.md) — Take → AudioFile refactor
