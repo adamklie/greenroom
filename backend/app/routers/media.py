@@ -3,14 +3,14 @@ import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.auth.deps import require_viewer
 from app.config import settings
 from app.database import get_db
 from app.models import AudioFile, Take
-from app.services.vault import resolve_audio_path
+from app.services.vault import get_backend, resolve_audio_path
 
 router = APIRouter(prefix="/api/media", tags=["media"])
 
@@ -114,6 +114,13 @@ def stream_audio_file(audio_file_id: int, request: Request, db: Session = Depend
     af = db.query(AudioFile).get(audio_file_id)
     if not af:
         raise HTTPException(404, "Audio file not found")
+    # Cloud backends produce a presigned URL — redirect the browser straight
+    # to object storage so the FastAPI process doesn't proxy the bytes. Local
+    # backend returns None and we fall through to range-aware streaming.
+    backend = get_backend()
+    url = backend.url_for(af) if hasattr(backend, "url_for") else None
+    if url is not None:
+        return RedirectResponse(url, status_code=307)
     full = resolve_audio_path(af)
     if not full.exists():
         raise HTTPException(404, "Audio file not found on disk")

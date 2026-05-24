@@ -7,6 +7,8 @@ fixture isn't needed here — no HTTP surface.
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from app.config import settings
@@ -59,29 +61,105 @@ def test_local_backend_ingest_idempotent(tmp_path):
     assert dest2.read_bytes() == b"hello vault"
 
 
-def test_cloud_backend_raises(tmp_path):
-    """Every CloudVaultBackend method raises NotImplementedError."""
+class _AFStub:
+    """Lightweight AudioFile-shaped stand-in for backend tests."""
+
+    identifier = "AFTEST"
+    file_type = "m4a"
+    file_path = "AFTEST.m4a"
+
+
+def _patch_boto3(monkeypatch, mock_client: MagicMock) -> MagicMock:
+    """Stub out boto3.client so CloudVaultBackend doesn't try to talk to R2."""
+    fake_boto3 = MagicMock()
+    fake_boto3.client.return_value = mock_client
+    monkeypatch.setitem(__import__("sys").modules, "boto3", fake_boto3)
+    return fake_boto3
+
+
+def test_cloud_backend_constructs_with_creds(monkeypatch):
+    """CloudVaultBackend wires boto3.client with the configured R2 settings."""
+    monkeypatch.setattr(settings, "r2_endpoint_url", "https://acct.r2.cloudflarestorage.com")
+    monkeypatch.setattr(settings, "r2_access_key_id", "key-id")
+    monkeypatch.setattr(settings, "r2_secret_access_key", "secret")
+    monkeypatch.setattr(settings, "r2_bucket", "greenroom-media")
+
+    s3 = MagicMock()
+    fake_boto3 = _patch_boto3(monkeypatch, s3)
+
     backend = CloudVaultBackend()
-    with pytest.raises(NotImplementedError, match="R2 backend not yet wired"):
-        backend.path_for("AF1", "m4a")
-    with pytest.raises(NotImplementedError):
-        backend.exists("AF1", "m4a")
-    with pytest.raises(NotImplementedError):
-        backend.ingest(tmp_path / "x.m4a", "AF1", "m4a")
 
-    # resolve() needs an AudioFile-shaped object; a tiny stand-in is fine
-    # because the method raises before touching any attribute.
-    class _Stub:
-        identifier = "AF1"
-        file_type = "m4a"
-        file_path = "AF1.m4a"
+    fake_boto3.client.assert_called_once()
+    args, kwargs = fake_boto3.client.call_args
+    assert args == ("s3",)
+    assert kwargs["endpoint_url"] == "https://acct.r2.cloudflarestorage.com"
+    assert kwargs["aws_access_key_id"] == "key-id"
+    assert kwargs["aws_secret_access_key"] == "secret"
+    assert kwargs["region_name"] == "auto"
+    assert backend._bucket == "greenroom-media"
 
-    with pytest.raises(NotImplementedError):
-        backend.resolve(_Stub())
+
+def test_cloud_backend_ingest_uploads(monkeypatch, tmp_path):
+    """ingest() calls s3.upload_file with the canonical key."""
+    monkeypatch.setattr(settings, "r2_bucket", "greenroom-media")
+    s3 = MagicMock()
+    _patch_boto3(monkeypatch, s3)
+
+    src = tmp_path / "foo.m4a"
+    src.write_bytes(b"x")
+
+    backend = CloudVaultBackend()
+    backend.ingest(src, "AFTEST", "m4a")
+
+    s3.upload_file.assert_called_once_with(str(src), "greenroom-media", "files/AFTEST.m4a")
+
+
+def test_cloud_backend_url_for_signs(monkeypatch):
+    """url_for() generates a presigned GET URL with the configured TTL."""
+    monkeypatch.setattr(settings, "r2_bucket", "greenroom-media")
+    monkeypatch.setattr(settings, "r2_presign_ttl_seconds", 1800)
+    s3 = MagicMock()
+    s3.generate_presigned_url.return_value = "https://signed.example/AFTEST.m4a?sig=abc"
+    _patch_boto3(monkeypatch, s3)
+
+    backend = CloudVaultBackend()
+    url = backend.url_for(_AFStub())
+
+    assert url == "https://signed.example/AFTEST.m4a?sig=abc"
+    s3.generate_presigned_url.assert_called_once_with(
+        "get_object",
+        Params={"Bucket": "greenroom-media", "Key": "files/AFTEST.m4a"},
+        ExpiresIn=1800,
+    )
+
+
+def test_cloud_backend_exists_handles_404(monkeypatch):
+    """head_object raising ClientError → exists() returns False, not bubble."""
+    from botocore.exceptions import ClientError
+
+    monkeypatch.setattr(settings, "r2_bucket", "greenroom-media")
+    s3 = MagicMock()
+    s3.head_object.side_effect = ClientError(
+        {"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject"
+    )
+    _patch_boto3(monkeypatch, s3)
+
+    backend = CloudVaultBackend()
+    assert backend.exists("AFNOPE", "m4a") is False
+
+
+def test_local_backend_url_for_returns_none():
+    """LocalVaultBackend has no notion of a signed URL — returns None."""
+    backend = LocalVaultBackend()
+    assert backend.url_for(_AFStub()) is None
 
 
 def test_get_backend_respects_setting(monkeypatch):
-    """Flipping settings.media_backend to 'r2' surfaces the Cloud stub."""
+    """Flipping settings.media_backend to 'r2' surfaces CloudVaultBackend."""
+    # CloudVaultBackend instantiates boto3 in __init__, which complains about
+    # the empty endpoint URL in this test environment — stub the import.
+    _patch_boto3(monkeypatch, MagicMock())
+
     monkeypatch.setattr(settings, "media_backend", "r2")
     reset_backend()
     assert isinstance(get_backend(), CloudVaultBackend)
