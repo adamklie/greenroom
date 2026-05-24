@@ -61,6 +61,17 @@ from app.models import AudioFile
 from app.services.vault import get_backend, is_cloud_backend, resolve_audio_path
 
 
+def _list_r2_keys(backend) -> set[str]:
+    """Single paginated list_objects_v2 of `files/` prefix — way faster
+    than per-row head_object when there are hundreds of candidates."""
+    paginator = backend._s3.get_paginator("list_objects_v2")
+    keys: set[str] = set()
+    for page in paginator.paginate(Bucket=backend._bucket, Prefix="files/"):
+        for obj in page.get("Contents", []) or []:
+            keys.add(obj["Key"])
+    return keys
+
+
 def find_orphans(db) -> list[AudioFile]:
     """Return non-stem AudioFile rows whose backing file is missing."""
     backend = get_backend()
@@ -71,6 +82,13 @@ def find_orphans(db) -> list[AudioFile]:
         .filter((AudioFile.role.is_(None)) | (AudioFile.role != "deleted"))
         .all()
     )
+
+    # Cloud path: one listing instead of N head_objects (which would otherwise
+    # take 600+ round-trips and bust the `fly machine exec` timeout).
+    r2_keys: set[str] | None = None
+    if is_cloud_backend():
+        r2_keys = _list_r2_keys(backend)
+
     orphans: list[AudioFile] = []
     for af in candidates:
         if not af.file_type:
@@ -78,7 +96,8 @@ def find_orphans(db) -> list[AudioFile]:
             # than guess and risk a false-positive delete.
             continue
         if is_cloud_backend():
-            present = backend.exists(af.identifier, af.file_type)
+            key = backend._key(af.identifier, af.file_type)
+            present = key in r2_keys
         else:
             present = resolve_audio_path(af).exists()
         if not present:
