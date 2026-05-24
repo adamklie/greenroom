@@ -40,13 +40,15 @@ RUN tar -C /usr/local/bin -xzf /tmp/litestream.tar.gz && rm /tmp/litestream.tar.
 
 WORKDIR /app
 
-# Install Python deps first using only pyproject.toml so the layer is
-# cached across application-code changes.
-COPY backend/pyproject.toml ./backend/
-RUN pip install --no-cache-dir -e ./backend
-
-# Now copy the actual application source.
+# Copy backend source then install. The earlier split (pyproject-only
+# install for layer caching, source second) silently broke the package:
+# setuptools' packages.find ran before app/ existed, so top_level.txt
+# was empty and `python scripts/x.py` couldn't `import app.*`. The app
+# still booted because uvicorn runs from /app/backend (cwd on sys.path),
+# but anything invoked from a subdir broke. Caching the deps layer
+# isn't worth this footgun for a backend that rebuilds on every deploy.
 COPY backend/ ./backend/
+RUN pip install --no-cache-dir -e ./backend
 
 # Bring the built SPA across from the web stage and tell FastAPI where it lives.
 COPY --from=web /web/dist /app/static
