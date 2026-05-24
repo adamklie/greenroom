@@ -49,6 +49,13 @@ class VaultBackend(Protocol):
         """True if a file is already stored at `{identifier}.{ext}`."""
         ...
 
+    def url_for(self, af: AudioFile, expires_in: int | None = None) -> str | None:
+        """Return a directly-fetchable URL for `af`, or None if the backend
+        can't produce one (e.g. local files). Cloud backends return a
+        presigned GET URL so the browser can fetch from object storage
+        directly, bypassing the FastAPI process."""
+        ...
+
 
 class LocalVaultBackend:
     """Default backend: flat directory under `settings.vault_files_dir`."""
@@ -78,31 +85,77 @@ class LocalVaultBackend:
     def exists(self, identifier: str, file_type: str) -> bool:
         return self.path_for(identifier, file_type).exists()
 
+    def url_for(self, af: AudioFile, expires_in: int | None = None) -> str | None:
+        """Local files are served by FastAPI itself; no external URL."""
+        return None
+
 
 class CloudVaultBackend:
-    """Stub for Cloudflare R2 (S3-compatible) hosting.
+    """Cloudflare R2 (S3-compatible) hosting.
 
-    Not wired yet — `MEDIA_BACKEND=r2` will instantiate this class but every
-    operation raises. Phase 3 of the deployment work adds boto3 + credentials
-    + actual upload/download.
+    boto3 is lazy-imported inside __init__ so the local-only dev path doesn't
+    require it at module import time. Objects live at `files/{identifier}.{ext}`
+    in the configured bucket — same flat layout as the local vault, just
+    remote.
+
+    Media is served to browsers via presigned GET URLs (see `url_for`), which
+    the `/api/media/*` router returns as 307 redirects. This bypasses the
+    FastAPI process for the actual byte transfer, which is essential when
+    every Fly machine has 1 GB of memory and a 33 GB media tree.
     """
 
-    _ERR = (
-        "R2 backend not yet wired — set R2_* env vars and ensure boto3 is "
-        "installed when MEDIA_BACKEND=r2"
-    )
+    def __init__(self) -> None:
+        import boto3  # lazy: keeps the local-dev path boto3-free
+
+        self._s3 = boto3.client(
+            "s3",
+            endpoint_url=settings.r2_endpoint_url,
+            aws_access_key_id=settings.r2_access_key_id,
+            aws_secret_access_key=settings.r2_secret_access_key,
+            region_name="auto",
+        )
+        self._bucket = settings.r2_bucket
+
+    @staticmethod
+    def _key(identifier: str, file_type: str) -> str:
+        ext = file_type.lstrip(".").lower()
+        return f"files/{identifier}.{ext}"
 
     def path_for(self, identifier: str, file_type: str) -> Path:
-        raise NotImplementedError(self._ERR)
+        # PurePosixPath models the "files/foo.m4a" object key. The Protocol
+        # advertises Path; PurePosixPath is a sibling of PurePath, so we cast.
+        from pathlib import PurePosixPath
+        return PurePosixPath(self._key(identifier, file_type))  # type: ignore[return-value]
 
     def resolve(self, af: AudioFile) -> Path:
-        raise NotImplementedError(self._ERR)
+        # Callers should prefer `url_for` for cloud storage — this sentinel
+        # exists only so the Protocol is satisfied. Local fallthrough paths
+        # in the media router check `url_for` first and redirect before
+        # ever reaching resolve.
+        return self.path_for(af.identifier, af.file_type)
 
     def ingest(self, source: Path, identifier: str, file_type: str) -> Path:
-        raise NotImplementedError(self._ERR)
+        key = self._key(identifier, file_type)
+        self._s3.upload_file(str(source), self._bucket, key)
+        return self.path_for(identifier, file_type)
 
     def exists(self, identifier: str, file_type: str) -> bool:
-        raise NotImplementedError(self._ERR)
+        from botocore.exceptions import ClientError
+        try:
+            self._s3.head_object(Bucket=self._bucket, Key=self._key(identifier, file_type))
+            return True
+        except ClientError:
+            return False
+
+    def url_for(self, af: AudioFile, expires_in: int | None = None) -> str | None:
+        return self._s3.generate_presigned_url(
+            "get_object",
+            Params={
+                "Bucket": self._bucket,
+                "Key": self._key(af.identifier, af.file_type),
+            },
+            ExpiresIn=expires_in or settings.r2_presign_ttl_seconds,
+        )
 
 
 _backend: VaultBackend | None = None
