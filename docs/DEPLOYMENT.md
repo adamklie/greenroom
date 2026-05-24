@@ -108,8 +108,8 @@ rm -rf local-data              # nukes the DB + vault for a clean restart
 | `GREENROOM_AUTH_REQUIRED` | `false` | `true` |
 | `GREENROOM_AUTH_SECRET` | `dev-secret-change-me` | `fly secrets set …` |
 | `GREENROOM_EMAIL_BACKEND` | `stub` | `resend` |
-| `GREENROOM_ALLOWED_ORIGINS` | (uses default localhost list) | `fly secrets set https://greenroom.<domain>` |
-| `GREENROOM_PUBLIC_URL` | `http://localhost:5175` (default) | `https://greenroom.<domain>` |
+| `GREENROOM_ALLOWED_ORIGINS` | (uses default localhost list) | `fly secrets set https://greenroom-1.fly.dev` |
+| `GREENROOM_PUBLIC_URL` | `http://localhost:5175` (default) | `https://greenroom-1.fly.dev` |
 | `R2_*` | unset (Litestream skipped) | `fly secrets set …` |
 | `RESEND_API_KEY` | unset (stub emailer) | `fly secrets set …` |
 
@@ -147,20 +147,25 @@ After R2 + Resend signups complete, the deploy looks roughly like:
 
 ```bash
 # One-time
-fly apps create greenroom                          # or a unique variant
+fly apps create greenroom-1                        # confirmed available name
 fly volumes create data --region sea --size 3      # /data mount
 
-# Secrets — replace each <…> with the real value from the provider dashboards
-fly secrets set \
-    R2_ACCOUNT_ID=<id> \
-    R2_ACCESS_KEY_ID=<key> \
-    R2_SECRET_ACCESS_KEY=<secret> \
-    R2_BUCKET=greenroom-media \
-    R2_DB_BACKUP_BUCKET=greenroom-db-backups \
-    GREENROOM_AUTH_SECRET=$(openssl rand -hex 32) \
-    RESEND_API_KEY=<key> \
-    GREENROOM_ALLOWED_ORIGINS=https://greenroom.<domain> \
-    GREENROOM_PUBLIC_URL=https://greenroom.<domain>
+# Secrets — exported from the local shell, never inlined here.
+AUTH_SECRET=$(openssl rand -hex 32)
+fly secrets set -a greenroom-1 \
+    R2_ACCESS_KEY_ID="$GREENROOM_R2_ACCESS_KEY_ID" \
+    R2_SECRET_ACCESS_KEY="$GREENROOM_R2_SECRET_ACCESS_KEY" \
+    R2_BUCKET="greenroom-media" \
+    R2_DB_BACKUP_BUCKET="greenroom-db" \
+    R2_ACCOUNT_ID="9a19e3fc1679ae3ab01e97284b68d421" \
+    GREENROOM_R2_ACCESS_KEY_ID="$GREENROOM_R2_ACCESS_KEY_ID" \
+    GREENROOM_R2_SECRET_ACCESS_KEY="$GREENROOM_R2_SECRET_ACCESS_KEY" \
+    GREENROOM_R2_ENDPOINT_URL="$GREENROOM_R2_ENDPOINT_URL" \
+    GREENROOM_R2_BUCKET="greenroom-media" \
+    GREENROOM_RESEND_API_KEY="$GREENROOM_RESEND_API_KEY" \
+    GREENROOM_AUTH_SECRET="$AUTH_SECRET" \
+    GREENROOM_PUBLIC_URL="https://greenroom-1.fly.dev" \
+    GREENROOM_ALLOWED_ORIGINS="https://greenroom-1.fly.dev"
 
 # Ongoing
 fly deploy                                         # builds + deploys
@@ -168,9 +173,15 @@ fly logs                                           # tail
 fly ssh console                                    # poke around
 ```
 
-`fly.toml` already declares the volume mount, ports, and non-secret env.
-The `app` and `primary_region` keys are placeholders — update them once
-`fly apps create` confirms a name.
+Each R2 credential is set twice — once unprefixed (`R2_*`) and once
+prefixed (`GREENROOM_R2_*`). The unprefixed copies are read by
+`infra/litestream.yml` and `infra/entrypoint.sh`, which expect the bare
+names ; the prefixed copies are what Pydantic's `env_prefix="GREENROOM_"`
+picks up for `Settings.r2_*`. Dual-setting is the simplest way to keep
+both consumers happy without adding `AliasChoices` to every R2 field.
+
+`fly.toml` already declares the volume mount, ports, and non-secret env
+(app name is `greenroom-1`, region `sea`).
 
 After the first successful deploy:
 

@@ -14,8 +14,8 @@
 # surface inside the machine as plain env vars, just like compose's
 # `environment:` block.
 
-app = "greenroom"               # rename to whatever `fly apps create` returns
-primary_region = "sea"          # change to the region closest to you
+app = "greenroom-1"
+primary_region = "sea"
 
 [build]
   dockerfile = "Dockerfile"
