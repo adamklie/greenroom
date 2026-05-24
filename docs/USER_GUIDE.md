@@ -237,15 +237,16 @@ role, ask.
 
 ## 8. Asking for changes
 
-Bug reports and feature requests can go through the **Feedback** page
-inside the app — those land in the DB and the owner reviews them. For
-anything urgent or that needs a back-and-forth, talk to the owner
-directly (channel is up to him).
+Bug reports and feature requests go through the **Feedback** page
+inside the app. Submissions become real GitHub issues at
+<https://github.com/adamklie/greenroom/issues> with the category
+(feedback / bug / feature / question) and priority as labels. The owner
+(admin) reviews them there. For anything urgent or that needs
+back-and-forth, talk to the owner directly.
 
 ---
 
 ## See also
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — how it all works under the hood.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — how it all works under the hood, including the magic-link auth flow.
 - [`DEPLOYMENT.md`](DEPLOYMENT.md) — for the owner / contributors deploying the app.
-- [`AUTH.md`](AUTH.md) — magic-link flow, adding users.

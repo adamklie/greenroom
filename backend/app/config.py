@@ -50,6 +50,15 @@ class Settings(BaseSettings):
     # short enough that a leaked URL expires quickly.
     r2_presign_ttl_seconds: int = 3600  # GREENROOM_R2_PRESIGN_TTL_SECONDS
 
+    # --- Feedback / GitHub issues ---
+    # Personal access token for the feedback endpoint. Empty disables real
+    # issue creation — the endpoint returns a clean error without hitting
+    # the network. Set GREENROOM_GITHUB_TOKEN on the deploy to enable.
+    github_token: str = ""            # GREENROOM_GITHUB_TOKEN
+    # Repo that feedback issues are filed into. Overridable so a fork or
+    # test repo can be targeted without a code change.
+    github_repo: str = "adamklie/greenroom"  # GREENROOM_GITHUB_REPO
+
     # --- Email (Phase 3d) ---
     # Resend API key. Empty disables real sends — ResendEmailer falls back
     # to printing the magic link to stdout (same behavior as StubEmailer).

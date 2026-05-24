@@ -38,7 +38,7 @@ Equivalent to `from app.services.backup import hash_all_files`. Prints a summary
 cd ~/code/greenroom && make export
 ```
 
-Writes `exports/annotations_latest.json` with the current state of all songs + takes. This is the recovery path described in `docs/STORAGE.md` — if the DB ever gets corrupted, the JSON + vault files are enough to rebuild.
+Writes `exports/annotations_latest.json` with the current state of all songs + takes. This is the recovery path described in `docs/ARCHITECTURE.md` (storage section) — if the DB ever gets corrupted, the JSON + vault files are enough to rebuild.
 
 ### 5. Backup — snapshot the DB
 
@@ -68,7 +68,7 @@ If the user declines, leave the file dirty in the working tree — they can comm
 ## Rules
 
 - **Don't** skip steps. Bootstrap → hash → export → backup is the canonical order in `Makefile` (and in `scripts/after-practice.sh`, which is what the `after-practice` make target invokes). Running them out of order works but the export may capture a stale state.
-- **Don't** `git add` other files (DB, audio, vault). Only `exports/annotations_latest.json` is meant to be tracked. The audio/video files live in the iCloud vault — see `docs/STORAGE.md`.
+- **Don't** `git add` other files (DB, audio, vault). Only `exports/annotations_latest.json` is meant to be tracked. The audio/video files live in the iCloud vault — see `docs/ARCHITECTURE.md`.
 - **Don't** auto-resolve "missing" files reported by `make hash`. Those need user attention (the file may have moved, been renamed, or been deleted). Surface the count, don't act.
 - If any step exits non-zero, STOP — don't continue with downstream steps. The pipeline is sequential by design.
 - `make after-practice` exists and runs roughly the same sequence via `scripts/after-practice.sh`. Use the individual targets in this skill so each step is observable; fall back to `make after-practice` if the user explicitly wants the all-in-one script.

@@ -4,9 +4,8 @@
 
 ## Before you start
 
-1. Read [VISION.md](VISION.md) — what Greenroom is, who it's for, the three pillars
-2. Read [ARCHITECTURE.md](ARCHITECTURE.md) — system map, request flows, boot sequence
-3. Read [STORAGE.md](STORAGE.md) — how files + DB + backups are laid out
+1. Read the root [README.md](../README.md) — what Greenroom is, tech stack, quick start
+2. Read [ARCHITECTURE.md](ARCHITECTURE.md) — system map, request flows, boot sequence, storage layout, auth model
 
 ---
 
@@ -35,7 +34,37 @@ For any non-trivial change:
 
 **Test** — Verify the change works AND verify nothing else broke. If something regresses, go back to planning — don't patch around it.
 
-See [DEVELOPMENT_WORKFLOW.md](DEVELOPMENT_WORKFLOW.md) for the step-by-step version, including the Claude Code prompt template.
+### The PR cycle
+
+Every non-trivial change follows this loop:
+
+```
+Create draft PR → Develop (Explore → Plan → Code → Test) → Review → Merge
+```
+
+1. **Open a draft PR first**, before writing code. Name the change, scope it visibly, give Claude a clear target.
+   ```bash
+   git checkout -b feat/my-feature
+   git push -u origin feat/my-feature
+   gh pr create --draft --title "Short, specific" --body "What + why in 2-5 sentences."
+   ```
+2. **Develop** through Explore → Plan → Code → Test. The plan-approval step is the most important: five minutes reviewing a plan saves an hour of rework. Don't skip past `plan` when driving Claude.
+3. **Review** before flipping out of draft. In Claude Code, `/review-pr <number>` runs an automated pass classifying findings as CRITICAL / WARNING / NOTE. Manual checklist: PR does one thing, no build artifacts, no dead code, no orphaned exports.
+4. **Fix and merge.** Either squash or regular merge — your call.
+
+### Driving Claude Code
+
+When handing a PR to Claude, give it the workflow explicitly so it doesn't skip steps:
+
+```
+Read docs/CONTRIBUTING.md and docs/ARCHITECTURE.md. Then read PR #<number>.
+
+Follow Explore → Plan → Code → Test:
+  1. Explore: list and read the relevant files
+  2. Plan: write a short plan — changes, risks, open questions — and PAUSE for approval
+  3. Code: surgical, targeted changes only
+  4. Test: pytest + manual smoke; verify nothing else broke
+```
 
 ---
 
@@ -61,7 +90,7 @@ Examples:
 | Don't commit | Why | What to do instead |
 |---|---|---|
 | `backend/.venv/`, `frontend/node_modules/` | Build artifacts, regeneratable | Already in `.gitignore` |
-| `greenroom.db`, `*.db` | Live DB — changes constantly, too large | Rolling backups live in the iCloud vault (see [STORAGE.md](STORAGE.md)) |
+| `greenroom.db`, `*.db` | Live DB — changes constantly, too large | Rolling backups live in the iCloud vault (see [ARCHITECTURE.md](ARCHITECTURE.md#disaster-recovery-local-mode-new-machine)) |
 | `.env`, credentials, API keys | Security risk | `.env` locally (gitignored); env vars in deploys |
 | Audio/video files | Not what git is for | Vault in iCloud is the canonical store |
 | `frontend/dist/`, `__pycache__/`, `.DS_Store` | Build/OS noise | Already in `.gitignore` |
@@ -106,7 +135,7 @@ The React frontend (`frontend/src/`) and FastAPI backend (`backend/app/`) commun
 
 ### The vault is canonical
 
-Audio/video files live in the iCloud vault as flat `{identifier}.{ext}` files. The DB path is just the filename. **Never** write code that infers file location from song metadata (project, title, artist) — resolution goes through `backend/app/services/vault.py`. See [STORAGE.md](STORAGE.md).
+Audio/video files live in the iCloud vault (local mode) or R2 (cloud) as flat `{identifier}.{ext}` files. The DB path is just the filename. **Never** write code that infers file location from song metadata (project, title, artist) — resolution goes through `backend/app/services/vault.py`. See [ARCHITECTURE.md](ARCHITECTURE.md#5-storage-layout).
 
 ### The DB is the source of truth for metadata
 

@@ -37,7 +37,7 @@ Given a PR number, perform a two-phase review.
    - Dead code: new functions with zero callers (grep across `backend/` and `frontend/`)
    - Scope creep: changes in files unrelated to the PR's stated purpose
    - Build artifacts or debug files committed (`node_modules/`, `dist/`, `__pycache__/`, `*.db`, `.env`)
-   - Audio/video files checked into git (should be in the iCloud vault; see `docs/STORAGE.md`)
+   - Audio/video files checked into git (should be in the iCloud vault; see `docs/ARCHITECTURE.md`)
 
    **Agent 4 — Maintainability:**
    - Unclear variable names or logic
