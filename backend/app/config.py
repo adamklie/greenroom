@@ -34,13 +34,30 @@ class Settings(BaseSettings):
     # "r2" is a stub for future Cloudflare R2 hosting (not yet wired).
     media_backend: Literal["local", "r2"] = "local"
 
-    # Placeholders for the future R2 (S3-compatible) backend. Unused while
-    # media_backend == "local". Populated from env vars when cloud hosting
-    # is enabled in a later phase.
-    r2_account_id: str = ""
-    r2_access_key_id: str = ""
-    r2_secret_access_key: str = ""
-    r2_bucket: str = ""
+    # R2 (S3-compatible) backend config. Unused while media_backend == "local".
+    # Populated from env vars when cloud hosting is enabled.
+    r2_account_id: str = ""           # GREENROOM_R2_ACCOUNT_ID
+    r2_access_key_id: str = ""        # GREENROOM_R2_ACCESS_KEY_ID
+    r2_secret_access_key: str = ""    # GREENROOM_R2_SECRET_ACCESS_KEY
+    r2_bucket: str = ""               # GREENROOM_R2_BUCKET (media bucket)
+    # Full endpoint URL with scheme (e.g. https://<account>.r2.cloudflarestorage.com).
+    r2_endpoint_url: str = ""         # GREENROOM_R2_ENDPOINT_URL
+    # Separate bucket for Litestream DB replicas. Kept apart so a media-only
+    # API token can be issued for bulk-upload scripts without DB access.
+    r2_db_backup_bucket: str = ""     # GREENROOM_R2_DB_BACKUP_BUCKET
+    # TTL for presigned media URLs handed to the browser. Default 1 hour —
+    # long enough to play a track without spamming the signing endpoint,
+    # short enough that a leaked URL expires quickly.
+    r2_presign_ttl_seconds: int = 3600  # GREENROOM_R2_PRESIGN_TTL_SECONDS
+
+    # --- Email (Phase 3d) ---
+    # Resend API key. Empty disables real sends — ResendEmailer falls back
+    # to printing the magic link to stdout (same behavior as StubEmailer).
+    resend_api_key: str = ""          # GREENROOM_RESEND_API_KEY
+    # The `from` header for outbound mail. Defaults to the Resend sandbox
+    # sender so the deploy works out-of-the-box without a verified domain;
+    # override per-deploy once a custom domain is verified in Resend.
+    resend_from_email: str = "Greenroom <onboarding@resend.dev>"  # GREENROOM_RESEND_FROM_EMAIL
 
     # --- Auth (Phase 3a) ---
     # Master switch. When False (default), all role-guarded routes return a
