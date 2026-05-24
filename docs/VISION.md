@@ -67,11 +67,13 @@ The following lived in earlier iterations but were cut as out-of-scope for "song
 
 ## Related Docs
 
-- [ROADMAP.md](ROADMAP.md) — built, in-progress, and planned features
+- [ARCHITECTURE.md](ARCHITECTURE.md) — system map, request flows, boot sequence
+- [USER_GUIDE.md](USER_GUIDE.md) — what each page does, workflows, backups
+- [DEMO_SCRIPT.md](DEMO_SCRIPT.md) — 10-min walkthrough for new users
+- [DEPLOYMENT.md](DEPLOYMENT.md) — Fly + R2 + Resend setup
 - [SCHEMAS.md](SCHEMAS.md) — DB schema, status flows, annotation system
 - [STORAGE.md](STORAGE.md) — filesystem layout and backups
 - [DATA_INGESTION.md](DATA_INGESTION.md) — how data sources enter the system
-- [AUDIOFILE_UNIFICATION.md](AUDIOFILE_UNIFICATION.md) — unified audio file model
-- [ANALYTICS.md](ANALYTICS.md) — metrics and analytics endpoints
+- [AUDIOFILE_UNIFICATION.md](AUDIOFILE_UNIFICATION.md) — Take → AudioFile refactor (Phase 4 open)
 - [../README.md](../README.md) — tech stack and setup
 - [../REMOVED.md](../REMOVED.md) — features cut during simplification

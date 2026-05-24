@@ -1,139 +1,144 @@
 # Greenroom
 
-A song record-keeping tool for working musicians. Organize covers, originals, and ideas; attach recordings and Guitar Pro tabs to each song; rate practice takes; keep everything findable.
+A private app for tracking your band's songs, recordings, and practice sessions. Think of it as a digital songbook + recording library + practice diary.
 
-## Features
+**Production:** <https://greenroom-1.fly.dev> (magic-link sign-in)
+**Code:** this repo. Deployed on Fly.io (LAX) with Cloudflare R2 for media storage.
 
-- **Dashboard** — Songs by type/status/project, recent activity, focus songs, data-protection actions
-- **Songs (Covers / Originals / Ideas)** — Searchable catalog with status tracking (idea → rehearsed → polished → recorded → released), key/tempo/tuning, lyrics with version history, tags
-- **Library** — Every audio file in one place; inline rating, song linking, trimming
-- **Sessions** — Practice sessions and their takes, browsable by date, rateable in-browser
-- **Setlists** — Build setlists per gig configuration; reorder; per-item duration totals
-- **Tabs** — Upload Guitar Pro files (`.gp`, `.gp3`–`.gp7`, `.gpx`) and play them inline via alphaTab
-- **Progress** — Practice frequency, rating trends, skill radar, status funnel
-- **Triage** — Auto-detect new files on disk and classify them into the catalog
-- **Import** — Drag-drop new audio/video; auto-extracts audio from video uploads
-- **Sync** — One-button "After Practice" / "Weekly" snapshots of annotations + DB to the iCloud vault
-- **Process** — Cut a long video (GoPro practice, etc.) into per-song clips
+## What you can do
+
+- **Library** — Every audio/video clip in one searchable place. Filter by source, role, song. Inline playback streams from cloud storage with full scrub support.
+- **Songs (Covers / Originals / Ideas)** — Status-tracked catalog with versioned lyrics, key/tempo/tuning, tags.
+- **Sessions** — Practice sessions grouped by date. Each session expands into its takes, rateable across 7 dimensions (overall, vocals, guitar, drums, tone, timing, energy).
+- **Setlists** — Build ordered song collections for performances.
+- **Process** — Cut a long practice video into per-song clips (local dev only — see DEPLOYMENT).
+- **Tabs** — Upload Guitar Pro files (`.gp`–`.gp7`) and play them inline via alphaTab.
+- **Progress** — Practice frequency, rating trends, skill radar, status funnel.
+- **Settings → Export JSON** — Download every annotation as a portable JSON file.
 
 ## Tech Stack
 
 - **Frontend:** React + TypeScript + Vite + Tailwind CSS
 - **Backend:** FastAPI + SQLAlchemy + SQLite
-- **Media:** HTTP `Range`-aware streaming for audio/video scrubbing
+- **Storage:** Cloudflare R2 (media) + Fly volume (SQLite, replicated to R2 via Litestream)
+- **Auth:** Magic-link with JWT cookies. Three roles: viewer / editor / admin
+- **Email:** Resend (transactional)
+- **Hosting:** Fly.io, single container, ~$5–7/month total
 
-## Quick Start
+## Docs
+
+| Doc | What's in it |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System map, request flow walkthroughs, boot sequence, code layout |
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | What each page does, common workflows, backups, roles |
+| [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | 10-min walkthrough for showing the app to a new user |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Fly + R2 + Resend setup, secrets, runbook |
+| [docs/AUDIOFILE_UNIFICATION.md](docs/AUDIOFILE_UNIFICATION.md) | Ongoing refactor: Take → AudioFile |
+| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Dev workflow conventions |
+| [docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md) | Branching, commit style, CI |
+| [REMOVED.md](REMOVED.md) | Features cut during simplification (Triage, Sync, Discover, Recommendations, Apple Music ingest) and why |
+
+## Quick Start — Local Dev
 
 ### Prerequisites
 
 - Python 3.11+
 - Node.js 18+
-
-### Recommended layout
-
-- Repo (code + live DB): `~/code/greenroom` — **not in iCloud**, backed up via GitHub
-- Vault (audio/video files, DB backups, annotation exports): `~/Library/Mobile Documents/com~apple~CloudDocs/greenroom/` — auto-created on first run, iCloud-synced
-
-See [docs/STORAGE.md](docs/STORAGE.md) for the full picture.
+- ffmpeg (for trim / extract-audio)
 
 ### Setup
 
 ```bash
-# Clone to ~/code/greenroom (outside iCloud)
 git clone https://github.com/adamklie/greenroom ~/code/greenroom
 cd ~/code/greenroom
 
-# Install backend dependencies
-cd backend && pip install -e ".[dev]"
+# Backend deps
+cd backend && pip install -e ".[dev]" && cd ..
 
-# Install frontend dependencies
-cd ../frontend && npm install
+# Frontend deps
+cd frontend && npm install && cd ..
+
+# Bootstrap from local vault (audio + practice sessions)
+make bootstrap
 ```
 
 ### Run
 
 ```bash
-# Terminal 1: Backend API
-make backend
-
-# Terminal 2: Frontend dev server
-make frontend
+make dev   # runs backend + frontend concurrently
 ```
 
-Open **http://localhost:5173**
+Then open **<http://localhost:5173>**.
 
-### Configuration
+In local dev, `AUTH_REQUIRED=false` by default — no login screen. Set `GREENROOM_AUTH_REQUIRED=true` to test the magic-link flow locally.
+
+### Config
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `GREENROOM_VAULT_DIR` | `~/Library/Mobile Documents/com~apple~CloudDocs/greenroom` | iCloud vault root |
-| `GREENROOM_MUSIC_DIR` | parent of repo | Legacy source-file resolution (used while migrating to the vault) |
-| `GREENROOM_DB_PATH` | `<repo>/greenroom.db` | Live DB |
+| `GREENROOM_DB_PATH` | `<repo>/greenroom.db` | SQLite location |
+| `GREENROOM_VAULT_DIR` | `~/Library/Mobile Documents/com~apple~CloudDocs/greenroom` | Local vault for audio/video |
+| `GREENROOM_MEDIA_BACKEND` | `local` | `local` for filesystem, `r2` for Cloudflare R2 |
+| `GREENROOM_AUTH_REQUIRED` | `false` | Toggle magic-link auth in dev |
+| `GREENROOM_AUTH_SECRET` | (must set in prod) | JWT signing secret |
+| `GREENROOM_PUBLIC_URL` | `http://localhost:5173` | Base URL for magic links |
 
-Set these in a `.env` file at the repo root or export them before running.
+Production env vars live in `fly secrets` — see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
-## How It Works
-
-Files you drag into Greenroom (from `~/Downloads`, phone exports, etc.) are copied into the vault as `{identifier}.{ext}` — a flat directory where every file is named by its DB identifier (e.g. `AF12AB34CD.m4a`). Path resolution goes through `backend/app/services/vault.py`; no code infers location from song metadata. The DB carries the annotations (ratings, tags, lyrics, notes); the vault carries the bytes plus rolling DB backups. See [docs/STORAGE.md](docs/STORAGE.md).
-
-## Project Structure
+## Project Layout
 
 ```
-greenroom/
-├── backend/
-│   ├── app/
-│   │   ├── main.py          # FastAPI app
-│   │   ├── config.py        # Settings (vault dir, music dir, DB path)
-│   │   ├── database.py      # SQLAlchemy setup
-│   │   ├── models/          # ORM models (Song, PracticeSession, Take, AudioFile, ...)
-│   │   ├── schemas/         # Pydantic request/response schemas
-│   │   ├── routers/         # API route handlers
-│   │   └── services/        # Vault, file_manager, bootstrap, autosync, backup, ...
-│   └── pyproject.toml
-├── frontend/
-│   ├── src/
-│   │   ├── App.tsx          # Shell with sidebar navigation
-│   │   ├── api/client.ts    # Typed API client
-│   │   └── pages/           # Dashboard, Songs, Sessions, Library, Setlists, ...
-│   └── package.json
-├── scripts/                 # One-off maintenance scripts
-├── docs/                    # VISION, STORAGE, CONTRIBUTING, ROADMAP, ...
-├── REMOVED.md               # Features cut during simplification
-├── Makefile
-└── README.md
+backend/app/
+  main.py           # FastAPI app + route registration + lifespan
+  routers/          # API handlers (one file per resource)
+  models/           # SQLAlchemy ORM
+  services/
+    vault.py        # Storage abstraction (LocalVaultBackend + CloudVaultBackend)
+    backup.py       # DB backups + JSON export
+    autosync.py     # File reorganization (local-only)
+  auth/             # Magic-link + JWT + role gating
+  alembic/          # Schema migrations
+backend/scripts/    # CLI utilities (create_admin, bootstrap, ...)
+backend/tests/      # pytest suite (55 tests at last commit)
+
+frontend/src/
+  pages/            # Top-level SPA pages (one per sidebar item)
+  api/client.ts     # Typed API client
+  components/       # Shared UI
+
+infra/
+  entrypoint.sh     # Container boot script (litestream restore + replicate + uvicorn)
+  litestream.yml    # WAL → R2 replication config
+
+Dockerfile          # Two-stage: node frontend build, python runtime
+docker-compose.yml  # Local container parity
+fly.toml            # Fly app config
+Makefile            # Common targets: dev, test, lint, bootstrap, deploy
+docs/               # Architecture, user guide, deployment, demo script
 ```
 
-## API
+## Key API endpoints
 
-The backend exposes a REST API at `http://localhost:8000/api`:
+The backend exposes a REST API. All routes require auth in prod (viewer+ for reads, editor+ for writes).
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/health` | Liveness check |
-| `GET /api/dashboard` | Stats, recent songs / audio files / sessions |
-| `GET /api/songs` | Song list (filterable by type, project, status, tag, search) |
-| `GET /api/songs/{id}` | Song detail with takes, audio files, lyrics versions |
-| `POST /api/songs` / `PATCH /api/songs/{id}` / `DELETE /api/songs/{id}` | Song CRUD (soft-delete) |
-| `PUT /api/songs/{id}/lyrics` | Versioned lyrics update |
-| `POST /api/songs/{id}/promote` | Promote an idea into an original |
-| `GET /api/audio-files` / `PATCH /api/audio-files/{id}` | Library CRUD |
-| `POST /api/audio-files/{id}/trim` | Trim a region into a new audio file |
-| `GET /api/sessions` / `GET /api/sessions/{id}` | Practice sessions |
-| `PATCH /api/sessions/takes/{id}` | Rate a take or add notes |
-| `GET /api/setlists` / CRUD | Setlists |
-| `GET /api/tabs` / CRUD | Guitar Pro tab attachments |
-| `GET /api/triage` / `PATCH /api/triage/{id}` | Inbox of unclassified files |
-| `POST /api/upload` | Drag-drop ingest into the vault |
-| `GET /api/media/audio/{id}` | Range-aware audio stream |
-| `GET /api/media/take/{id}/audio` | Range-aware take audio stream |
-| `POST /api/sync/after-practice` / `POST /api/sync/weekly` | One-button snapshot |
-| `POST /api/backup/create` / `POST /api/backup/restore/{file}` | DB backup + restore |
-| `GET /api/analytics/*` | Practice frequency, rating trends, skill radar, status funnel |
-| `POST /api/gopro/analyze` / `POST /api/gopro/process` | Video-to-clip pipeline |
-| `GET /api/options` / CRUD | Dropdown options (sources, roles, projects, tunings) |
-| `GET /api/tags` / CRUD | Tags across songs / takes / audio files |
-| `GET /api/trash` / restore | Soft-deleted song cleanup |
-| `POST /api/feedback` | In-app feedback (files a GitHub issue) |
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/health` | Liveness check (unauthenticated) |
+| `POST /api/auth/request` | Send magic-link email |
+| `GET /api/auth/exchange?token=…` | Exchange magic token for JWT cookie |
+| `GET /api/dashboard` | Stats + recent additions |
+| `GET /api/songs` / `PATCH /api/songs/{id}` | Song CRUD with status / lyrics / tags |
+| `GET /api/audio-files` / `PATCH /api/audio-files/{id}` | Library CRUD + rating |
+| `GET /api/sessions` / `GET /api/sessions/{id}` | Practice sessions + their audio |
+| `GET /api/setlists` | Setlist CRUD |
+| `GET /api/tabs` | Guitar Pro attachments |
+| `GET /api/media/audio/{id}` | 307 redirect to presigned R2 URL (cloud) or Range stream (local) |
+| `POST /api/upload` | Drag-drop ingest into vault |
+| `POST /api/backup/create` | Create DB snapshot |
+| `GET /api/backup/export-download` | Stream all annotations as JSON |
+| `GET /api/analytics/*` | Practice frequency, rating trends |
+
+Full API surface: see `backend/app/routers/`.
 
 ## License
 

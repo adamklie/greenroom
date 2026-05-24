@@ -70,10 +70,12 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 Authoritative references for this repo. Read the relevant one before making non-trivial changes in its area.
 
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system map, request flow walkthroughs, boot sequence
+- [docs/USER_GUIDE.md](docs/USER_GUIDE.md) — what each page does, workflows, backups
+- [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) — 10-min walkthrough for showing the app
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Fly + R2 + Resend setup runbook
 - [docs/VISION.md](docs/VISION.md) — product goals, scope, target user
-- [docs/ROADMAP.md](docs/ROADMAP.md) — built, in-progress, and planned features
 - [docs/SCHEMAS.md](docs/SCHEMAS.md) — DB schema, SQLAlchemy models, API shapes
 - [docs/STORAGE.md](docs/STORAGE.md) — filesystem layout, backups, exports
 - [docs/DATA_INGESTION.md](docs/DATA_INGESTION.md) — ingestion scripts and data flow
-- [docs/AUDIOFILE_UNIFICATION.md](docs/AUDIOFILE_UNIFICATION.md) — unified audio file model
-- [docs/ANALYTICS.md](docs/ANALYTICS.md) — analytics endpoints and metrics
+- [docs/AUDIOFILE_UNIFICATION.md](docs/AUDIOFILE_UNIFICATION.md) — Take → AudioFile refactor

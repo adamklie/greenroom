@@ -267,8 +267,8 @@ backend/app/services/           — vault (storage backends), email, file_manage
 backend/app/auth/               — magic-link issue/exchange (router.py), JWT (jwt.py), role gating (deps.py)
 backend/app/schemas/            — Pydantic request/response models
 backend/alembic/versions/       — schema migrations (two so far: baseline + users/magic_tokens)
-backend/scripts/                — CLI utilities: create_admin, backfill_audio_files_from_takes, ingest_early_days, stamp_baseline, benchmark
-backend/tests/                  — pytest suite (33 tests across auth, vault, media redirect, integration, smoke)
+backend/scripts/                — CLI utilities: create_admin, stamp_baseline, migrate_to_vault, drop_simplified_tables, restore_song_annotations, bootstrap, benchmark
+backend/tests/                  — pytest suite (55 tests across auth, vault, media redirect, integration, smoke, cloud-mode safety)
 frontend/src/App.tsx            — sidebar shell, route table, login gate
 frontend/src/pages/             — top-level pages: Dashboard, Library, Songs, Sessions, Progress, ProcessSession, SetlistBuilder, Import, Feedback, Schemas, Settings
 frontend/src/api/client.ts      — typed fetch client used by every page

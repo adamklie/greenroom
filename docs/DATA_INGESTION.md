@@ -19,7 +19,6 @@ Every piece of music data follows one of these paths from **source → filesyste
 | 5 | Sural (collaborator) | Produced tracks (m4a/mp3) | `Sural/{SONGNAME}/` | Ad hoc |
 | 6 | Joe (collaborator) | Demo recordings (m4a/mp3) | `Joe/` | Inactive |
 | 7 | Downloaded backing tracks | MP3/MP4 from YouTube etc. | `Backing Tracks/` | Ad hoc |
-| 8 | Manual markdown edits | Song metadata, roadmap tasks | `REPERTOIRE.md`, `ROADMAP.md` | As needed |
 
 ---
 
@@ -133,20 +132,6 @@ YYYY-M-D/
 4. Hit "Rescan Files"
 ```
 
-### Path 7: Manual Metadata → REPERTOIRE.md / ROADMAP.md
-
-```
-1. Edit REPERTOIRE.md to add/update songs
-2. Edit ROADMAP.md to add/update career tasks
-3. Hit "Rescan Files" (re-parses markdown into database)
-```
-
-**Or:** Edit directly in Greenroom UI (status changes, ratings, roadmap toggles persist to database without needing markdown edits).
-
-**Note:** The database is the working copy. REPERTOIRE.md is the bootstrap source. If you edit a song's status in the UI, it won't be written back to REPERTOIRE.md — it lives in the database.
-
----
-
 ## Known Gaps (To Fix)
 
 ### Critical
@@ -198,7 +183,7 @@ Run `make bootstrap` and check output matches expectations. Investigate any drop
 | .MP4 | Video (GoPro) | No | Raw GoPro files, not directly scanned |
 | .band | GarageBand project | Excluded | Requires manual export |
 | .logicx | Logic Pro project | N/A | Not present on disk |
-| .md | Markdown | Yes | REPERTOIRE.md, ROADMAP.md parsed |
+| .md | Markdown | No | Markdown bootstrap was removed during simplify-v2; edit metadata in the UI instead |
 
 ---
 

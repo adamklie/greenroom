@@ -5,8 +5,8 @@
 ## Before you start
 
 1. Read [VISION.md](VISION.md) — what Greenroom is, who it's for, the three pillars
-2. Read [STORAGE.md](STORAGE.md) — how files + DB + backups are laid out
-3. Skim [ROADMAP.md](ROADMAP.md) — what's built and what's next
+2. Read [ARCHITECTURE.md](ARCHITECTURE.md) — system map, request flows, boot sequence
+3. Read [STORAGE.md](STORAGE.md) — how files + DB + backups are laid out
 
 ---
 

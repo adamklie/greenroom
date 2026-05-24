@@ -1,9 +1,11 @@
 # AudioFile Unification Plan
 
+> **Status (2026-05-24):** Phases 1–3 effectively complete. Phase 4 (drop Take table) is pending. Take model still has ~8 references in router/service code that will be cleaned up alongside the table drop. The Library, Sessions, and media endpoints all read from `AudioFile` now; only legacy `models/take.py` and its importers remain.
+
 ## Goal
 Treat every practice-session clip as a first-class `AudioFile`. Sessions become groupings of audio files (like setlists group songs), and the Library tab lists all audio sortable by `recorded_at`.
 
-## Current state
+## Current state (historical — kept for context on the original migration)
 - `AudioFile` (models/audio_file.py) already has `session_id`, `clip_name`, `source_video`, `start_time`, `end_time`, `video_path`, `recorded_at`, and full ratings — explicitly designed as the unified table.
 - `Take` (models/take.py) is the legacy parallel table. `gopro_processor.process_session` still writes `Take` rows, so Process output never lands in the Library.
 - `migrate_takes.py` service exists — partial backfill already drafted.
