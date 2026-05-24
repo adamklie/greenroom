@@ -1,8 +1,7 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { api, type RecentSong, type RecentAudioFile, type RecentSession } from "../api/client";
-import { Music, Radio, Star, Disc3, PenTool, Lightbulb, FolderInput, Shield, Download, Hash, Wrench, Target, ArrowRight, Clock, FileAudio, CalendarDays } from "lucide-react";
+import { Music, Radio, Star, Disc3, PenTool, Lightbulb, Target, ArrowRight, Clock, FileAudio, CalendarDays } from "lucide-react";
 
 function StatCard({ label, value, icon: Icon, color }: {
   label: string; value: number | string; icon: React.ElementType; color: string;
@@ -14,124 +13,6 @@ function StatCard({ label, value, icon: Icon, color }: {
         <Icon size={18} style={{ color }} />
       </div>
       <div className="text-3xl font-bold">{value}</div>
-    </div>
-  );
-}
-
-function DataProtectionCard() {
-  const [checked, setChecked] = useState(false);
-  const { data: health, refetch } = useQuery({
-    queryKey: ["file-health"],
-    queryFn: api.files.healthCheck,
-    enabled: checked,
-  });
-
-  const { data: backupList } = useQuery({
-    queryKey: ["backups"],
-    queryFn: api.backup.list,
-  });
-
-  const backupMut = useMutation({ mutationFn: api.backup.create });
-  const hashMut = useMutation({ mutationFn: api.backup.hashFiles });
-  const healMut = useMutation({ mutationFn: api.backup.autoHeal });
-  const exportMut = useMutation({ mutationFn: api.backup.export });
-  const consolidateMut = useMutation({ mutationFn: api.files.consolidateAll });
-
-  const latestBackup = backupList?.backups?.[0];
-
-  return (
-    <div className="rounded-xl p-5 border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
-      <h3 className="font-semibold mb-4 flex items-center gap-2">
-        <Shield size={18} style={{ color: "var(--green)" }} />
-        Data Protection
-      </h3>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        {/* Backup */}
-        <button onClick={() => backupMut.mutate()}
-          disabled={backupMut.isPending}
-          className="p-3 rounded-lg border text-left hover:opacity-80 transition-opacity"
-          style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
-          <Download size={16} className="mb-1" style={{ color: "var(--accent)" }} />
-          <div className="text-sm font-medium">{backupMut.isPending ? "Backing up..." : "Backup DB"}</div>
-          <div className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-            {latestBackup ? `Last: ${latestBackup.created.split("T")[0]}` : "No backups yet"}
-          </div>
-          {backupMut.data && <div className="text-xs mt-1" style={{ color: "var(--green)" }}>Saved!</div>}
-        </button>
-
-        {/* Hash files */}
-        <button onClick={() => hashMut.mutate()}
-          disabled={hashMut.isPending}
-          className="p-3 rounded-lg border text-left hover:opacity-80 transition-opacity"
-          style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
-          <Hash size={16} className="mb-1" style={{ color: "var(--blue)" }} />
-          <div className="text-sm font-medium">{hashMut.isPending ? "Hashing..." : "Hash Files"}</div>
-          <div className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Fingerprint files for auto-heal</div>
-          {hashMut.data && (
-            <div className="text-xs mt-1" style={{ color: "var(--green)" }}>
-              {hashMut.data.newly_hashed} new, {hashMut.data.already_hashed} cached
-            </div>
-          )}
-        </button>
-
-        {/* Health check + auto-heal */}
-        <button onClick={() => { if (!checked) setChecked(true); else { refetch(); healMut.mutate(); } }}
-          disabled={healMut.isPending}
-          className="p-3 rounded-lg border text-left hover:opacity-80 transition-opacity"
-          style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
-          <Wrench size={16} className="mb-1" style={{ color: "var(--yellow)" }} />
-          <div className="text-sm font-medium">{healMut.isPending ? "Healing..." : "Check & Heal"}</div>
-          <div className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-            {health ? `${health.total_broken} broken` : "Find & fix broken paths"}
-          </div>
-          {healMut.data && (
-            <div className="text-xs mt-1" style={{ color: "var(--green)" }}>
-              {healMut.data.healed} healed, {healMut.data.unresolvable} unresolvable
-            </div>
-          )}
-        </button>
-
-        {/* Export */}
-        <button onClick={() => exportMut.mutate()}
-          disabled={exportMut.isPending}
-          className="p-3 rounded-lg border text-left hover:opacity-80 transition-opacity"
-          style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
-          <FolderInput size={16} className="mb-1" style={{ color: "var(--accent)" }} />
-          <div className="text-sm font-medium">{exportMut.isPending ? "Exporting..." : "Export JSON"}</div>
-          <div className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Save all annotations</div>
-          {exportMut.data && (
-            <div className="text-xs mt-1" style={{ color: "var(--green)" }}>
-              {exportMut.data.songs} songs, {exportMut.data.takes} takes
-            </div>
-          )}
-        </button>
-      </div>
-
-      {/* Consolidate */}
-      <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: "var(--bg)" }}>
-        <div>
-          <div className="text-sm font-medium">Consolidate scattered files</div>
-          <div className="text-xs" style={{ color: "var(--text-muted)" }}>Move files from ~/Music, ~/Desktop into your organized directory</div>
-        </div>
-        <button onClick={() => consolidateMut.mutate()} disabled={consolidateMut.isPending}
-          className="px-3 py-1.5 rounded text-sm font-medium text-white disabled:opacity-50"
-          style={{ background: "var(--accent)" }}>
-          {consolidateMut.isPending ? "Moving..." : "Consolidate"}
-        </button>
-      </div>
-      {consolidateMut.data && (
-        <div className="mt-2 text-xs" style={{ color: "var(--green)" }}>
-          Moved {consolidateMut.data.moved} files ({consolidateMut.data.errors.length} errors)
-        </div>
-      )}
-
-      {/* How it works */}
-      <div className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
-        <strong>How protection works:</strong> DB is auto-backed up every time the app starts (last {backupList?.backups?.length || 0} backups kept).
-        Hash Files fingerprints each audio file so if you move it, Check & Heal can find it again by content.
-        Export JSON saves all your annotations (ratings, lyrics, tags) as a portable file.
-      </div>
     </div>
   );
 }
@@ -268,11 +149,6 @@ export default function Dashboard() {
           </div>
           <div className="text-3xl font-bold">{stats.songs_by_type["idea"] || 0}</div>
         </div>
-      </div>
-
-      {/* Data Protection */}
-      <div className="mb-8">
-        <DataProtectionCard />
       </div>
 
       {/* Songs by status */}

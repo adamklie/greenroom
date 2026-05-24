@@ -1,6 +1,10 @@
 """Backup & data protection API."""
 
+import json
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.auth.deps import require_editor, require_viewer
@@ -56,9 +60,27 @@ def heal(db: Session = Depends(get_db), _user=Depends(require_editor)):
 
 @router.post("/export")
 def export(db: Session = Depends(get_db), _user=Depends(require_editor)):
-    """Export all annotations as JSON."""
+    """Export all annotations as JSON (writes a server-side file and returns metadata)."""
     result = export_annotations(db)
     return {"ok": True, "path": result["path"],
             "songs": len(result["data"]["songs"]),
             "takes": len(result["data"]["takes"]),
             "setlists": len(result["data"]["setlists"])}
+
+
+@router.get("/export-download")
+def export_download(db: Session = Depends(get_db), _user=Depends(require_editor)):
+    """Stream all annotations as a downloadable JSON attachment.
+
+    The POST /export sibling writes to the server's vault dir; this one
+    streams directly to the browser so editors can grab a portable copy
+    without an SSH session.
+    """
+    result = export_annotations(db)
+    content = json.dumps(result["data"], indent=2, default=str)
+    filename = f"greenroom-export-{datetime.utcnow().strftime('%Y-%m-%d')}.json"
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
