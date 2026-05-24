@@ -13,7 +13,11 @@ export function BackendHealthBanner() {
       const slowTimer = setTimeout(() => !cancelled && setState("slow"), 3000);
       const hardTimer = setTimeout(() => ctrl.abort(), 8000);
       try {
-        const r = await fetch("/api/dashboard", { signal: ctrl.signal });
+        // /api/health is intentionally unauthenticated so this banner
+        // probe doesn't flash red on the login screen for unsigned-in
+        // visitors (which is what /api/dashboard would do post-Phase-3a
+        // when auth gating was added).
+        const r = await fetch("/api/health", { signal: ctrl.signal });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         if (!cancelled) { setState("ok"); setLastError(""); }
       } catch (err) {
