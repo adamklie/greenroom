@@ -49,7 +49,7 @@ function AudioFileRating({ af }: { af: AudioFile }) {
           {RATING_DIMENSIONS.slice(1).map(({ key, label }) => (
             <div key={key} className="flex items-center gap-2">
               <span className="text-xs w-12" style={{ color: "var(--text-muted)" }}>{label}</span>
-              <StarRating value={(af as Record<string, unknown>)[key] as number | null}
+              <StarRating value={(af as unknown as Record<string, unknown>)[key] as number | null}
                 onChange={(r) => mutation.mutate({ [key]: r })} size={12} />
             </div>
           ))}
@@ -151,9 +151,19 @@ function BestTakes() {
       )}
       <div className="space-y-3">
         {takes.map((t) => (
-          <div key={t.id} className="flex items-center gap-4">
+          <div key={t.id} className="flex items-center gap-4 rounded-lg p-3 border"
+            style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
             <span className="text-sm w-24 flex-shrink-0" style={{ color: "var(--text-muted)" }}>{t.session_date}</span>
-            <div className="flex-1"><TakeCard take={t} /></div>
+            <div className="flex-1">
+              <div className="font-medium">{t.clip_name}</div>
+              {t.song_title && (
+                <div className="text-xs" style={{ color: "var(--text-muted)" }}>{t.song_title}</div>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <Star size={12} style={{ color: "var(--yellow)" }} />
+              <span className="text-sm">{t.rating_overall?.toFixed(1) ?? "—"}</span>
+            </div>
           </div>
         ))}
       </div>
