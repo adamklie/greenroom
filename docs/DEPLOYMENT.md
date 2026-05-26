@@ -362,6 +362,35 @@ The script uses a single R2 `list_objects_v2` call (not per-row HEADs), so it fi
 
 ---
 
+## R2 CORS — required for direct browser → R2 multipart uploads
+
+The Process page uploads large GoPro videos straight from the browser to R2 using presigned multipart PUT URLs (saves the laptop→Fly→R2 double-hop). For that to work, R2 must allow PUTs from the app origin and must expose the `ETag` response header to JS — both are CORS settings.
+
+This is a Cloudflare dashboard config, not an env var. Apply it once per bucket:
+
+1. Cloudflare dashboard → R2 → `greenroom-1-media` → **Settings** → **CORS Policy** → **Add Policy**
+2. Paste:
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://greenroom-1.fly.dev", "http://localhost:5173"],
+    "AllowedMethods": ["PUT", "POST", "GET", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+3. Save. Takes effect within ~1 minute.
+
+Without `ExposeHeaders: ["ETag"]` the browser strips ETag from the PUT response and the upload state machine errors out with `no ETag in R2 response`. Without `AllowedOrigins` matching the page origin the browser blocks the PUT before it even reaches R2.
+
+The legacy single-shot `/api/gopro/upload-raw` endpoint doesn't need CORS — it streams through Fly first.
+
+---
+
 ## Troubleshooting
 
 **Image build fails with `ModuleNotFoundError: app` inside the container** — Dockerfile must `COPY backend/` **before** `pip install -e ./backend`. Installing first against just `pyproject.toml` leaves an empty package (setuptools `packages.find` ran when `app/` didn't exist yet).
@@ -385,6 +414,10 @@ The script uses a single R2 `list_objects_v2` call (not per-row HEADs), so it fi
 **SPA serves but `/api/*` returns 404** — static mount happens AFTER router registration in `main.py`. If a `/` mount lands first, it shadows everything.
 
 **Hard refresh on `/sessions` (or any SPA route) returns 404** — the StaticFiles mount needs `html=True` so unknown paths fall back to `index.html`.
+
+**Process page video upload fails with "no ETag in R2 response (check bucket CORS config)"** — the R2 bucket is missing `ExposeHeaders: ["ETag"]` (or CORS isn't configured at all). See "R2 CORS" above for the JSON policy.
+
+**Process page video upload fails with `CORS policy: No 'Access-Control-Allow-Origin' header`** — bucket CORS doesn't list the page origin. Add `https://greenroom-1.fly.dev` (and `http://localhost:5173` for dev) to `AllowedOrigins`. See "R2 CORS" above.
 
 ---
 
