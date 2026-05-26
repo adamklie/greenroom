@@ -78,12 +78,36 @@ def health():
     return {"status": "ok", "app": "greenroom", "version": "0.2.0"}
 
 
-# Serve the built React SPA from `/` when a static directory is configured.
-# Mounted last so every `/api/*` route above takes priority. `html=True`
-# makes unknown sub-paths (e.g. /sessions, /library) fall back to index.html
-# so client-side routing works on hard refresh. When `static_dir` is empty
-# or missing (local dev where Vite serves the frontend separately), we skip
-# the mount entirely.
+# Serve the built React SPA when a static directory is configured.
+#
+# StaticFiles(html=True) only handles directory-style requests — it does NOT
+# fall back to index.html for arbitrary SPA paths like /library or /sessions.
+# So we use a two-piece setup:
+#   1. /assets/* mount serves the hashed Vite bundle directly (correct MIME
+#      types, conditional GETs, all that)
+#   2. A catch-all GET serves real files in static_dir if they exist
+#      (favicon.ico, robots.txt, etc.), otherwise returns index.html so
+#      client-side routing takes over.
+#
+# Registration order matters: every /api/* router above is registered before
+# this catch-all, so API routes take priority. The catch-all is only reached
+# for paths the API didn't claim.
 _static_dir = settings.static_dir
 if _static_dir and os.path.isdir(_static_dir):
-    app.mount("/", StaticFiles(directory=_static_dir, html=True), name="static")
+    from fastapi.responses import FileResponse
+    from fastapi import HTTPException
+
+    _assets_dir = os.path.join(_static_dir, "assets")
+    if os.path.isdir(_assets_dir):
+        app.mount("/assets", StaticFiles(directory=_assets_dir), name="assets")
+
+    @app.get("/{full_path:path}")
+    def spa_catchall(full_path: str):
+        """Serve a real file if it exists in static_dir, otherwise the SPA shell."""
+        # Don't intercept /api or /assets (those are handled above)
+        if full_path.startswith("api/") or full_path.startswith("assets/"):
+            raise HTTPException(404)
+        candidate = os.path.join(_static_dir, full_path)
+        if full_path and os.path.isfile(candidate):
+            return FileResponse(candidate)
+        return FileResponse(os.path.join(_static_dir, "index.html"))
