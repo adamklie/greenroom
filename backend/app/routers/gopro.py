@@ -1,5 +1,6 @@
 """GoPro session workflow API — analyze videos, process clips."""
 
+import math
 import re
 import shutil
 import tempfile
@@ -22,6 +23,13 @@ from app.services.gopro_processor import (
 from app.services.vault import CLOUD_UNSUPPORTED_MESSAGE, get_backend, is_cloud_backend
 
 router = APIRouter(prefix="/api/gopro", tags=["gopro"])
+
+# R2/S3 multipart-upload constraints. Hard ceiling of 10,000 parts per object —
+# pick a default part size that comfortably fits the largest files we expect
+# (GoPro 4K/5.3K practice videos are 5-50 GB), and only grow it when needed.
+_DEFAULT_PART_SIZE_BYTES = 8 * 1024 * 1024   # 8 MiB
+_MAX_PARTS = 10000
+_MIN_PART_SIZE_BYTES = 5 * 1024 * 1024       # S3 spec min for non-final parts
 
 
 def _sanitize_filename(name: str) -> str:
@@ -266,3 +274,207 @@ async def upload_raw(
             staged.unlink()
         except OSError:
             pass
+
+
+# ---------------------------------------------------------------------------
+# Multipart direct-to-R2 upload (browser → R2, no Fly hop).
+#
+# The flow:
+#   1. Browser calls /multipart-init with {filename, content_type, size_bytes}.
+#      Backend creates a multipart upload on R2, returns N presigned PUT URLs
+#      (one per part) + a chunk size.
+#   2. Browser PUTs each chunk directly to R2, collects ETags as it goes, and
+#      uploads in parallel (typically 5-at-a-time).
+#   3. Browser calls /multipart-complete with the full {part_number, etag}
+#      list. Backend asks R2 to assemble the parts and returns the key + a
+#      presigned GET URL for playback during cut-marking.
+#   4. On error the browser calls /multipart-abort to free the incomplete
+#      upload (R2 otherwise eventually GCs them, but it's polite to clean up).
+#
+# This avoids the laptop→Fly→R2 bottleneck — large files now take 1 hop in
+# the browser's parallel streams rather than serializing through the Fly
+# machine's upstream.
+# ---------------------------------------------------------------------------
+
+
+class MultipartInitRequest(BaseModel):
+    filename: str
+    content_type: str = "application/octet-stream"
+    size_bytes: int
+
+
+class MultipartPart(BaseModel):
+    part_number: int
+    etag: str
+
+
+class MultipartCompleteRequest(BaseModel):
+    key: str
+    upload_id: str
+    parts: list[MultipartPart]
+
+
+class MultipartAbortRequest(BaseModel):
+    key: str
+    upload_id: str
+
+
+def _choose_part_size(size_bytes: int) -> int:
+    """Pick a part size that respects R2/S3's 10,000-part ceiling.
+
+    Default 8 MiB chunks are nice — small enough to retry cheaply, big
+    enough that the per-part HTTP overhead doesn't dominate. For very large
+    objects (>~80 GB) we have to grow the part size to stay under 10k parts;
+    round up to the nearest MiB so the number stays human-readable.
+    """
+    if size_bytes <= 0:
+        return _DEFAULT_PART_SIZE_BYTES
+    min_required = math.ceil(size_bytes / _MAX_PARTS)
+    if min_required <= _DEFAULT_PART_SIZE_BYTES:
+        return _DEFAULT_PART_SIZE_BYTES
+    # Round up to next whole MiB so the chunk size stays readable.
+    one_mib = 1024 * 1024
+    rounded = math.ceil(min_required / one_mib) * one_mib
+    return max(rounded, _MIN_PART_SIZE_BYTES)
+
+
+@router.post("/multipart-init")
+def multipart_init(req: MultipartInitRequest, _user=Depends(require_editor)):
+    """Start a multipart upload and hand back presigned PUT URLs per part.
+
+    Cloud mode only — local mode has no R2 to upload to (use /upload-raw).
+    """
+    if not is_cloud_backend():
+        raise HTTPException(status_code=501, detail=CLOUD_UNSUPPORTED_MESSAGE)
+    if req.size_bytes <= 0:
+        raise HTTPException(400, "size_bytes must be positive")
+    if not req.filename:
+        raise HTTPException(400, "filename required")
+
+    safe_name = _sanitize_filename(req.filename)
+    timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+    key = f"raw/{timestamp}_{safe_name}"
+
+    part_size = _choose_part_size(req.size_bytes)
+    num_parts = max(1, math.ceil(req.size_bytes / part_size))
+
+    backend = get_backend()
+    s3 = backend._s3  # type: ignore[attr-defined]
+    bucket = backend._bucket  # type: ignore[attr-defined]
+
+    try:
+        mp = s3.create_multipart_upload(
+            Bucket=bucket, Key=key, ContentType=req.content_type or "application/octet-stream",
+        )
+    except Exception as e:
+        raise HTTPException(500, f"R2 multipart init failed: {e}")
+    upload_id = mp["UploadId"]
+
+    try:
+        part_urls = [
+            s3.generate_presigned_url(
+                "upload_part",
+                Params={
+                    "Bucket": bucket,
+                    "Key": key,
+                    "UploadId": upload_id,
+                    "PartNumber": i,
+                },
+                # 1 hour per URL is generous — a multi-GB upload over a slow
+                # residential link with 5x concurrency typically finishes in
+                # well under an hour. Frontend can re-init if it needs more.
+                ExpiresIn=3600,
+            )
+            for i in range(1, num_parts + 1)
+        ]
+    except Exception as e:
+        # Best-effort cleanup of the half-created multipart upload.
+        try:
+            s3.abort_multipart_upload(Bucket=bucket, Key=key, UploadId=upload_id)
+        except Exception:
+            pass
+        raise HTTPException(500, f"R2 presign failed: {e}")
+
+    return {
+        "upload_id": upload_id,
+        "key": key,
+        "part_size_bytes": part_size,
+        "num_parts": num_parts,
+        "part_urls": part_urls,
+    }
+
+
+@router.post("/multipart-complete")
+def multipart_complete(req: MultipartCompleteRequest, _user=Depends(require_editor)):
+    """Finalize the multipart upload and return a presigned playback URL.
+
+    Cloud mode only.
+    """
+    if not is_cloud_backend():
+        raise HTTPException(status_code=501, detail=CLOUD_UNSUPPORTED_MESSAGE)
+    if not req.parts:
+        raise HTTPException(400, "parts list cannot be empty")
+
+    backend = get_backend()
+    s3 = backend._s3  # type: ignore[attr-defined]
+    bucket = backend._bucket  # type: ignore[attr-defined]
+
+    # S3 wants parts sorted by PartNumber. The frontend already sorts, but
+    # defending here keeps the contract honest.
+    ordered = sorted(req.parts, key=lambda p: p.part_number)
+    parts_payload = [
+        {"PartNumber": p.part_number, "ETag": p.etag} for p in ordered
+    ]
+
+    try:
+        s3.complete_multipart_upload(
+            Bucket=bucket,
+            Key=req.key,
+            UploadId=req.upload_id,
+            MultipartUpload={"Parts": parts_payload},
+        )
+    except Exception as e:
+        raise HTTPException(500, f"R2 multipart complete failed: {e}")
+
+    try:
+        presigned = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": req.key},
+            ExpiresIn=settings.r2_presign_ttl_seconds,
+        )
+    except Exception:
+        presigned = None
+
+    return {
+        "ok": True,
+        "key": req.key,
+        "presigned_url": presigned,
+    }
+
+
+@router.post("/multipart-abort")
+def multipart_abort(req: MultipartAbortRequest, _user=Depends(require_editor)):
+    """Abort an in-progress multipart upload. Idempotent.
+
+    R2 returns NoSuchUpload if the upload was already completed or already
+    aborted; we treat that as success and log nothing — the caller's intent
+    ("make this go away") is satisfied either way.
+    """
+    if not is_cloud_backend():
+        raise HTTPException(status_code=501, detail=CLOUD_UNSUPPORTED_MESSAGE)
+
+    backend = get_backend()
+    s3 = backend._s3  # type: ignore[attr-defined]
+    bucket = backend._bucket  # type: ignore[attr-defined]
+
+    try:
+        s3.abort_multipart_upload(
+            Bucket=bucket, Key=req.key, UploadId=req.upload_id,
+        )
+    except Exception:
+        # Idempotent: swallow errors (NoSuchUpload, already-aborted, etc.).
+        # We deliberately don't surface these — a non-existent upload is the
+        # state the caller wanted anyway.
+        pass
+
+    return {"ok": True}

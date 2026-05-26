@@ -379,9 +379,36 @@ export const api = {
       session_id: number; session_date: string; clips_processed: number;
       audio_extracted: number; errors: string[]; cuts_txt_path: string;
     }>(`${BASE}/gopro/process`, data),
-    // Upload raw video. Returns a `source_path` that the frontend passes
-    // back to `/process` (R2 key in cloud mode, filesystem path in local
-    // mode) plus a `playback_url` suitable for <video src=>.
+    // Direct browser → R2 multipart upload. Three-call flow:
+    //   1. multipartInit — get presigned PUT URLs (one per chunk).
+    //   2. browser PUTs each chunk directly to R2.
+    //   3. multipartComplete — finalize the object, get a presigned GET URL.
+    //   * multipartAbort — discard a half-uploaded object on error.
+    //
+    // The browser does the PUTs without going through this client (raw fetch
+    // against the presigned URLs); ProcessSession.tsx owns that state
+    // machine. These helpers just bookend the flow.
+    multipartInit: (body: { filename: string; content_type: string; size_bytes: number }) =>
+      post<{
+        upload_id: string;
+        key: string;
+        part_size_bytes: number;
+        num_parts: number;
+        part_urls: string[];
+      }>(`${BASE}/gopro/multipart-init`, body),
+    multipartComplete: (body: {
+      key: string;
+      upload_id: string;
+      parts: { part_number: number; etag: string }[];
+    }) =>
+      post<{ ok: boolean; key: string; presigned_url: string | null }>(
+        `${BASE}/gopro/multipart-complete`, body
+      ),
+    multipartAbort: (body: { key: string; upload_id: string }) =>
+      post<{ ok: boolean }>(`${BASE}/gopro/multipart-abort`, body),
+    // Legacy single-shot upload. Streams the whole file through Fly to R2 —
+    // OK for small files (<25 MB) and still used as a fallback. Returns the
+    // same `source_path` shape as the multipart flow.
     uploadRaw: (file: File, onProgress?: (loaded: number, total: number) => void) => {
       // Use XHR (not fetch) so we get upload progress events for the
       // potentially-multi-GB body. fetch's ReadableStream upload doesn't

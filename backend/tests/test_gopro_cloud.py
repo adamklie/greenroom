@@ -245,3 +245,146 @@ def test_process_session_cloud_skips_zero_duration_clips(client, db, monkeypatch
     mock_run.assert_not_called()
     # No cuts uploaded.
     fake_s3.upload_file.assert_not_called()
+
+
+# --- /api/gopro/multipart-init|complete|abort (direct browser → R2) ---
+
+
+def _stub_cloud_backend(monkeypatch, presigned: str = "https://example.r2.dev/x"):
+    """Wire a MagicMock S3 client into the gopro router. Returns the mock."""
+    monkeypatch.setattr(settings, "media_backend", "r2")
+    fake_s3 = MagicMock()
+    fake_s3.create_multipart_upload.return_value = {"UploadId": "upload-id-xyz"}
+    # Each call to generate_presigned_url returns a unique URL so we can
+    # assert the list back at the caller.
+    fake_s3.generate_presigned_url.side_effect = (
+        lambda *a, **kw: f"{presigned}?n={kw.get('Params', {}).get('PartNumber', 'get')}"
+    )
+    fake_backend = MagicMock()
+    fake_backend._s3 = fake_s3
+    fake_backend._bucket = "greenroom-1-media"
+    monkeypatch.setattr("app.routers.gopro.get_backend", lambda: fake_backend)
+    return fake_s3
+
+
+def test_multipart_init_returns_part_urls(client, monkeypatch):
+    """multipart-init returns one presigned PUT URL per chunk plus the
+    chosen part_size_bytes and total num_parts."""
+    fake_s3 = _stub_cloud_backend(monkeypatch)
+
+    # 20 MiB file → with default 8 MiB part size → ceil(20/8) = 3 parts.
+    size = 20 * 1024 * 1024
+    response = client.post(
+        "/api/gopro/multipart-init",
+        json={
+            "filename": "My Practice Video.mp4",
+            "content_type": "video/mp4",
+            "size_bytes": size,
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["upload_id"] == "upload-id-xyz"
+    assert body["key"].startswith("raw/")
+    assert body["key"].endswith("My_Practice_Video.mp4")
+    assert body["part_size_bytes"] == 8 * 1024 * 1024
+    assert body["num_parts"] == 3
+    assert len(body["part_urls"]) == 3
+
+    # create_multipart_upload was called with the right bucket + key + CT.
+    fake_s3.create_multipart_upload.assert_called_once()
+    _, kw = fake_s3.create_multipart_upload.call_args
+    assert kw["Bucket"] == "greenroom-1-media"
+    assert kw["Key"] == body["key"]
+    assert kw["ContentType"] == "video/mp4"
+
+    # generate_presigned_url called once per part, with PartNumber 1..N.
+    assert fake_s3.generate_presigned_url.call_count == 3
+    part_numbers = [
+        call.kwargs["Params"]["PartNumber"]
+        for call in fake_s3.generate_presigned_url.call_args_list
+    ]
+    assert part_numbers == [1, 2, 3]
+
+
+def test_multipart_init_chooses_safe_part_size(client, monkeypatch):
+    """For pathologically large files (100 GB), part_size_bytes must grow so
+    num_parts stays ≤ 10000."""
+    _stub_cloud_backend(monkeypatch)
+
+    size = 100 * 1024 * 1024 * 1024  # 100 GB
+    response = client.post(
+        "/api/gopro/multipart-init",
+        json={"filename": "huge.mp4", "content_type": "video/mp4", "size_bytes": size},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["num_parts"] <= 10000
+    # Default 8 MiB would've yielded ~12,800 parts; chosen size must be bigger.
+    assert body["part_size_bytes"] > 8 * 1024 * 1024
+    # And the chosen size * num_parts must cover the file.
+    assert body["part_size_bytes"] * body["num_parts"] >= size
+
+
+def test_multipart_complete_calls_s3(client, monkeypatch):
+    """multipart-complete forwards the parts list to S3's
+    complete_multipart_upload in PartNumber order and returns a presigned
+    GET URL for playback."""
+    fake_s3 = _stub_cloud_backend(monkeypatch)
+
+    response = client.post(
+        "/api/gopro/multipart-complete",
+        json={
+            "key": "raw/20260525T220000_video.mp4",
+            "upload_id": "upload-id-xyz",
+            # Intentionally out of order — the endpoint should sort before
+            # sending to S3.
+            "parts": [
+                {"part_number": 2, "etag": "\"etag-2\""},
+                {"part_number": 1, "etag": "\"etag-1\""},
+                {"part_number": 3, "etag": "\"etag-3\""},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["ok"] is True
+    assert body["key"] == "raw/20260525T220000_video.mp4"
+    assert body["presigned_url"].startswith("https://")
+
+    fake_s3.complete_multipart_upload.assert_called_once()
+    _, kw = fake_s3.complete_multipart_upload.call_args
+    assert kw["Bucket"] == "greenroom-1-media"
+    assert kw["Key"] == "raw/20260525T220000_video.mp4"
+    assert kw["UploadId"] == "upload-id-xyz"
+    assert kw["MultipartUpload"]["Parts"] == [
+        {"PartNumber": 1, "ETag": "\"etag-1\""},
+        {"PartNumber": 2, "ETag": "\"etag-2\""},
+        {"PartNumber": 3, "ETag": "\"etag-3\""},
+    ]
+
+
+def test_multipart_abort_idempotent(client, monkeypatch):
+    """multipart-abort returns ok even if S3 raises (e.g. NoSuchUpload after
+    the upload was already completed or already aborted)."""
+    fake_s3 = _stub_cloud_backend(monkeypatch)
+
+    # First call: success path.
+    r1 = client.post(
+        "/api/gopro/multipart-abort",
+        json={"key": "raw/x.mp4", "upload_id": "u-1"},
+    )
+    assert r1.status_code == 200
+    assert r1.json() == {"ok": True}
+
+    # Second call: simulate S3 raising NoSuchUpload — endpoint must still
+    # return ok rather than 500.
+    fake_s3.abort_multipart_upload.side_effect = Exception("NoSuchUpload")
+    r2 = client.post(
+        "/api/gopro/multipart-abort",
+        json={"key": "raw/x.mp4", "upload_id": "u-1"},
+    )
+    assert r2.status_code == 200
+    assert r2.json() == {"ok": True}
+    # And the S3 call was attempted twice.
+    assert fake_s3.abort_multipart_upload.call_count == 2

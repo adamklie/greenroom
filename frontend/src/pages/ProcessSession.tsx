@@ -155,12 +155,110 @@ export default function ProcessSession() {
 
   const listMut = useMutation({ mutationFn: () => api.gopro.listVideos(directory) });
 
-  // Upload the chosen file directly to the backend, which streams it into R2
-  // (cloud mode) or writes it to vault_dir/raw/ (local mode). Either way, the
-  // returned `source_path` is what the Process step submits.
+  // Threshold for switching from single-shot upload (through Fly) to direct-
+  // to-R2 multipart upload. Small files don't benefit from parallel chunks
+  // and the multipart endpoints 501 in local mode anyway — single-shot stays
+  // as the fallback.
+  const MULTIPART_THRESHOLD_BYTES = 25 * 1024 * 1024;
+
+  // Upload large files directly browser→R2 using presigned multipart URLs.
+  // Streams up to 5 chunks in parallel for 2-5x faster uploads on the same
+  // residential link than single-stream through Fly. On any failure, aborts
+  // the multipart upload so R2 doesn't accumulate orphan parts.
+  async function uploadDirectMultipart(file: File) {
+    const init = await api.gopro.multipartInit({
+      filename: file.name,
+      content_type: file.type || "application/octet-stream",
+      size_bytes: file.size,
+    });
+
+    const parts: { part_number: number; etag: string }[] = [];
+    let bytesUploaded = 0;
+
+    // Bounded concurrency. 5 streams saturates most residential upstreams
+    // without burning the laptop's TCP table. R2 handles parallel PUTs fine.
+    const CONCURRENCY = 5;
+    const queue = Array.from({ length: init.num_parts }, (_, i) => i);
+
+    const uploadPart = async (i: number) => {
+      const partNumber = i + 1;
+      const start = i * init.part_size_bytes;
+      const end = Math.min(start + init.part_size_bytes, file.size);
+      const chunk = file.slice(start, end);
+
+      const res = await fetch(init.part_urls[i], { method: "PUT", body: chunk });
+      if (!res.ok) {
+        throw new Error(`Part ${partNumber} failed: ${res.status} ${res.statusText}`);
+      }
+      const etag = res.headers.get("ETag");
+      if (!etag) {
+        // R2 must expose ETag via CORS ExposeHeaders. If this fires, CORS
+        // is misconfigured on the bucket — see docs/DEPLOYMENT.md.
+        throw new Error(
+          `Part ${partNumber}: no ETag in R2 response (check bucket CORS config)`
+        );
+      }
+      parts.push({ part_number: partNumber, etag });
+      bytesUploaded += chunk.size;
+      setUploadProgress({ loaded: bytesUploaded, total: file.size });
+    };
+
+    const workers = Array.from({ length: CONCURRENCY }, async () => {
+      while (queue.length) {
+        const i = queue.shift()!;
+        await uploadPart(i);
+      }
+    });
+
+    try {
+      await Promise.all(workers);
+    } catch (err) {
+      // Best-effort cleanup. Swallow abort errors — surfacing them would
+      // mask the original upload failure that the user actually cares about.
+      try {
+        await api.gopro.multipartAbort({ key: init.key, upload_id: init.upload_id });
+      } catch { /* ignore */ }
+      throw err;
+    }
+
+    // Concurrent uploads may have appended out of order. Sort before
+    // completing — both R2 and the backend re-sort, but the explicit step
+    // documents the assumption.
+    parts.sort((a, b) => a.part_number - b.part_number);
+
+    const result = await api.gopro.multipartComplete({
+      key: init.key,
+      upload_id: init.upload_id,
+      parts,
+    });
+
+    return {
+      source_path: result.key,
+      playback_url: result.presigned_url,
+      size_bytes: file.size,
+    };
+  }
+
+  // Upload the chosen file. For big files we go browser→R2 directly via
+  // multipart presigned URLs (much faster than streaming through Fly). For
+  // small files (and local mode, where multipart-init 501s) we fall back to
+  // the single-shot /upload-raw endpoint.
   const uploadMut = useMutation({
-    mutationFn: (file: File) =>
-      api.gopro.uploadRaw(file, (loaded, total) => setUploadProgress({ loaded, total })),
+    mutationFn: async (file: File) => {
+      if (file.size >= MULTIPART_THRESHOLD_BYTES) {
+        try {
+          return await uploadDirectMultipart(file);
+        } catch (err) {
+          // If multipart-init 501s (local mode), fall through to the
+          // legacy single-shot path. Any other error is real — re-throw.
+          const msg = err instanceof Error ? err.message : String(err);
+          if (!msg.includes("501")) throw err;
+        }
+      }
+      return api.gopro.uploadRaw(file, (loaded, total) =>
+        setUploadProgress({ loaded, total })
+      );
+    },
     onMutate: () => { setUploadError(null); setUploadProgress({ loaded: 0, total: 1 }); },
     onSuccess: (data) => {
       setSelectedVideo(data.source_path);
