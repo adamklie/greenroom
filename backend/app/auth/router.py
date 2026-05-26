@@ -143,13 +143,18 @@ def me(request: Request, db: Session = Depends(get_db)):
     """Return the current user, or 401 if no valid session.
 
     When AUTH_REQUIRED=false (dev default), returns a synthetic admin so
-    the frontend has a stable shape to render against in local dev.
+    the frontend has a stable shape to render against in local dev — the
+    rest of the API does this via require_viewer/editor/admin deps; /me
+    has to do it inline because it intentionally doesn't go through those.
     """
     # Imported locally to break the deps→router→deps cycle (router defines
     # COOKIE_NAME which deps imports).
     from app.auth.deps import _read_cookie_user
+    from app.config import settings
 
     user = _read_cookie_user(request=request, db=db)
     if user is None:
+        if not settings.auth_required:
+            return MeResponse(id=0, email="dev@local", role="admin")
         raise HTTPException(status_code=401, detail="Not authenticated")
     return MeResponse(id=user.id, email=user.email, role=user.role)
