@@ -379,6 +379,40 @@ export const api = {
       session_id: number; session_date: string; clips_processed: number;
       audio_extracted: number; errors: string[]; cuts_txt_path: string;
     }>(`${BASE}/gopro/process`, data),
+    // Upload raw video. Returns a `source_path` that the frontend passes
+    // back to `/process` (R2 key in cloud mode, filesystem path in local
+    // mode) plus a `playback_url` suitable for <video src=>.
+    uploadRaw: (file: File, onProgress?: (loaded: number, total: number) => void) => {
+      // Use XHR (not fetch) so we get upload progress events for the
+      // potentially-multi-GB body. fetch's ReadableStream upload doesn't
+      // give us a granular progress callback yet.
+      return new Promise<{
+        ok: boolean;
+        source_path: string;
+        r2_key: string | null;
+        size_bytes: number;
+        playback_url: string | null;
+        filename: string;
+      }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `${BASE}/gopro/upload-raw`);
+        xhr.withCredentials = true;
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable && onProgress) onProgress(e.loaded, e.total);
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try { resolve(JSON.parse(xhr.responseText)); } catch (err) { reject(err); }
+          } else {
+            reject(new Error(`${xhr.status} ${xhr.statusText}: ${xhr.responseText}`));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Network error"));
+        const form = new FormData();
+        form.append("file", file);
+        xhr.send(form);
+      });
+    },
   },
   analytics: {
     practiceFrequency: () => json<{ date: string; takes: number }[]>(`${BASE}/analytics/practice-frequency`),
