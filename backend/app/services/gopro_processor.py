@@ -11,6 +11,7 @@ import math
 import re
 import struct
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -20,6 +21,7 @@ from sqlalchemy.orm import Session as DBSession
 from app.config import settings
 from app.models import AudioFile, PracticeSession
 from app.models.audio_file import generate_identifier
+from app.services.vault import get_backend, is_cloud_backend
 
 FFMPEG = "/Users/adamklie/opt/ffmpeg"
 if not Path(FFMPEG).exists():
@@ -278,7 +280,42 @@ def process_session(
 
     If existing_session_id is given, clips are added to that session and
     written into its folder (cuts.txt is appended, not overwritten).
+
+    In cloud mode (`media_backend='r2'`), `source_directory` is interpreted
+    as an R2 object key (e.g. `raw/20260525T2200_practice.mp4`). The raw
+    video is downloaded to a tempdir, sliced with ffmpeg, and each cut is
+    uploaded to R2 at `files/{identifier}.{ext}`. The cuts.txt file is
+    skipped (no shared filesystem to write it to).
     """
+    if is_cloud_backend():
+        return _process_session_cloud(
+            db=db,
+            source_key=source_directory,
+            session_date=session_date,
+            clips=clips,
+            project=project,
+            existing_session_id=existing_session_id,
+        )
+    return _process_session_local(
+        db=db,
+        source_directory=source_directory,
+        session_date=session_date,
+        clips=clips,
+        project=project,
+        existing_session_id=existing_session_id,
+    )
+
+
+def _process_session_local(
+    db: DBSession,
+    source_directory: str,
+    session_date: date,
+    clips: list[ClipMarker],
+    project: str,
+    existing_session_id: int | None,
+) -> ProcessResult:
+    """Original local-filesystem processing path. Writes cuts into the
+    music_dir layout and inserts DB rows pointing at the relative paths."""
     errors: list[str] = []
     source_dir = Path(source_directory)
 
@@ -390,4 +427,133 @@ def process_session(
         session_id=session.id, session_date=date_str,
         clips_processed=clips_processed, audio_extracted=audio_extracted,
         errors=errors, cuts_txt_path=str(cuts_txt_path.relative_to(settings.music_dir)),
+    )
+
+
+def _process_session_cloud(
+    db: DBSession,
+    source_key: str,
+    session_date: date,
+    clips: list[ClipMarker],
+    project: str,
+    existing_session_id: int | None,
+) -> ProcessResult:
+    """Cloud-mode processing path.
+
+    `source_key` is an R2 object key (e.g. `raw/20260525T2200_practice.mp4`).
+    The raw video is downloaded to a tempdir, ffmpeg `-c copy` slices each
+    clip locally, then each cut is uploaded to R2 at `files/{identifier}.mp4`.
+
+    There is no shared filesystem to write cuts.txt to, so it's skipped. DB
+    rows are inserted with `file_path={identifier}.mp4` (same convention as
+    `routers/upload.py` uses for cloud uploads — the vault filename only,
+    `files/` prefix is implied by the backend).
+
+    The raw R2 object is intentionally left in place after processing; a
+    future cleanup script can sweep `raw/` separately.
+    """
+    errors: list[str] = []
+    backend = get_backend()
+    # CloudVaultBackend specifics — _s3 and _bucket. We don't go through the
+    # Protocol here because we need download + raw-key uploads, neither of
+    # which are part of the VaultBackend Protocol.
+    s3 = backend._s3  # type: ignore[attr-defined]
+    bucket = backend._bucket  # type: ignore[attr-defined]
+
+    # Resolve target session
+    session: PracticeSession | None = None
+    if existing_session_id is not None:
+        session = db.query(PracticeSession).get(existing_session_id)
+        if not session:
+            raise ValueError(f"Session {existing_session_id} not found")
+        date_str = f"{session.date.year}-{session.date.month}-{session.date.day}"
+        folder_rel = session.folder_path
+    else:
+        date_str = f"{session_date.year}-{session_date.month}-{session_date.day}"
+        # Logical folder path used only as a DB pointer in cloud mode (no
+        # actual directory is created). Mirrors the local layout so the
+        # session row looks identical across modes.
+        folder_rel = f"Ozone Destructors/Practice Sessions/{date_str}"
+
+    if session is None:
+        existing_session = db.query(PracticeSession).filter_by(folder_path=folder_rel).first()
+        if existing_session:
+            session = existing_session
+        else:
+            session = PracticeSession(date=session_date, project=project, folder_path=folder_rel)
+            db.add(session)
+            db.flush()
+
+    clips_processed = 0
+    audio_extracted = 0
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        local_video = tmpdir_path / "input.mp4"
+
+        # Download raw video from R2 once; reuse for all clips.
+        try:
+            s3.download_file(bucket, source_key, str(local_video))
+        except Exception as e:
+            raise RuntimeError(f"Failed to download raw video from R2 ({source_key}): {e}")
+
+        for clip in clips:
+            safe_name = _sanitize_name(clip.clip_name)
+            duration = clip.end_seconds - clip.start_seconds
+            if duration <= 0:
+                errors.append(f"Invalid duration for {clip.clip_name}")
+                continue
+
+            cut_out = tmpdir_path / f"{safe_name}.mp4"
+            try:
+                subprocess.run([
+                    FFMPEG, "-ss", str(clip.start_seconds), "-i", str(local_video),
+                    "-t", str(duration), "-c", "copy", "-y", str(cut_out),
+                ], capture_output=True, timeout=120, check=True)
+                clips_processed += 1
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+                errors.append(f"Failed to cut {clip.clip_name}: {e}")
+                continue
+
+            recorded_at_dt = datetime.combine(session.date, datetime.min.time())
+            identifier = generate_identifier(f"{safe_name}.mp4", recorded_at_dt.isoformat())
+            ftype = "mp4"
+
+            # Upload to R2 at files/{identifier}.{ext}.
+            try:
+                s3.upload_file(str(cut_out), bucket, f"files/{identifier}.{ftype}")
+            except Exception as e:
+                errors.append(f"Failed to upload cut {clip.clip_name} to R2: {e}")
+                continue
+
+            # DB row: file_path is just the vault filename (matches the
+            # convention upload.py uses for cloud-vault rows).
+            vault_name = f"{identifier}.{ftype}"
+            if db.query(AudioFile).filter_by(file_path=vault_name).first():
+                continue
+
+            start_tc = _seconds_to_timecode(clip.start_seconds)
+            end_tc = _seconds_to_timecode(clip.end_seconds)
+            db.add(AudioFile(
+                song_id=clip.song_id,
+                file_path=vault_name,
+                file_type=ftype,
+                identifier=identifier,
+                source=project,
+                role="practice_clip",
+                is_stem=False,
+                session_id=session.id,
+                clip_name=safe_name,
+                source_file=Path(source_key).name,
+                start_time=start_tc,
+                end_time=end_tc,
+                video_path=vault_name,
+                recorded_at=recorded_at_dt,
+            ))
+
+    db.commit()
+    return ProcessResult(
+        session_id=session.id, session_date=date_str,
+        clips_processed=clips_processed, audio_extracted=audio_extracted,
+        errors=errors, cuts_txt_path="",  # no cuts.txt in cloud mode
     )

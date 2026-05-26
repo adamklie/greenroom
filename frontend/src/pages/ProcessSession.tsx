@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { FolderOpen, Scan, Scissors, Play, Plus, Trash2, Check, Video, Folder, ChevronUp, X } from "lucide-react";
+import { FolderOpen, Scan, Scissors, Play, Plus, Trash2, Check, Video, Folder, ChevronUp, X, Upload } from "lucide-react";
 
 interface Clip {
   start_seconds: number;
@@ -121,14 +121,26 @@ function EnergyWaveform({ profile, clips, duration, threshold, onSeek }: {
 export default function ProcessSession() {
   const [directory, setDirectory] = useState("/Users/adamklie/Desktop");
   const [directFile, setDirectFile] = useState("");
+  // `selectedVideo` is the value the backend wants in `source_path`. In cloud
+  // mode this is an R2 key (e.g. "raw/20260525T220000_practice.mp4"); in local
+  // mode it's an absolute filesystem path. The page no longer cares which.
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
+  // Direct playback URL — presigned R2 URL in cloud mode, /api/media/file/... in
+  // local mode. When non-null, the <video> tag points at this; otherwise we
+  // fall back to /api/media/file/<selectedVideo> (the legacy local path).
+  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
   const [showBrowser, setShowBrowser] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [clips, setClips] = useState<Clip[]>([]);
   const [duration, setDuration] = useState(0);
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split("T")[0]);
   const [existingSessionId, setExistingSessionId] = useState<number | null>(null);
   const [marking, setMarking] = useState<{ start: number } | null>(null);
+  // Upload progress for the cloud-friendly "upload raw video" flow.
+  const [uploadProgress, setUploadProgress] = useState<{ loaded: number; total: number } | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Energy-based detection tuning
   const [dropDb, setDropDb] = useState(6);
@@ -142,6 +154,41 @@ export default function ProcessSession() {
   useQuery({ queryKey: ["tags"], queryFn: () => api.tags.list() });
 
   const listMut = useMutation({ mutationFn: () => api.gopro.listVideos(directory) });
+
+  // Upload the chosen file directly to the backend, which streams it into R2
+  // (cloud mode) or writes it to vault_dir/raw/ (local mode). Either way, the
+  // returned `source_path` is what the Process step submits.
+  const uploadMut = useMutation({
+    mutationFn: (file: File) =>
+      api.gopro.uploadRaw(file, (loaded, total) => setUploadProgress({ loaded, total })),
+    onMutate: () => { setUploadError(null); setUploadProgress({ loaded: 0, total: 1 }); },
+    onSuccess: (data) => {
+      setSelectedVideo(data.source_path);
+      setPlaybackUrl(data.playback_url);
+      setDirectFile(data.source_path);
+      setClips([]);
+      setDuration(0);
+      setUploadProgress(null);
+    },
+    onError: (err) => {
+      setUploadError(err instanceof Error ? err.message : String(err));
+      setUploadProgress(null);
+    },
+  });
+
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadMut.mutate(file);
+    // Reset so picking the same file twice still triggers onChange.
+    e.target.value = "";
+  };
+
+  const formatBytes = (n: number) => {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+    return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  };
 
   const analyzeMut = useMutation({
     mutationFn: (path: string) => api.gopro.analyze(path, { dropDb, minGap: minGapDuration, minClip: minClipDuration }),
@@ -208,63 +255,119 @@ export default function ProcessSession() {
       {/* Step 1: Select video */}
       <div className="rounded-xl p-5 border mb-6" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
         <h3 className="font-semibold mb-3 flex items-center gap-2">
-          <FolderOpen size={18} style={{ color: "var(--accent)" }} /> Step 1: Select Video
+          <FolderOpen size={18} style={{ color: "var(--accent)" }} /> Step 1: Upload Video
         </h3>
 
-        <div className="flex gap-2 mb-3">
-          <input value={directFile} onChange={(e) => setDirectFile(e.target.value)}
-            placeholder="Paste file path or click Browse..."
-            className="flex-1 px-3 py-2 rounded-lg border text-sm outline-none" style={inputStyle}
-            onKeyDown={(e) => { if (e.key === "Enter" && directFile.trim()) { setSelectedVideo(directFile.trim()); setClips([]); setDuration(0); } }} />
-          <button onClick={() => setShowBrowser(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
+        {/* Primary flow: upload a video file. Works in both cloud and local
+            mode — the backend writes to R2 or vault_dir/raw/ accordingly. */}
+        <div className="mb-3">
+          <input ref={fileInputRef} type="file" accept="video/*"
+            onChange={handleFileSelected} className="hidden" />
+          <button onClick={() => fileInputRef.current?.click()}
+            disabled={uploadMut.isPending}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
             style={{ background: "var(--accent)" }}>
-            <FolderOpen size={16} /> Browse
+            <Upload size={16} /> {uploadMut.isPending ? "Uploading..." : "Choose video to upload"}
           </button>
-          {directFile.trim() && (
-            <button onClick={() => { setSelectedVideo(directFile.trim()); setClips([]); setDuration(0); }}
-              className="px-4 py-2 rounded-lg text-sm border hover:opacity-80"
-              style={{ borderColor: "var(--border)", color: "var(--text)" }}>Load</button>
-          )}
+          <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+            Pick the raw GoPro file from your computer. Upload runs in the browser; processing happens after you mark cuts.
+          </p>
         </div>
 
-        {showBrowser && (
-          <FileBrowserModal
-            onSelect={(path) => { setDirectFile(path); setSelectedVideo(path); setClips([]); setDuration(0); setShowBrowser(false); }}
-            onClose={() => setShowBrowser(false)} />
+        {uploadProgress && (
+          <div className="mb-3 p-3 rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span style={{ color: "var(--text-muted)" }}>
+                Uploading {formatBytes(uploadProgress.loaded)} / {formatBytes(uploadProgress.total)}
+              </span>
+              <span style={{ color: "var(--text-muted)" }}>
+                {Math.round((uploadProgress.loaded / Math.max(1, uploadProgress.total)) * 100)}%
+              </span>
+            </div>
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--bg-hover)" }}>
+              <div className="h-full transition-all"
+                style={{
+                  width: `${(uploadProgress.loaded / Math.max(1, uploadProgress.total)) * 100}%`,
+                  background: "var(--accent)",
+                }} />
+            </div>
+          </div>
         )}
 
-        <div className="flex items-center gap-3 mb-3">
-          <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>or scan a directory</span>
-          <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-        </div>
+        {uploadError && (
+          <div className="mb-3 p-3 rounded-lg text-sm" style={{ background: "var(--bg)", color: "var(--red)" }}>
+            Upload failed: {uploadError}
+          </div>
+        )}
 
-        <div className="flex gap-2 mb-4">
-          <input value={directory} onChange={(e) => setDirectory(e.target.value)}
-            placeholder="/Volumes/GOPRO/DCIM/100GOPRO"
-            className="flex-1 px-3 py-2 rounded-lg border text-sm outline-none" style={inputStyle} />
-          <button onClick={() => listMut.mutate()} disabled={listMut.isPending}
-            className="px-4 py-2 rounded-lg text-sm font-medium border hover:opacity-80"
-            style={{ borderColor: "var(--border)", color: "var(--text)" }}>
-            {listMut.isPending ? "Scanning..." : "Scan Folder"}
+        {/* Advanced: legacy local-mode flow (paste path / browse / scan folder).
+            Hidden by default — only useful when running ./dev.sh against a local
+            GoPro mount. Cloud mode has no filesystem to browse. */}
+        <div className="mt-4 pt-3 border-t" style={{ borderColor: "var(--border)" }}>
+          <button onClick={() => setShowAdvanced(!showAdvanced)}
+            className="text-xs underline" style={{ color: "var(--text-muted)" }}>
+            {showAdvanced ? "Hide" : "Advanced:"} use a local file path (dev only)
           </button>
         </div>
 
-        {listMut.data?.files && listMut.data.files.length > 0 && (
-          <div className="space-y-2">
-            {listMut.data.files.map((f) => (
-              <div key={f.path}
-                className="flex items-center justify-between p-3 rounded-lg border cursor-pointer"
-                style={{ background: selectedVideo === f.path ? "var(--bg-hover)" : "var(--bg)", borderColor: selectedVideo === f.path ? "var(--accent)" : "var(--border)" }}
-                onClick={() => { setSelectedVideo(f.path); setDirectFile(f.path); setClips([]); setDuration(0); }}>
-                <div className="flex items-center gap-2">
-                  <Video size={16} style={{ color: "var(--text-muted)" }} />
-                  <span className="font-medium text-sm">{f.filename}</span>
-                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>{f.size_mb} MB</span>
-                </div>
+        {showAdvanced && (
+          <div className="mt-3">
+            <div className="flex gap-2 mb-3">
+              <input value={directFile} onChange={(e) => setDirectFile(e.target.value)}
+                placeholder="Paste file path or click Browse..."
+                className="flex-1 px-3 py-2 rounded-lg border text-sm outline-none" style={inputStyle}
+                onKeyDown={(e) => { if (e.key === "Enter" && directFile.trim()) { setSelectedVideo(directFile.trim()); setPlaybackUrl(null); setClips([]); setDuration(0); } }} />
+              <button onClick={() => setShowBrowser(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border"
+                style={{ borderColor: "var(--border)", color: "var(--text)" }}>
+                <FolderOpen size={16} /> Browse
+              </button>
+              {directFile.trim() && (
+                <button onClick={() => { setSelectedVideo(directFile.trim()); setPlaybackUrl(null); setClips([]); setDuration(0); }}
+                  className="px-4 py-2 rounded-lg text-sm border hover:opacity-80"
+                  style={{ borderColor: "var(--border)", color: "var(--text)" }}>Load</button>
+              )}
+            </div>
+
+            {showBrowser && (
+              <FileBrowserModal
+                onSelect={(path) => { setDirectFile(path); setSelectedVideo(path); setPlaybackUrl(null); setClips([]); setDuration(0); setShowBrowser(false); }}
+                onClose={() => setShowBrowser(false)} />
+            )}
+
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>or scan a directory</span>
+              <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+            </div>
+
+            <div className="flex gap-2 mb-4">
+              <input value={directory} onChange={(e) => setDirectory(e.target.value)}
+                placeholder="/Volumes/GOPRO/DCIM/100GOPRO"
+                className="flex-1 px-3 py-2 rounded-lg border text-sm outline-none" style={inputStyle} />
+              <button onClick={() => listMut.mutate()} disabled={listMut.isPending}
+                className="px-4 py-2 rounded-lg text-sm font-medium border hover:opacity-80"
+                style={{ borderColor: "var(--border)", color: "var(--text)" }}>
+                {listMut.isPending ? "Scanning..." : "Scan Folder"}
+              </button>
+            </div>
+
+            {listMut.data?.files && listMut.data.files.length > 0 && (
+              <div className="space-y-2">
+                {listMut.data.files.map((f) => (
+                  <div key={f.path}
+                    className="flex items-center justify-between p-3 rounded-lg border cursor-pointer"
+                    style={{ background: selectedVideo === f.path ? "var(--bg-hover)" : "var(--bg)", borderColor: selectedVideo === f.path ? "var(--accent)" : "var(--border)" }}
+                    onClick={() => { setSelectedVideo(f.path); setPlaybackUrl(null); setDirectFile(f.path); setClips([]); setDuration(0); }}>
+                    <div className="flex items-center gap-2">
+                      <Video size={16} style={{ color: "var(--text-muted)" }} />
+                      <span className="font-medium text-sm">{f.filename}</span>
+                      <span className="text-xs" style={{ color: "var(--text-muted)" }}>{f.size_mb} MB</span>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
 
@@ -275,11 +378,15 @@ export default function ProcessSession() {
               <Video size={16} style={{ color: "var(--accent)" }} />
               <span className="font-medium text-sm">{selectedVideo.split("/").pop()}</span>
             </div>
-            <button onClick={() => analyzeMut.mutate(selectedVideo)} disabled={analyzeMut.isPending}
-              className="flex items-center gap-1 px-3 py-1 rounded text-sm font-medium text-white"
-              style={{ background: "var(--green)" }}>
-              <Scan size={14} /> {analyzeMut.isPending ? "Analyzing..." : "Auto-Detect Clips"}
-            </button>
+            {/* Auto-Detect is local-only for now (analyze still 501s in cloud mode).
+                Hide it when we don't have a local filesystem path. */}
+            {!playbackUrl?.startsWith("http") && (
+              <button onClick={() => analyzeMut.mutate(selectedVideo)} disabled={analyzeMut.isPending}
+                className="flex items-center gap-1 px-3 py-1 rounded text-sm font-medium text-white"
+                style={{ background: "var(--green)" }}>
+                <Scan size={14} /> {analyzeMut.isPending ? "Analyzing..." : "Auto-Detect Clips"}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -367,10 +474,17 @@ export default function ProcessSession() {
             />
           )}
 
-          {/* Video player */}
-          <video ref={videoRef} controls className="w-full rounded-lg mb-4" style={{ maxHeight: 400 }}>
-            <source src={`/api/media/file/${encodeURIComponent(selectedVideo)}`} />
-          </video>
+          {/* Video player. Prefer the `playbackUrl` returned by upload-raw —
+              presigned R2 URL in cloud mode, /api/media/file/... in local
+              mode. Falls back to the legacy /api/media/file/<path> for users
+              who pasted a path in via the advanced flow. */}
+          <video ref={videoRef} controls className="w-full rounded-lg mb-4" style={{ maxHeight: 400 }}
+            src={playbackUrl ?? `/api/media/file/${encodeURIComponent(selectedVideo)}`} />
+          {playbackUrl?.startsWith("http") && (
+            <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+              Auto-detect isn't available in cloud mode yet — mark cuts manually using the Mark Start / Mark End buttons below.
+            </p>
+          )}
 
           {/* Marking controls */}
           <div className="flex gap-2 mb-4">

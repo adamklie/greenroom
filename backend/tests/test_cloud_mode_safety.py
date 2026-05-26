@@ -179,19 +179,10 @@ def test_gopro_analyze_in_cloud_mode_returns_501(client, monkeypatch):
     assert response.status_code == 501
 
 
-def test_gopro_process_in_cloud_mode_returns_501(client, monkeypatch):
-    """POST /api/gopro/process is 501 in cloud mode."""
-    monkeypatch.setattr(settings, "media_backend", "r2")
-
-    response = client.post(
-        "/api/gopro/process",
-        json={
-            "source_path": "/tmp/x.mp4",
-            "session_date": "2026-01-01",
-            "clips": [],
-        },
-    )
-    assert response.status_code == 501
+# NOTE: /api/gopro/process is now SUPPORTED in cloud mode (see
+# tests/test_gopro_cloud.py). It downloads the raw video from R2, slices
+# with ffmpeg locally, and uploads each cut back to R2. The 501 guard was
+# removed when the cloud branch landed.
 
 
 # --- FILES admin endpoints ---
