@@ -2,7 +2,7 @@ import mimetypes
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -26,6 +26,16 @@ MIME_MAP = {
 
 def _get_mime(path: Path) -> str:
     return MIME_MAP.get(path.suffix, mimetypes.guess_type(str(path))[0] or "application/octet-stream")
+
+
+def _download_name(af: AudioFile) -> str:
+    """Friendly filename for a download: prefer the originally submitted name,
+    else the stable identifier + extension."""
+    if af.submitted_file_name:
+        return af.submitted_file_name
+    ext = (af.file_type or "").lstrip(".").lower()
+    base = af.identifier or f"audio-{af.id}"
+    return f"{base}.{ext}" if ext else base
 
 
 def _resolve_path(file_path: str) -> Path:
@@ -118,20 +128,24 @@ def stream_take_video(take_id: int, request: Request, db: Session = Depends(get_
 
 
 @router.get("/audio/{audio_file_id}")
-def stream_audio_file(audio_file_id: int, request: Request, db: Session = Depends(get_db), _user=Depends(require_viewer)):
+def stream_audio_file(audio_file_id: int, request: Request, download: bool = Query(False), db: Session = Depends(get_db), _user=Depends(require_viewer)):
     af = db.query(AudioFile).get(audio_file_id)
     if not af:
         raise HTTPException(404, "Audio file not found")
+    download_name = _download_name(af) if download else None
     # Cloud backends produce a presigned URL — redirect the browser straight
     # to object storage so the FastAPI process doesn't proxy the bytes. Local
     # backend returns None and we fall through to range-aware streaming.
     backend = get_backend()
-    url = backend.url_for(af) if hasattr(backend, "url_for") else None
+    url = backend.url_for(af, download_name=download_name) if hasattr(backend, "url_for") else None
     if url is not None:
         return RedirectResponse(url, status_code=307)
     full = resolve_audio_path(af)
     if not full.exists():
         raise HTTPException(404, "Audio file not found on disk")
+    if download:
+        # FileResponse with filename sets Content-Disposition: attachment.
+        return FileResponse(full, media_type=_get_mime(full), filename=download_name)
     return _serve_with_range(full, request)
 
 

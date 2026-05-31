@@ -71,3 +71,9 @@ class AudioFileUpdate(BaseModel):
     notes: str | None = None
     uploaded_at: datetime | None = None
     recorded_at: datetime | None = None
+
+
+class AudioFileBulkUpdate(BaseModel):
+    """Apply the same field changes to many audio files at once."""
+    ids: list[int]
+    data: AudioFileUpdate

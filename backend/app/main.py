@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.auth.router import router as auth_router
-from app.routers import analytics, audio_files, backup, dashboard, feedback, filebrowser, files, gopro, media, options, sessions, setlists, songs, tabs as tabs_router, tags, trash, trim, upload
+from app.routers import analytics, audio_files, backup, dashboard, dedup, feedback, filebrowser, files, gopro, integrity, media, options, sessions, setlists, songs, tabs as tabs_router, tags, trash, trim, upload
 
 
 @asynccontextmanager
@@ -67,6 +67,8 @@ app.include_router(filebrowser.router)
 app.include_router(upload.router)
 app.include_router(backup.router)
 app.include_router(trash.router)
+app.include_router(dedup.router)
+app.include_router(integrity.router)
 app.include_router(options.router)
 app.include_router(feedback.router)
 app.include_router(trim.router)

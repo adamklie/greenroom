@@ -264,6 +264,8 @@ export const api = {
       patch<Song>(`${BASE}/songs/${id}`, data),
     delete: (id: number) =>
       json<{ ok: boolean }>(`${BASE}/songs/${id}`, { method: "DELETE" }),
+    restore: (id: number) =>
+      post<Song>(`${BASE}/songs/${id}/restore`, {}),
     updateLyrics: (id: number, lyrics: string, changeNote?: string) =>
       put<Song>(`${BASE}/songs/${id}/lyrics`, { lyrics, change_note: changeNote }),
     lyricsVersions: (id: number) =>
@@ -277,6 +279,35 @@ export const api = {
   sessions: {
     list: () => json<Session[]>(`${BASE}/sessions`),
     get: (id: number) => json<SessionDetail>(`${BASE}/sessions/${id}`),
+  },
+  trash: {
+    list: () => json<{
+      files: { filename: string; size_mb: number; deleted_at: string; days_until_purge: number }[];
+      deleted_songs: { id: number; title: string; type: string | null; project: string | null }[];
+    }>(`${BASE}/trash`),
+    restoreSong: (songId: number) => post<{ ok: boolean }>(`${BASE}/trash/restore/${songId}`, {}),
+    purge: (olderThanDays = 30) => post<{ ok: boolean; files_purged: number; songs_purged: number }>(
+      `${BASE}/trash/purge?older_than_days=${olderThanDays}`, {}),
+  },
+  integrity: {
+    recordings: () => json<{
+      db_missing_object: { id: number; identifier: string | null; file_path: string; song_title: string | null }[];
+      orphan_objects: { key: string; identifier: string }[];
+      checked: number;
+      mode: string;
+    }>(`${BASE}/integrity/recordings`),
+  },
+  dedup: {
+    duplicates: (fuzzy = false) => json<{
+      key: string;
+      entries: { id: number; title: string; artist: string | null; type: string | null;
+        status: string | null; project: string | null; audio_count: number;
+        take_count: number; notes: string | null }[];
+    }[]>(`${BASE}/dedup/duplicates${fuzzy ? "?fuzzy=true" : ""}`),
+    merge: (keepId: number, mergeIds: number[]) =>
+      post<{ ok: boolean; kept: { id: number; title: string }; merged_audio: number;
+        merged_takes: number; deleted_songs: { id: number; title: string }[] }>(
+        `${BASE}/dedup/merge`, { keep_id: keepId, merge_ids: mergeIds }),
   },
   takes: {
     update: (id: number, data: Record<string, unknown>) =>
@@ -321,8 +352,12 @@ export const api = {
     get: (id: number) => json<AudioFile>(`${BASE}/audio-files/${id}`),
     update: (id: number, data: Record<string, unknown>) =>
       patch<AudioFile>(`${BASE}/audio-files/${id}`, data),
+    bulkUpdate: (ids: number[], data: Record<string, unknown>) =>
+      patch<AudioFile[]>(`${BASE}/audio-files/bulk`, { ids, data }),
     delete: (id: number) =>
       json<{ ok: boolean }>(`${BASE}/audio-files/${id}`, { method: "DELETE" }),
+    restore: (id: number) =>
+      post<AudioFile>(`${BASE}/audio-files/${id}/restore`, {}),
     trim: (id: number, startTime: number, endTime: number) =>
       post<AudioFile>(`${BASE}/audio-files/${id}/trim`, { start_time: startTime, end_time: endTime }),
     extractAudio: (id: number) =>
@@ -474,5 +509,6 @@ export const api = {
     takeAudioUrl: (takeId: number) => `${BASE}/media/take/${takeId}/audio`,
     takeVideoUrl: (takeId: number) => `${BASE}/media/take/${takeId}/video`,
     audioFileUrl: (audioFileId: number) => `${BASE}/media/audio/${audioFileId}`,
+    audioFileDownloadUrl: (audioFileId: number) => `${BASE}/media/audio/${audioFileId}?download=1`,
   },
 };

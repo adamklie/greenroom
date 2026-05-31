@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.audio_file import generate_identifier
 
@@ -13,7 +13,7 @@ from app.auth.deps import require_editor, require_viewer
 from app.config import settings
 from app.database import get_db
 from app.models import AudioFile, Song
-from app.schemas.audio_file import AudioFileRead, AudioFileUpdate
+from app.schemas.audio_file import AudioFileBulkUpdate, AudioFileRead, AudioFileUpdate
 from app.services.autosync import compute_organized_path, resolve_path, _cleanup_empty_parent
 from app.services.vault import CLOUD_UNSUPPORTED_MESSAGE, is_cloud_backend, resolve_audio_path
 
@@ -85,7 +85,13 @@ def list_audio_files(
     _user=Depends(require_viewer),
 ):
     """List all audio files with optional filters. Hides role='deleted' unless include_deleted=true."""
-    q = db.query(AudioFile).filter(AudioFile.is_stem == False)  # noqa: E712
+    # selectinload the relationships _af_to_read touches, otherwise each row
+    # lazy-loads its song + session (the N+1 that made the library slow to load).
+    q = (
+        db.query(AudioFile)
+        .options(selectinload(AudioFile.song), selectinload(AudioFile.session))
+        .filter(AudioFile.is_stem == False)  # noqa: E712
+    )
 
     if not include_deleted and role != "deleted":
         q = q.filter((AudioFile.role != "deleted") | (AudioFile.role.is_(None)))
@@ -119,6 +125,42 @@ def get_audio_file(audio_file_id: int, db: Session = Depends(get_db), _user=Depe
     if not af:
         raise HTTPException(404, "Audio file not found")
     return _af_to_read(af)
+
+
+@router.patch("/bulk", response_model=list[AudioFileRead])
+def bulk_update_audio_files(payload: AudioFileBulkUpdate, db: Session = Depends(get_db), _user=Depends(require_editor)):
+    """Apply the same field changes to many audio files in a single transaction.
+
+    Declared before /{audio_file_id} so "bulk" isn't parsed as an int id.
+    One commit for the whole batch (vs. N commits + N auto-backups when the
+    frontend PATCHes each row individually).
+    """
+    changes = payload.data.model_dump(exclude_unset=True)
+    if not payload.ids or not changes:
+        return []
+
+    files = (
+        db.query(AudioFile)
+        .options(selectinload(AudioFile.song), selectinload(AudioFile.session))
+        .filter(AudioFile.id.in_(payload.ids))
+        .all()
+    )
+    song_changed_ids = []
+    for af in files:
+        if "song_id" in changes and changes["song_id"] != af.song_id:
+            song_changed_ids.append(af.id)
+        for field, value in changes.items():
+            setattr(af, field, value)
+
+    db.commit()
+
+    # Auto-move only the files whose song assignment actually changed.
+    for af in files:
+        if af.id in song_changed_ids:
+            db.refresh(af)
+            _auto_move_file(af, db)
+
+    return [_af_to_read(af) for af in files]
 
 
 @router.patch("/{audio_file_id}", response_model=AudioFileRead)
@@ -184,6 +226,28 @@ def delete_audio_file(audio_file_id: int, db: Session = Depends(get_db), _user=D
     af.role = "deleted"
     db.commit()
     return {"ok": True, "id": audio_file_id}
+
+
+@router.post("/{audio_file_id}/restore", response_model=AudioFileRead)
+def restore_audio_file(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
+    """Undo a soft-delete. Cloud: clear role='deleted'. Local: move the file
+    back out of _trash/ to its organized location (mirrors delete_audio_file)."""
+    af = db.query(AudioFile).get(audio_file_id)
+    if not af:
+        raise HTTPException(404, "Audio file not found")
+    if af.role != "deleted":
+        return _af_to_read(af)
+
+    # Restore role first so _auto_move_file routes it to the right folder.
+    af.role = None
+    if not is_cloud_backend():
+        db.commit()
+        db.refresh(af)
+        _auto_move_file(af, db)  # moves out of _trash/ based on song assignment
+    else:
+        db.commit()
+        db.refresh(af)
+    return _af_to_read(af)
 
 
 FFMPEG = "/Users/adamklie/opt/ffmpeg" if Path("/Users/adamklie/opt/ffmpeg").exists() else "ffmpeg"

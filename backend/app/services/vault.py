@@ -49,7 +49,7 @@ class VaultBackend(Protocol):
         """True if a file is already stored at `{identifier}.{ext}`."""
         ...
 
-    def url_for(self, af: AudioFile, expires_in: int | None = None) -> str | None:
+    def url_for(self, af: AudioFile, expires_in: int | None = None, download_name: str | None = None) -> str | None:
         """Return a directly-fetchable URL for `af`, or None if the backend
         can't produce one (e.g. local files). Cloud backends return a
         presigned GET URL so the browser can fetch from object storage
@@ -85,8 +85,11 @@ class LocalVaultBackend:
     def exists(self, identifier: str, file_type: str) -> bool:
         return self.path_for(identifier, file_type).exists()
 
-    def url_for(self, af: AudioFile, expires_in: int | None = None) -> str | None:
-        """Local files are served by FastAPI itself; no external URL."""
+    def url_for(self, af: AudioFile, expires_in: int | None = None, download_name: str | None = None) -> str | None:
+        """Local files are served by FastAPI itself; no external URL.
+
+        Accepts download_name for signature parity with CloudVaultBackend (the
+        media router passes it); local downloads are handled by FileResponse."""
         return None
 
 
@@ -147,13 +150,28 @@ class CloudVaultBackend:
         except ClientError:
             return False
 
-    def url_for(self, af: AudioFile, expires_in: int | None = None) -> str | None:
+    def list_keys(self) -> list[str]:
+        """All object keys under the files/ prefix (paginated). Used by the
+        recording-integrity check to find objects with no DB row."""
+        keys: list[str] = []
+        paginator = self._s3.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=self._bucket, Prefix="files/"):
+            for obj in page.get("Contents", []):
+                keys.append(obj["Key"])
+        return keys
+
+    def url_for(self, af: AudioFile, expires_in: int | None = None, download_name: str | None = None) -> str | None:
+        params = {
+            "Bucket": self._bucket,
+            "Key": self._key(af.identifier, af.file_type),
+        }
+        # Force a browser download (with a friendly filename) instead of inline
+        # playback. R2 honors response-content-disposition on the presigned URL.
+        if download_name:
+            params["ResponseContentDisposition"] = f'attachment; filename="{download_name}"'
         return self._s3.generate_presigned_url(
             "get_object",
-            Params={
-                "Bucket": self._bucket,
-                "Key": self._key(af.identifier, af.file_type),
-            },
+            Params=params,
             ExpiresIn=expires_in or settings.r2_presign_ttl_seconds,
         )
 

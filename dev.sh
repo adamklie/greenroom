@@ -20,8 +20,22 @@ sleep 1
 echo "→ clearing Vite optimized-deps cache"
 rm -rf "$FRONTEND/node_modules/.vite" 2>/dev/null || true
 
-echo "→ starting backend (logs: /tmp/greenroom-backend.log)"
-( cd "$BACKEND" && nohup python3 -m uvicorn app.main:app --port 8000 \
+# Pick a Python that actually has uvicorn. On this machine `python3` resolves
+# to Homebrew (no uvicorn) while pyenv's `python` has it — using the wrong one
+# silently fails the backend, which surfaces in the UI as the login screen
+# (the frontend can't reach /api/auth/me).
+PY=""
+for cand in python python3; do
+  if command -v "$cand" >/dev/null 2>&1 && "$cand" -c "import uvicorn" >/dev/null 2>&1; then
+    PY="$cand"; break
+  fi
+done
+if [ -z "$PY" ]; then
+  echo "   ✗ no python with uvicorn found (tried: python, python3). Run 'pip install uvicorn' in the right env." >&2
+  PY="python3"
+fi
+echo "→ starting backend with '$PY' (logs: /tmp/greenroom-backend.log)"
+( cd "$BACKEND" && nohup "$PY" -m uvicorn app.main:app --port 8000 \
     > /tmp/greenroom-backend.log 2>&1 & ) >/dev/null
 
 echo "→ starting frontend (logs: /tmp/greenroom-frontend.log)"

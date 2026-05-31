@@ -17,6 +17,7 @@ import {
   Database,
   Settings2,
   MessageSquare,
+  Trash2,
   LogOut,
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
@@ -29,6 +30,7 @@ import Import from "./pages/Import";
 import Library from "./pages/Library";
 import Schemas from "./pages/Schemas";
 import Settings from "./pages/Settings";
+import Trash from "./pages/Trash";
 import Feedback from "./pages/Feedback";
 import Login from "./auth/Login";
 import { useCurrentUser } from "./auth/useCurrentUser";
@@ -47,6 +49,7 @@ const navItems = [
   { to: "/import", icon: Upload, label: "Import" },
   { to: "/feedback", icon: MessageSquare, label: "Feedback" },
   { to: "/schemas", icon: Database, label: "Schemas" },
+  { to: "/trash", icon: Trash2, label: "Trash" },
   { to: "/settings", icon: Settings2, label: "Settings" },
 ];
 
@@ -201,6 +204,7 @@ function AppShell() {
           <Route path="/import" element={<Import />} />
           <Route path="/feedback" element={<Feedback />} />
           <Route path="/schemas" element={<Schemas />} />
+          <Route path="/trash" element={<Trash />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>

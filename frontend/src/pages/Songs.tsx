@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { api, type Song, type AudioFile } from "../api/client";
-import { Search, X, Play, Music, Tag, ArrowUpRight, Plus, Trash2, ChevronDown, ChevronRight, Scissors, FileMusic, Upload } from "lucide-react";
+import { Search, X, Play, Music, Tag, ArrowUpRight, Plus, Trash2, ChevronDown, ChevronRight, Scissors, FileMusic, Upload, RotateCcw } from "lucide-react";
 import { TabViewer } from "../components/TabViewer";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -672,6 +672,16 @@ export default function Songs({ songType, title }: { songType: string; title: st
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["songs"] }),
   });
 
+  const deleteSongMut = useMutation({
+    mutationFn: (id: number) => api.songs.delete(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["songs"] }),
+  });
+
+  const restoreSongMut = useMutation({
+    mutationFn: (id: number) => api.songs.restore(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["songs"] }),
+  });
+
   const createMut = useMutation({
     mutationFn: () => api.songs.create({
       title: newTitle,
@@ -797,7 +807,7 @@ export default function Songs({ songType, title }: { songType: string; title: st
                 <SortTh k="status" className="text-left">Status</SortTh>
                 <SortTh k="key" className="text-center">Key</SortTh>
                 <SortTh k="takes" className="text-center">Takes</SortTh>
-                {songType === "idea" && <th className="text-center px-4 py-3 font-medium" style={{ color: "var(--text-muted)" }}>Actions</th>}
+                <th className="text-center px-4 py-3 font-medium" style={{ color: "var(--text-muted)" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -810,6 +820,10 @@ export default function Songs({ songType, title }: { songType: string; title: st
                   <td className="px-4 py-3 font-medium flex items-center gap-2">
                     {song.has_audio ? <Play size={14} style={{ color: "var(--green)" }} /> : <Music size={14} style={{ color: "var(--text-muted)" }} />}
                     {song.title}
+                    {song.status === "deleted" && (
+                      <span className="px-1 rounded text-[10px] uppercase tracking-wide"
+                        style={{ background: "var(--danger, #ef4444)", color: "#fff" }}>deleted</span>
+                    )}
                     {song.tags.length > 0 && <span className="text-xs" style={{ color: "var(--accent)" }}>+{song.tags.length}</span>}
                   </td>
                   {songType === "cover" && (
@@ -821,16 +835,29 @@ export default function Songs({ songType, title }: { songType: string; title: st
                   </td>
                   <td className="px-4 py-3 text-center" style={{ color: "var(--text-muted)" }}>{song.key || "—"}</td>
                   <td className="px-4 py-3 text-center">{song.take_count || "—"}</td>
-                  {songType === "idea" && (
-                    <td className="px-4 py-3 text-center">
-                      {song.status !== "promoted" && (
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-center gap-3">
+                      {songType === "idea" && song.status !== "promoted" && song.status !== "deleted" && (
                         <button onClick={(e) => { e.stopPropagation(); promoteMut.mutate(song.id); }}
-                          className="text-xs flex items-center gap-1 mx-auto" style={{ color: "var(--accent)" }}>
+                          className="text-xs flex items-center gap-1" style={{ color: "var(--accent)" }}>
                           <ArrowUpRight size={14} /> Promote
                         </button>
                       )}
-                    </td>
-                  )}
+                      {song.status === "deleted" ? (
+                        <button onClick={(e) => { e.stopPropagation(); restoreSongMut.mutate(song.id); }}
+                          className="p-1 rounded hover:bg-white/10" title="Restore"
+                          style={{ color: "var(--green, #22c55e)" }}>
+                          <RotateCcw size={14} />
+                        </button>
+                      ) : (
+                        <button onClick={(e) => { e.stopPropagation(); if (confirm(`Delete "${song.title}"? It can be restored within 30 days.`)) deleteSongMut.mutate(song.id); }}
+                          className="p-1 rounded hover:bg-white/10" title="Delete"
+                          style={{ color: "var(--text-muted)" }}>
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
