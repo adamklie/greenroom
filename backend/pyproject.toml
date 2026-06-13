@@ -1,6 +1,6 @@
 [project]
 name = "greenroom"
-version = "1.2.0"
+version = "1.2.1"
 description = "Song record-keeping for musicians"
 requires-python = ">=3.11"
 dependencies = [
