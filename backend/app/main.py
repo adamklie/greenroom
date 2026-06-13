@@ -12,6 +12,12 @@ from app.config import settings
 from app.auth.router import router as auth_router
 from app.routers import analytics, audio_files, backup, dashboard, dedup, feedback, filebrowser, files, gopro, integrity, media, options, sessions, setlists, songs, tabs as tabs_router, tags, trash, trim, upload
 
+try:
+    from importlib.metadata import version as _pkg_version
+    APP_VERSION = _pkg_version("greenroom")
+except Exception:  # not installed as a package (shouldn't happen in prod)
+    APP_VERSION = "0.0.0"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -42,7 +48,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Greenroom", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="Greenroom", version=APP_VERSION, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -77,7 +83,7 @@ app.include_router(tabs_router.router)
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "app": "greenroom", "version": "0.2.0"}
+    return {"status": "ok", "app": "greenroom", "version": APP_VERSION}
 
 
 # Serve the built React SPA when a static directory is configured.

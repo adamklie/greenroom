@@ -4,6 +4,13 @@ All notable changes to Greenroom are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.1] - 2026-06-13
+
+### Fixed
+- `/api/health` and the OpenAPI schema now report the real package version
+  (read from installed package metadata) instead of a hardcoded `0.2.0`, so
+  Settings → App Info shows the correct backend version.
+
 ## [1.2.0] - 2026-06-13
 
 Terminology: "takes" → "tracks" across the UI and the live API.
