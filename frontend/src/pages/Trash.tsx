@@ -114,7 +114,7 @@ function DedupSection() {
   };
 
   const autoMergeAll = () => {
-    if (!confirm(`Auto-merge ${groups.length} duplicate groups? The entry with the most audio+takes will be kept in each group.`)) return;
+    if (!confirm(`Auto-merge ${groups.length} duplicate groups? The entry with the most audio+tracks will be kept in each group.`)) return;
     for (const group of groups) {
       const best = [...group.entries].sort((a, b) =>
         (b.audio_count + b.take_count) - (a.audio_count + a.take_count)
@@ -145,7 +145,7 @@ function DedupSection() {
       </div>
       <div className="flex items-center gap-3 mb-4">
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-          Songs with matching title + artist. Pick which to keep — audio files, takes, and metadata merge into it. Merged-away songs go to Trash (restorable for 30 days).
+          Songs with matching title + artist. Pick which to keep — audio files, tracks, and metadata merge into it. Merged-away songs go to Trash (restorable for 30 days).
         </p>
         <label className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap">
           <input type="checkbox" checked={fuzzy} onChange={(e) => setFuzzy(e.target.checked)} />
@@ -182,7 +182,7 @@ function DedupSection() {
                     <th className="text-left py-1">Status</th>
                     <th className="text-left py-1">Project</th>
                     <th className="text-center py-1">Audio</th>
-                    <th className="text-center py-1">Takes</th>
+                    <th className="text-center py-1">Tracks</th>
                     <th className="text-left py-1">Notes</th>
                   </tr>
                 </thead>

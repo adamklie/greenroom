@@ -97,7 +97,7 @@ export interface Song {
   reference_audio_file_id: number | null;
   promoted_from_id: number | null;
   has_audio: boolean;
-  take_count: number;
+  track_count: number;
   tags: string[];
 }
 
@@ -195,7 +195,7 @@ export interface Session {
   project: string;
   folder_path: string;
   notes: string | null;
-  take_count: number;
+  track_count: number;
 }
 
 export interface SessionDetail extends Session {

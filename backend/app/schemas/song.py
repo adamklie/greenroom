@@ -38,7 +38,7 @@ class SongRead(SongBase):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     has_audio: bool = False
-    take_count: int = 0
+    track_count: int = 0
     tags: list[str] = []
 
     model_config = {"from_attributes": True}

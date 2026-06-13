@@ -79,7 +79,7 @@ function FocusSongs() {
             <div className="flex gap-4 text-xs" style={{ color: "var(--text-muted)" }}>
               {song.key && <span>Key: {song.key}</span>}
               {song.tempo_bpm && <span>{song.tempo_bpm} BPM</span>}
-              <span>{song.take_count} takes</span>
+              <span>{song.track_count} tracks</span>
               {song.has_audio && <span style={{ color: "var(--green)" }}>Has audio</span>}
             </div>
             {song.notes && (
