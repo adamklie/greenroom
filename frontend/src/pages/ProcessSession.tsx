@@ -671,7 +671,7 @@ export default function ProcessSession() {
                 className="px-3 py-2 rounded-lg border text-sm outline-none" style={inputStyle}>
                 <option value="">New session</option>
                 {recentSessions.map((s) => (
-                  <option key={s.id} value={s.id}>#{s.id} · {s.date} · {s.folder_path.split("/").pop()} ({s.take_count ?? 0})</option>
+                  <option key={s.id} value={s.id}>#{s.id} · {s.date} · {s.folder_path.split("/").pop()} ({s.track_count ?? 0})</option>
                 ))}
               </select>
             </div>

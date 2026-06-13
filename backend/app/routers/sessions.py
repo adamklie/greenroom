@@ -45,7 +45,7 @@ def list_sessions(
     result = []
     for s in sessions:
         sr = SessionRead.model_validate(s)
-        sr.take_count = counts.get(s.id, 0)
+        sr.track_count = counts.get(s.id, 0)
         result.append(sr)
     return result
 
@@ -63,7 +63,7 @@ def get_session(session_id: int, db: Session = Depends(get_db), _user=Depends(re
         .all()
     )
     sr = SessionRead.model_validate(session)
-    sr.take_count = len(audio_files) or len(takes)
+    sr.track_count = len(audio_files) or len(takes)
     af_reads = []
     for af in audio_files:
         r = AudioFileRead.model_validate(af)

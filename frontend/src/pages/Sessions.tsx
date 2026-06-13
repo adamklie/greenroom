@@ -104,7 +104,7 @@ function SessionCard({ session }: { session: Session }) {
           {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
           <div>
             <div className="font-semibold">{session.date}</div>
-            <div className="text-xs" style={{ color: "var(--text-muted)" }}>{session.take_count} recordings</div>
+            <div className="text-xs" style={{ color: "var(--text-muted)" }}>{session.track_count} recordings</div>
           </div>
         </div>
       </button>
@@ -145,8 +145,8 @@ function BestTakes() {
       {!isLoading && takes.length === 0 && (
         <div className="text-center py-12 rounded-xl border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
           <Star size={32} className="mx-auto mb-3" style={{ color: "var(--text-muted)" }} />
-          <p className="font-medium">No rated takes yet</p>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Rate takes in a session to see them here</p>
+          <p className="font-medium">No rated tracks yet</p>
+          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Rate tracks in a session to see them here</p>
         </div>
       )}
       <div className="space-y-3">
@@ -192,7 +192,7 @@ export default function Sessions() {
         <button onClick={() => setTab("best")}
           className="px-4 py-2 rounded-md text-sm font-medium"
           style={{ background: tab === "best" ? "var(--bg-hover)" : "transparent", color: tab === "best" ? "var(--text)" : "var(--text-muted)" }}>
-          Best Takes
+          Best Tracks
         </button>
       </div>
       {tab === "sessions" && (

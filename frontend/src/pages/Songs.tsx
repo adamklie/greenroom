@@ -719,7 +719,7 @@ export default function Songs({ songType, title }: { songType: string; title: st
     else if (sortKey === "project") cmp = (a.project || "").localeCompare(b.project || "");
     else if (sortKey === "status") cmp = (a.status || "").localeCompare(b.status || "");
     else if (sortKey === "key") cmp = (a.key || "").localeCompare(b.key || "");
-    else if (sortKey === "takes") cmp = (a.take_count || 0) - (b.take_count || 0);
+    else if (sortKey === "tracks") cmp = (a.track_count || 0) - (b.track_count || 0);
     return sortDir === "asc" ? cmp : -cmp;
   });
 
@@ -806,7 +806,7 @@ export default function Songs({ songType, title }: { songType: string; title: st
                 <SortTh k="project" className="text-left">Project</SortTh>
                 <SortTh k="status" className="text-left">Status</SortTh>
                 <SortTh k="key" className="text-center">Key</SortTh>
-                <SortTh k="takes" className="text-center">Takes</SortTh>
+                <SortTh k="tracks" className="text-center">Tracks</SortTh>
                 <th className="text-center px-4 py-3 font-medium" style={{ color: "var(--text-muted)" }}>Actions</th>
               </tr>
             </thead>
@@ -834,7 +834,7 @@ export default function Songs({ songType, title }: { songType: string; title: st
                     <StatusBadge status={song.status} onClick={(e) => { e.stopPropagation(); cycleStatus(song); }} />
                   </td>
                   <td className="px-4 py-3 text-center" style={{ color: "var(--text-muted)" }}>{song.key || "—"}</td>
-                  <td className="px-4 py-3 text-center">{song.take_count || "—"}</td>
+                  <td className="px-4 py-3 text-center">{song.track_count || "—"}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-3">
                       {songType === "idea" && song.status !== "promoted" && song.status !== "deleted" && (

@@ -35,7 +35,7 @@ def _songs_to_read_bulk(songs: list[Song], db: Session) -> list[SongRead]:
     # Access via song.tags in the loop; ensure the relationship is loaded up-front.
     results: list[SongRead] = []
     for song in songs:
-        take_count = af_counts.get(song.id, 0)
+        track_count = af_counts.get(song.id, 0)
         results.append(SongRead(
             id=song.id, title=song.title, artist=song.artist, type=song.type,
             project=song.project, status=song.status, key=song.key,
@@ -45,8 +45,8 @@ def _songs_to_read_bulk(songs: list[Song], db: Session) -> list[SongRead]:
             reference_audio_file_id=song.reference_audio_file_id,
             promoted_from_id=song.promoted_from_id,
             created_at=song.created_at, updated_at=song.updated_at,
-            has_audio=take_count > 0,
-            take_count=take_count,
+            has_audio=track_count > 0,
+            track_count=track_count,
             tags=[t.name for t in song.tags],
         ))
     return results
@@ -54,7 +54,7 @@ def _songs_to_read_bulk(songs: list[Song], db: Session) -> list[SongRead]:
 
 def _song_to_read(song: Song, db: Session) -> SongRead:
     has_audio = db.query(AudioFile.id).filter(AudioFile.song_id == song.id).first() is not None
-    take_count = db.query(func.count(AudioFile.id)).filter(AudioFile.song_id == song.id).scalar()
+    track_count = db.query(func.count(AudioFile.id)).filter(AudioFile.song_id == song.id).scalar()
     tag_names = [t.name for t in song.tags]
     return SongRead(
         id=song.id,
@@ -75,7 +75,7 @@ def _song_to_read(song: Song, db: Session) -> SongRead:
         created_at=song.created_at,
         updated_at=song.updated_at,
         has_audio=has_audio,
-        take_count=take_count,
+        track_count=track_count,
         tags=tag_names,
     )
 

@@ -15,7 +15,7 @@ class SessionRead(BaseModel):
     folder_path: str
     notes: str | None = None
     created_at: datetime | None = None
-    take_count: int = 0
+    track_count: int = 0
 
     model_config = {"from_attributes": True}
 

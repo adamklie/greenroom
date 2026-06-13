@@ -4,12 +4,28 @@ All notable changes to Greenroom are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.2.0] - 2026-06-13
+
+Terminology: "takes" → "tracks" across the UI and the live API.
+
+### Changed
+- Renamed the user-facing "Takes" terminology to "Tracks" throughout the UI
+  (songs table count column, dashboard, the Sessions "Best Tracks" tab, the
+  trash/dedup view).
+- Renamed the API response field `take_count` → `track_count` on songs and
+  sessions (plus the frontend types and usages). It counts recordings
+  (`AudioFile`s); behavior is unchanged.
 
 ### Fixed
 - GoPro raw upload (`/api/gopro/upload-raw`): bind the tempfile path before
   copying so a mid-copy failure (e.g. a full disk on a multi-GB upload) can no
   longer leak the partial temp file.
+
+### Note
+- The deprecated `Take` table still backs the Sessions "Best Tracks" feature,
+  the dedup counts, and `analytics.py` (whose only UI consumer, the Progress
+  tab, was removed in 1.1.0). Retiring `Take` and repointing those reads to
+  `AudioFile` is a separate follow-up, not part of this rename.
 
 ## [1.1.0] - 2026-06-13
 
