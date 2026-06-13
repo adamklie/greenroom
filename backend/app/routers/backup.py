@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_editor, require_viewer
+from app.auth.deps import require_admin
 from app.database import get_db
 from app.services.backup import (
     auto_heal_paths,
@@ -22,20 +22,20 @@ router = APIRouter(prefix="/api/backup", tags=["backup"])
 
 
 @router.post("/create")
-def create_backup(_user=Depends(require_editor)):
+def create_backup(_user=Depends(require_admin)):
     """Create a database backup now."""
     path = backup_database()
     return {"ok": True, "path": path}
 
 
 @router.get("/list")
-def get_backups(_user=Depends(require_viewer)):
+def get_backups(_user=Depends(require_admin)):
     """List available backups."""
     return {"backups": list_backups()}
 
 
 @router.post("/restore/{filename}")
-def restore(filename: str, _user=Depends(require_editor)):
+def restore(filename: str, _user=Depends(require_admin)):
     """Restore a backup. Current DB is backed up first."""
     try:
         path = restore_backup(filename)
@@ -45,21 +45,21 @@ def restore(filename: str, _user=Depends(require_editor)):
 
 
 @router.post("/hash-files")
-def hash_files(db: Session = Depends(get_db), _user=Depends(require_editor)):
+def hash_files(db: Session = Depends(get_db), _user=Depends(require_admin)):
     """Compute SHA256 hashes for all audio files (for auto-heal)."""
     stats = hash_all_files(db)
     return stats
 
 
 @router.post("/auto-heal")
-def heal(db: Session = Depends(get_db), _user=Depends(require_editor)):
+def heal(db: Session = Depends(get_db), _user=Depends(require_admin)):
     """Find broken file paths and fix them using content hashes."""
     stats = auto_heal_paths(db)
     return stats
 
 
 @router.post("/export")
-def export(db: Session = Depends(get_db), _user=Depends(require_editor)):
+def export(db: Session = Depends(get_db), _user=Depends(require_admin)):
     """Export all annotations as JSON (writes a server-side file and returns metadata)."""
     result = export_annotations(db)
     return {"ok": True, "path": result["path"],
@@ -69,7 +69,7 @@ def export(db: Session = Depends(get_db), _user=Depends(require_editor)):
 
 
 @router.get("/export-download")
-def export_download(db: Session = Depends(get_db), _user=Depends(require_editor)):
+def export_download(db: Session = Depends(get_db), _user=Depends(require_admin)):
     """Stream all annotations as a downloadable JSON attachment.
 
     The POST /export sibling writes to the server's vault dir; this one

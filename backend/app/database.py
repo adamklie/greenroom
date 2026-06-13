@@ -56,6 +56,32 @@ def _apply_project_scope(execute_state) -> None:
         )
 
 
+@event.listens_for(Session, "before_flush")
+def _stamp_project_id(session: Session, flush_context, instances) -> None:
+    """Stamp project_id on newly-created scoped rows from the active scope.
+
+    The read filter (_apply_project_scope) keeps a request from *seeing* other
+    projects; this is its write-side partner: a row created during a request
+    scoped to exactly one project inherits that project_id, so content lands in
+    the project the user is working in instead of being created NULL (which the
+    read filter would then hide from everyone).
+
+    Inert unless the flag is on AND the scope is exactly one project — so admin /
+    system / dev-bypass (unscoped) writes are untouched, and an explicitly-set
+    project_id is never overwritten.
+    """
+    if not settings.multi_project:
+        return
+    scope = get_scope()
+    if scope is None or len(scope) != 1:
+        return
+    (project_id,) = tuple(scope)
+    models = _scoped_models()
+    for obj in session.new:
+        if isinstance(obj, models) and getattr(obj, "project_id", None) is None:
+            obj.project_id = project_id
+
+
 # Debounced DB backup on every commit. Installed unconditionally so the vault
 # gets a rolling snapshot after any annotation change; a burst of writes
 # collapses to a single backup via schedule_backup's debounce.

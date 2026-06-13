@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_viewer
+from app.auth.deps import project_viewer, require_admin
 from app.config import settings
 from app.database import get_db
 from app.models import AudioFile, Take
@@ -112,7 +112,7 @@ def _resolve_and_serve(rel_path: str | None, kind: str, request: Request) -> Str
 
 
 @router.get("/take/{take_id}/audio")
-def stream_take_audio(take_id: int, request: Request, db: Session = Depends(get_db), _user=Depends(require_viewer)):
+def stream_take_audio(take_id: int, request: Request, db: Session = Depends(get_db), _user=Depends(project_viewer)):
     take = db.query(Take).get(take_id)
     if not take:
         raise HTTPException(404, "Take not found")
@@ -120,7 +120,7 @@ def stream_take_audio(take_id: int, request: Request, db: Session = Depends(get_
 
 
 @router.get("/take/{take_id}/video")
-def stream_take_video(take_id: int, request: Request, db: Session = Depends(get_db), _user=Depends(require_viewer)):
+def stream_take_video(take_id: int, request: Request, db: Session = Depends(get_db), _user=Depends(project_viewer)):
     take = db.query(Take).get(take_id)
     if not take:
         raise HTTPException(404, "Take not found")
@@ -128,7 +128,7 @@ def stream_take_video(take_id: int, request: Request, db: Session = Depends(get_
 
 
 @router.get("/audio/{audio_file_id}")
-def stream_audio_file(audio_file_id: int, request: Request, download: bool = Query(False), db: Session = Depends(get_db), _user=Depends(require_viewer)):
+def stream_audio_file(audio_file_id: int, request: Request, download: bool = Query(False), db: Session = Depends(get_db), _user=Depends(project_viewer)):
     af = db.query(AudioFile).get(audio_file_id)
     if not af:
         raise HTTPException(404, "Audio file not found")
@@ -150,8 +150,10 @@ def stream_audio_file(audio_file_id: int, request: Request, download: bool = Que
 
 
 @router.get("/file/{file_path:path}")
-def stream_file(file_path: str, request: Request, _user=Depends(require_viewer)):
-    """Stream any file by path. Supports absolute paths and relative to music_dir."""
+def stream_file(file_path: str, request: Request, _user=Depends(require_admin)):
+    """Stream any file by raw path (admin-only ops tool). The path is not tied to
+    a project row, so it can't be project-scoped — gate it to global admins,
+    alongside the file browser."""
     full = _resolve_path(file_path)
 
     # Security: for relative paths, ensure within music_dir

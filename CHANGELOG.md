@@ -13,6 +13,20 @@ All notable changes to Greenroom are documented here. Format follows
   files / takes / setlists (migration `f1a2b3c4d5e6`), and
   `scripts/backfill_projects.py` to populate it from the legacy `project`
   string. Additive and reversible (clean downgrade; legacy `project` retained).
+- v2 multi-project enforcement (Phase 3b) — also behind the default-off flag,
+  **inert until it flips**: per-request project scoping via the
+  `X-Greenroom-Project` header, a `require_project_role` gate, automatic
+  `project_id` stamping on new rows, cross-project write validation, and a
+  `/api/projects` CRUD + membership API. Read isolation is enforced centrally by
+  a `do_orm_execute` query filter (fails closed; covers relationship loads).
+  HTTP- and ORM-level isolation test suites added.
+
+### Changed
+- The ops/maintenance endpoints (integrity, file health/move/consolidate, file
+  browser, raw file streaming, cross-project dedup, and DB backup/restore/export)
+  are now **admin-only**, up from editor/viewer. With the multi-project flag off
+  this only affects non-admin users of those maintenance tools; data routes are
+  unchanged.
 
 ## [1.2.1] - 2026-06-13
 

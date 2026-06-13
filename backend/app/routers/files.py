@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_editor, require_viewer
+from app.auth.deps import require_admin
 from app.database import get_db
 from app.services.file_manager import (
     consolidate_all_external,
@@ -41,7 +41,7 @@ class ConsolidateResponse(BaseModel):
 
 
 @router.get("/health", response_model=HealthCheckResponse)
-def check_health(db: Session = Depends(get_db), _user=Depends(require_viewer)):
+def check_health(db: Session = Depends(get_db), _user=Depends(require_admin)):
     """Check for broken file links in the database."""
     broken = health_check(db)
     return HealthCheckResponse(
@@ -54,7 +54,7 @@ def check_health(db: Session = Depends(get_db), _user=Depends(require_viewer)):
 
 
 @router.post("/audio/{audio_file_id}/move", response_model=dict)
-def move_file(audio_file_id: int, req: MoveRequest, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def move_file(audio_file_id: int, req: MoveRequest, db: Session = Depends(get_db), _user=Depends(require_admin)):
     """Move an audio file to a new location. Updates DB atomically.
 
     Cloud mode: not supported — R2 keys are content-addressed, there's no
@@ -70,7 +70,7 @@ def move_file(audio_file_id: int, req: MoveRequest, db: Session = Depends(get_db
 
 
 @router.post("/audio/{audio_file_id}/consolidate", response_model=dict)
-def consolidate_one(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def consolidate_one(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(require_admin)):
     """Move a single file from external location into the organized music directory.
 
     Cloud mode: not supported — every file is already in R2.
@@ -85,7 +85,7 @@ def consolidate_one(audio_file_id: int, db: Session = Depends(get_db), _user=Dep
 
 
 @router.post("/consolidate-all", response_model=ConsolidateResponse)
-def consolidate_all(db: Session = Depends(get_db), _user=Depends(require_editor)):
+def consolidate_all(db: Session = Depends(get_db), _user=Depends(require_admin)):
     """Move ALL external files into the organized music directory.
 
     Cloud mode: not supported.

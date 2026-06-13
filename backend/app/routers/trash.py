@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_editor, require_viewer
+from app.auth.deps import project_editor, project_viewer
 from app.database import get_db
 from app.models import Song
 from app.services.autosync import list_trash, purge_trash, restore_song
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/trash", tags=["trash"])
 
 
 @router.get("")
-def get_trash(db: Session = Depends(get_db), _user=Depends(require_viewer)):
+def get_trash(db: Session = Depends(get_db), _user=Depends(project_viewer)):
     """List items in the trash + deleted songs."""
     files = list_trash(db)
     deleted_songs = db.query(Song).filter_by(status="deleted").all()
@@ -28,7 +28,7 @@ def get_trash(db: Session = Depends(get_db), _user=Depends(require_viewer)):
 
 
 @router.post("/restore/{song_id}")
-def restore(song_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def restore(song_id: int, db: Session = Depends(get_db), _user=Depends(project_editor)):
     """Restore a soft-deleted song."""
     try:
         result = restore_song(db, song_id)
@@ -38,7 +38,7 @@ def restore(song_id: int, db: Session = Depends(get_db), _user=Depends(require_e
 
 
 @router.post("/purge")
-def purge(older_than_days: int = Query(30), db: Session = Depends(get_db), _user=Depends(require_editor)):
+def purge(older_than_days: int = Query(30), db: Session = Depends(get_db), _user=Depends(project_editor)):
     """Permanently delete trashed files older than N days."""
     result = purge_trash(db, older_than_days=older_than_days)
     return {"ok": True, **result}

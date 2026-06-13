@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_editor
+from app.auth.deps import project_editor
 from app.database import get_db
 from app.models import AudioFile
 from app.models.audio_file import generate_identifier
@@ -29,7 +29,7 @@ class TrimRequest(BaseModel):
 
 
 @router.post("/{audio_file_id}/trim", response_model=AudioFileRead)
-def trim_audio_file(audio_file_id: int, req: TrimRequest, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def trim_audio_file(audio_file_id: int, req: TrimRequest, db: Session = Depends(get_db), _user=Depends(project_editor)):
     """Trim an audio file to a time range, creating a new AudioFile.
 
     Requires ffmpeg + a filesystem-backed source. In cloud mode the source

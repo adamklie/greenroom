@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.auth.router import router as auth_router
-from app.routers import analytics, audio_files, backup, dashboard, dedup, feedback, filebrowser, files, gopro, integrity, media, options, sessions, setlists, songs, tabs as tabs_router, tags, trash, trim, upload
+from app.routers import analytics, audio_files, backup, dashboard, dedup, feedback, filebrowser, files, gopro, integrity, media, options, projects, sessions, setlists, songs, tabs as tabs_router, tags, trash, trim, upload
 
 try:
     from importlib.metadata import version as _pkg_version
@@ -76,6 +76,7 @@ app.include_router(trash.router)
 app.include_router(dedup.router)
 app.include_router(integrity.router)
 app.include_router(options.router)
+app.include_router(projects.router)
 app.include_router(feedback.router)
 app.include_router(trim.router)
 app.include_router(tabs_router.router)

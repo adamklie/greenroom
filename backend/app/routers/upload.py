@@ -12,7 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_editor
+from app.auth.deps import project_editor
 from app.database import get_db
 from app.models import AudioFile, Song
 from app.models.audio_file import generate_identifier
@@ -50,7 +50,7 @@ async def upload_file(
     role: str = Form("recording"),
     notes: str | None = Form(None),
     db: Session = Depends(get_db),
-    _user=Depends(require_editor),
+    _user=Depends(project_editor),
 ):
     """Upload a file into the vault.
 

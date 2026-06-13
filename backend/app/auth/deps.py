@@ -22,10 +22,14 @@ from __future__ import annotations
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app import scoping
 from app.auth.jwt import decode_token
 from app.config import settings
 from app.database import get_db
-from app.models import User
+from app.models import ProjectMember, User
+
+# Header the frontend sends to name the active project (Phase 3b).
+PROJECT_HEADER = "X-Greenroom-Project"
 
 # Avoid an `from app.auth.router import COOKIE_NAME` cycle (router imports
 # from this module too). Keep the cookie name canonical here and re-use it
@@ -109,3 +113,90 @@ def _require_role(min_role: str):
 require_viewer = _require_role("viewer")
 require_editor = _require_role("editor")
 require_admin = _require_role("admin")
+
+
+# Per-project role priority. owner outranks editor outranks viewer. (The global
+# _ROLE_RANK above is a different ladder — viewer/editor/admin — used when the
+# multi_project flag is off or for the global admin bypass.)
+_PROJECT_RANK = {"viewer": 1, "editor": 2, "owner": 3}
+
+
+def _active_project_id(request: Request) -> int:
+    """Read + validate the X-Greenroom-Project header. Raises 400 if absent or
+    non-integer. Existence/membership is checked by the caller."""
+    raw = request.headers.get(PROJECT_HEADER)
+    if not raw:
+        raise HTTPException(status_code=400, detail=f"Missing {PROJECT_HEADER} header")
+    try:
+        return int(raw)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid {PROJECT_HEADER} header")
+
+
+def require_project_role(min_role: str):
+    """Project-scoped role gate — the v2 replacement for require_viewer/editor on
+    data routes. As a side effect it sets the request's read scope (the
+    do_orm_execute filter in database.py) so reads see only the active project.
+
+    Behavior matrix (resolved in this order):
+      - dev bypass (auth_required=False): synthetic admin, UNSCOPED (project
+        isolation is a documented no-op in dev).
+      - flag off (multi_project=False): gate on the global User.role exactly like
+        the old require_* deps; no scope set → V1 behavior.
+      - flag on, global admin: allowed and UNSCOPED (admin sees every project).
+      - flag on, non-admin: require the X-Greenroom-Project header, a
+        project_members row in that project, and a per-project role >= min_role;
+        scope the request to {project_id} and reset on teardown.
+
+    Implemented as an ASYNC generator dependency on purpose: an async dep runs
+    in the request's event-loop context, so the contextvar it sets propagates to
+    the sync endpoint (Starlette copies the context into the threadpool worker)
+    and the teardown reset runs in the same context. A *sync* yield-dep would set
+    and reset the var in two different threadpool contexts — the scope wouldn't
+    reach the endpoint and reset() would raise.
+    """
+    project_required = _PROJECT_RANK[min_role]
+    global_required = _ROLE_RANK[min_role]
+
+    async def dep(request: Request, db: Session = Depends(get_db)):
+        if not settings.auth_required:
+            yield _synthetic_admin()
+            return
+
+        user = _read_cookie_user(request, db)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
+        if not settings.multi_project:
+            if _ROLE_RANK.get(user.role, 0) < global_required:
+                raise HTTPException(status_code=403, detail="Insufficient role")
+            yield user
+            return
+
+        if user.role == "admin":
+            yield user  # unscoped: a global admin sees every project
+            return
+
+        project_id = _active_project_id(request)
+        member = (
+            db.query(ProjectMember)
+            .filter_by(project_id=project_id, user_id=user.id)
+            .first()
+        )
+        if member is None:
+            raise HTTPException(status_code=403, detail="Not a member of this project")
+        if _PROJECT_RANK.get(member.role, 0) < project_required:
+            raise HTTPException(status_code=403, detail="Insufficient project role")
+
+        token = scoping.set_scope({project_id})
+        try:
+            yield user
+        finally:
+            scoping.reset_scope(token)
+
+    return dep
+
+
+# Module-level singletons for the data routes (mirror require_viewer/editor).
+project_viewer = require_project_role("viewer")
+project_editor = require_project_role("editor")

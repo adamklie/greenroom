@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_editor, require_viewer
+from app.auth.deps import project_editor, project_viewer
 from app.config import settings
 from app.database import get_db
 from app.models import AudioFile, LyricsVersion, Song, Tag, Take
@@ -17,6 +17,20 @@ from app.schemas.song import SongCreate, SongDetail, SongRead, SongUpdate
 from app.schemas.take import TakeRead
 
 router = APIRouter(prefix="/api/songs", tags=["songs"])
+
+
+def _require_accessible_audio_file(audio_file_id: int | None, db: Session) -> None:
+    """Reject a reference_audio_file_id that points outside the active project.
+    A written FK isn't covered by the read filter, so validate it via a scoped
+    lookup (returns None for a cross-project row)."""
+    if audio_file_id is not None and db.query(AudioFile).get(audio_file_id) is None:
+        raise HTTPException(400, "reference_audio_file_id refers to a file you can't access")
+
+
+def _require_accessible_song(song_id: int | None, db: Session) -> None:
+    """Reject reassigning an audio file to a song outside the active project."""
+    if song_id is not None and db.query(Song).get(song_id) is None:
+        raise HTTPException(400, "song_id refers to a song you can't access")
 
 
 def _songs_to_read_bulk(songs: list[Song], db: Session) -> list[SongRead]:
@@ -89,7 +103,7 @@ def list_songs(
     tag: str | None = Query(None),
     include_deleted: bool = Query(False),
     db: Session = Depends(get_db),
-    _user=Depends(require_viewer),
+    _user=Depends(project_viewer),
 ):
     q = db.query(Song)
     if not include_deleted:
@@ -111,7 +125,7 @@ def list_songs(
 
 
 @router.post("", response_model=SongRead)
-def create_song(data: SongCreate, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def create_song(data: SongCreate, db: Session = Depends(get_db), _user=Depends(project_editor)):
     values = data.model_dump()
     # DB has NOT NULL on type/status/project from original schema — provide defaults
     if not values.get("type"):
@@ -128,7 +142,7 @@ def create_song(data: SongCreate, db: Session = Depends(get_db), _user=Depends(r
 
 
 @router.get("/{song_id}", response_model=SongDetail)
-def get_song(song_id: int, db: Session = Depends(get_db), _user=Depends(require_viewer)):
+def get_song(song_id: int, db: Session = Depends(get_db), _user=Depends(project_viewer)):
     song = db.query(Song).get(song_id)
     if not song:
         raise HTTPException(404, "Song not found")
@@ -165,13 +179,15 @@ def get_song(song_id: int, db: Session = Depends(get_db), _user=Depends(require_
 
 
 @router.patch("/{song_id}", response_model=SongRead)
-def update_song(song_id: int, data: SongUpdate, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def update_song(song_id: int, data: SongUpdate, db: Session = Depends(get_db), _user=Depends(project_editor)):
     song = db.query(Song).get(song_id)
     if not song:
         raise HTTPException(404, "Song not found")
 
     # Track which fields changed (for auto-sync)
     changes = data.model_dump(exclude_unset=True)
+    if "reference_audio_file_id" in changes:
+        _require_accessible_audio_file(changes["reference_audio_file_id"], db)
     needs_file_sync = any(k in changes for k in ("type", "project", "title", "artist"))
 
     for field, value in changes.items():
@@ -194,7 +210,7 @@ def update_song(song_id: int, data: SongUpdate, db: Session = Depends(get_db), _
 
 
 @router.delete("/{song_id}")
-def delete_song(song_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def delete_song(song_id: int, db: Session = Depends(get_db), _user=Depends(project_editor)):
     """Soft-delete: moves files to _trash/, marks song as deleted.
     Files are permanently removed after 30 days."""
     from app.services.autosync import soft_delete_song
@@ -206,7 +222,7 @@ def delete_song(song_id: int, db: Session = Depends(get_db), _user=Depends(requi
 
 
 @router.post("/{song_id}/restore", response_model=SongRead)
-def restore_deleted_song(song_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def restore_deleted_song(song_id: int, db: Session = Depends(get_db), _user=Depends(project_editor)):
     """Restore a soft-deleted song."""
     from app.services.autosync import restore_song
     try:
@@ -220,7 +236,7 @@ def restore_deleted_song(song_id: int, db: Session = Depends(get_db), _user=Depe
 # --- Lyrics ---
 
 @router.put("/{song_id}/lyrics", response_model=SongRead)
-def update_lyrics(song_id: int, data: LyricsUpdate, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def update_lyrics(song_id: int, data: LyricsUpdate, db: Session = Depends(get_db), _user=Depends(project_editor)):
     song = db.query(Song).get(song_id)
     if not song:
         raise HTTPException(404, "Song not found")
@@ -247,7 +263,7 @@ def update_lyrics(song_id: int, data: LyricsUpdate, db: Session = Depends(get_db
 
 
 @router.get("/{song_id}/lyrics/versions", response_model=list[LyricsVersionRead])
-def list_lyrics_versions(song_id: int, db: Session = Depends(get_db), _user=Depends(require_viewer)):
+def list_lyrics_versions(song_id: int, db: Session = Depends(get_db), _user=Depends(project_viewer)):
     return (
         db.query(LyricsVersion)
         .filter(LyricsVersion.song_id == song_id)
@@ -259,7 +275,7 @@ def list_lyrics_versions(song_id: int, db: Session = Depends(get_db), _user=Depe
 # --- Tags ---
 
 @router.post("/{song_id}/tags")
-def add_song_tag(song_id: int, tag_name: str = Query(...), db: Session = Depends(get_db), _user=Depends(require_editor)):
+def add_song_tag(song_id: int, tag_name: str = Query(...), db: Session = Depends(get_db), _user=Depends(project_editor)):
     song = db.query(Song).get(song_id)
     if not song:
         raise HTTPException(404, "Song not found")
@@ -275,7 +291,7 @@ def add_song_tag(song_id: int, tag_name: str = Query(...), db: Session = Depends
 
 
 @router.delete("/{song_id}/tags/{tag_name}")
-def remove_song_tag(song_id: int, tag_name: str, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def remove_song_tag(song_id: int, tag_name: str, db: Session = Depends(get_db), _user=Depends(project_editor)):
     song = db.query(Song).get(song_id)
     if not song:
         raise HTTPException(404, "Song not found")
@@ -289,7 +305,7 @@ def remove_song_tag(song_id: int, tag_name: str, db: Session = Depends(get_db), 
 # --- Promote idea to original ---
 
 @router.post("/{song_id}/promote", response_model=SongRead)
-def promote_idea(song_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def promote_idea(song_id: int, db: Session = Depends(get_db), _user=Depends(project_editor)):
     song = db.query(Song).get(song_id)
     if not song:
         raise HTTPException(404, "Song not found")
@@ -323,13 +339,15 @@ def promote_idea(song_id: int, db: Session = Depends(get_db), _user=Depends(requ
 # --- Audio File CRUD ---
 
 @router.patch("/audio-files/{audio_file_id}", response_model=AudioFileRead)
-def update_audio_file(audio_file_id: int, data: AudioFileUpdate, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def update_audio_file(audio_file_id: int, data: AudioFileUpdate, db: Session = Depends(get_db), _user=Depends(project_editor)):
     """Update an audio file's metadata. If song_id changes, file moves automatically."""
     af = db.query(AudioFile).get(audio_file_id)
     if not af:
         raise HTTPException(404, "Audio file not found")
 
     changes = data.model_dump(exclude_unset=True)
+    if "song_id" in changes:
+        _require_accessible_song(changes["song_id"], db)
     song_changed = "song_id" in changes and changes["song_id"] != af.song_id
 
     for field, value in changes.items():

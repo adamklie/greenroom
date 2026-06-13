@@ -13,7 +13,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, selectinload
 
-from app.auth.deps import require_editor
+from app.auth.deps import require_admin
 from app.config import settings
 from app.database import get_db
 from app.models import AudioFile
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/integrity", tags=["integrity"])
 
 
 @router.get("/recordings")
-def check_recordings(db: Session = Depends(get_db), _user=Depends(require_editor)):
+def check_recordings(db: Session = Depends(get_db), _user=Depends(require_admin)):
     backend = get_backend()
     cloud = is_cloud_backend()
 
