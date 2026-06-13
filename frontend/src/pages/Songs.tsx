@@ -125,7 +125,7 @@ function SongAudioFileRow({ af, onUpdate }: { af: AudioFile; onUpdate: () => voi
   });
 
   const save = (field: string, value: unknown) => updateMut.mutate({ [field]: value === "" ? null : value });
-  const displayName = af.identifier || af.file_path.split("/").pop() || af.file_path;
+  const displayName = af.submitted_file_name || af.identifier || af.file_path.split("/").pop() || af.file_path;
   const iStyle = { borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" };
 
   return (
@@ -612,8 +612,8 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
               <thead>
                 <tr style={{ background: "var(--bg)" }}>
                   <th className="text-left px-2 py-1.5 font-medium" style={{ color: "var(--text-muted)" }}>File</th>
-                  <th className="text-left px-2 py-1.5 font-medium w-16" style={{ color: "var(--text-muted)" }}>Source</th>
-                  <th className="text-left px-2 py-1.5 font-medium w-16" style={{ color: "var(--text-muted)" }}>Role</th>
+                  <th className="text-left px-2 py-1.5 font-medium w-28" style={{ color: "var(--text-muted)" }}>Source</th>
+                  <th className="text-left px-2 py-1.5 font-medium w-28" style={{ color: "var(--text-muted)" }}>Role</th>
                   <th className="text-center px-2 py-1.5 font-medium w-20" style={{ color: "var(--text-muted)" }}>Rating</th>
                   <th className="w-6" />
                 </tr>

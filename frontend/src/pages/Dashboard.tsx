@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, type RecentSong, type RecentAudioFile, type RecentSession } from "../api/client";
-import { Music, Radio, Star, Disc3, PenTool, Lightbulb, Target, ArrowRight, Clock, FileAudio, CalendarDays } from "lucide-react";
+import { Music, Radio, Disc3, PenTool, Lightbulb, Target, ArrowRight, Clock, FileAudio, CalendarDays, Upload } from "lucide-react";
 
 function StatCard({ label, value, icon: Icon, color }: {
   label: string; value: number | string; icon: React.ElementType; color: string;
@@ -107,16 +107,22 @@ export default function Dashboard() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Dashboard</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold">Dashboard</h2>
+        <Link to="/import"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
+          style={{ background: "var(--accent)" }}>
+          <Upload size={16} /> Import
+        </Link>
+      </div>
 
       {/* Focus Songs */}
       <FocusSongs />
 
       {/* Top stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
         <StatCard label="Total Songs" value={stats.total_songs} icon={Music} color="var(--accent)" />
         <StatCard label="Practice Sessions" value={stats.total_sessions} icon={Radio} color="var(--blue)" />
-        <StatCard label="Unrated Takes" value={stats.unrated_takes} icon={Star} color="var(--yellow)" />
       </div>
 
       {/* Recent additions */}
@@ -151,31 +157,18 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Songs by status */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-8">
-        <div className="rounded-xl p-5 border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
-          <h3 className="font-semibold mb-3">Songs by Status</h3>
-          <div className="flex gap-6 flex-wrap">
-            {Object.entries(stats.songs_by_status).map(([status, count]) => (
-              <div key={status} className="text-center">
-                <div className="text-2xl font-bold">{count}</div>
-                <div className="text-xs capitalize" style={{ color: "var(--text-muted)" }}>{status}</div>
+      {/* Songs by project */}
+      <div className="rounded-xl p-5 border mt-8" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
+        <h3 className="font-semibold mb-3">Songs by Project</h3>
+        <div className="flex gap-6 flex-wrap">
+          {Object.entries(stats.songs_by_project).map(([project, count]) => (
+            <div key={project} className="text-center">
+              <div className="text-2xl font-bold">{count}</div>
+              <div className="text-xs capitalize" style={{ color: "var(--text-muted)" }}>
+                {project.replace("_", " ")}
               </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-xl p-5 border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
-          <h3 className="font-semibold mb-3">Songs by Project</h3>
-          <div className="flex gap-6 flex-wrap">
-            {Object.entries(stats.songs_by_project).map(([project, count]) => (
-              <div key={project} className="text-center">
-                <div className="text-2xl font-bold">{count}</div>
-                <div className="text-xs capitalize" style={{ color: "var(--text-muted)" }}>
-                  {project.replace("_", " ")}
-                </div>
-              </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

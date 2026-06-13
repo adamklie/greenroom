@@ -10,7 +10,6 @@ import {
   ListMusic,
   Sun,
   Moon,
-  TrendingUp,
   Scissors,
   Upload,
   FileText,
@@ -24,7 +23,6 @@ import Dashboard from "./pages/Dashboard";
 import Songs from "./pages/Songs";
 import Sessions from "./pages/Sessions";
 import SetlistBuilder from "./pages/SetlistBuilder";
-import Progress from "./pages/Progress";
 import ProcessSession from "./pages/ProcessSession";
 import Import from "./pages/Import";
 import Library from "./pages/Library";
@@ -35,30 +33,23 @@ import Feedback from "./pages/Feedback";
 import Login from "./auth/Login";
 import { useCurrentUser } from "./auth/useCurrentUser";
 import { api, setForbiddenHandler } from "./api/client";
+import { ThemeProvider, useTheme } from "./theme";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/import", icon: Upload, label: "Import" },
   { to: "/library", icon: FileText, label: "Library" },
   { to: "/covers", icon: Disc3, label: "Covers" },
   { to: "/originals", icon: PenTool, label: "Originals" },
   { to: "/ideas", icon: Lightbulb, label: "Ideas" },
+  { to: "/setlists", icon: ListMusic, label: "Setlists" },
   { to: "/sessions", icon: CalendarDays, label: "Sessions" },
   { to: "/process", icon: Scissors, label: "Process" },
-  { to: "/progress", icon: TrendingUp, label: "Progress" },
-  { to: "/setlists", icon: ListMusic, label: "Setlists" },
-  { to: "/import", icon: Upload, label: "Import" },
   { to: "/feedback", icon: MessageSquare, label: "Feedback" },
-  { to: "/schemas", icon: Database, label: "Schemas" },
-  { to: "/trash", icon: Trash2, label: "Trash" },
+  { to: "/schemas", icon: Database, label: "Schemas", adminOnly: true },
+  { to: "/trash", icon: Trash2, label: "Trash & Cleanup" },
   { to: "/settings", icon: Settings2, label: "Settings" },
 ];
-
-function getInitialTheme(): "dark" | "light" {
-  if (typeof window !== "undefined") {
-    return (localStorage.getItem("greenroom-theme") as "dark" | "light") || "dark";
-  }
-  return "dark";
-}
 
 /**
  * Lightweight 403 toast — registered as the global forbidden handler on
@@ -88,17 +79,10 @@ function ForbiddenToast() {
 }
 
 function AppShell() {
-  const [theme, setTheme] = useState<"dark" | "light">(getInitialTheme);
+  const { theme, toggleTheme } = useTheme();
   const { user } = useCurrentUser();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-
-  const toggleTheme = () => {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("greenroom-theme", next);
-  };
 
   const onLogout = async () => {
     try {
@@ -109,10 +93,6 @@ function AppShell() {
     queryClient.removeQueries({ queryKey: ["auth", "me"] });
     navigate("/login");
   };
-
-  if (typeof document !== "undefined") {
-    document.documentElement.setAttribute("data-theme", theme);
-  }
 
   return (
     <div className="flex h-screen">
@@ -141,7 +121,9 @@ function AppShell() {
           </p>
         </div>
         <div className="flex-1 px-3 space-y-1 overflow-y-auto">
-          {navItems.map(({ to, icon: Icon, label }) => (
+          {navItems
+            .filter((item) => !("adminOnly" in item) || user?.role === "admin")
+            .map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}
@@ -199,7 +181,6 @@ function AppShell() {
           <Route path="/sessions" element={<Sessions />} />
           <Route path="/process" element={<ProcessSession />} />
           <Route path="/library" element={<Library />} />
-          <Route path="/progress" element={<Progress />} />
           <Route path="/setlists" element={<SetlistBuilder />} />
           <Route path="/import" element={<Import />} />
           <Route path="/feedback" element={<Feedback />} />
@@ -221,7 +202,7 @@ export default function App() {
   if (isLoading) return null;
 
   return (
-    <>
+    <ThemeProvider>
       <ForbiddenToast />
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -230,6 +211,6 @@ export default function App() {
           element={user ? <AppShell /> : <Login />}
         />
       </Routes>
-    </>
+    </ThemeProvider>
   );
 }
