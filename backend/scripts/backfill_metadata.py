@@ -6,6 +6,8 @@ Only fills fields from deterministic, existing sources — never guesses:
   uploaded_at  <- row created_at                 (proxy: when it entered Greenroom)
   clip_name    <- filename stem, but ONLY for rows that have start_time/end_time
                   set (i.e. genuine trimmed clips, not full recordings)
+  submitted_file_name <- clip_name, else file basename   (a readable display
+                  name so the UI isn't stuck showing the raw AF… identifier)
 
 Each pass is opt-in via a flag; with no pass flags, ALL passes run. Nothing is
 overwritten — only NULL/blank fields are touched. Soft-deleted and stem rows
@@ -63,7 +65,7 @@ def _parse_filename_date(name: str) -> datetime | None:
     return None
 
 
-def plan_changes(db, do_recorded: bool, do_filename: bool, do_uploaded: bool, do_clip: bool):
+def plan_changes(db, do_recorded: bool, do_filename: bool, do_uploaded: bool, do_clip: bool, do_submitted: bool):
     """Return a list of (audio_file, {field: new_value}) for rows to update."""
     rows = (
         db.query(AudioFile)
@@ -94,6 +96,15 @@ def plan_changes(db, do_recorded: bool, do_filename: bool, do_uploaded: bool, do
             if stem:
                 new["clip_name"] = stem
 
+        # submitted_file_name: a readable display name. Prefer clip_name (clean,
+        # no extension); fall back to the file's basename. Uses clip_name from
+        # this same pass's plan, so a row getting a fresh clip_name above also
+        # gets a matching submitted name.
+        if do_submitted and not af.submitted_file_name:
+            name = new.get("clip_name") or af.clip_name or os.path.basename(af.file_path)
+            if name:
+                new["submitted_file_name"] = name
+
         if new:
             changes.append((af, new))
     return changes
@@ -105,17 +116,18 @@ def main() -> int:
     p.add_argument("--filename", action="store_true", help="Backfill recorded_at from a date in the filename (no-session files).")
     p.add_argument("--uploaded", action="store_true", help="Backfill uploaded_at from created_at.")
     p.add_argument("--clip", action="store_true", help="Backfill clip_name from filename (trimmed clips only).")
+    p.add_argument("--submitted", action="store_true", help="Backfill submitted_file_name (display name) from clip_name or file basename.")
     p.add_argument("--dry-run", action="store_true", help="Show changes, commit nothing.")
     p.add_argument("--yes", action="store_true", help="Skip the confirmation prompt.")
     args = p.parse_args()
 
     # No pass flags -> run all passes.
-    if not (args.recorded or args.filename or args.uploaded or args.clip):
-        args.recorded = args.filename = args.uploaded = args.clip = True
+    if not (args.recorded or args.filename or args.uploaded or args.clip or args.submitted):
+        args.recorded = args.filename = args.uploaded = args.clip = args.submitted = True
 
     db = SessionLocal()
     try:
-        changes = plan_changes(db, args.recorded, args.filename, args.uploaded, args.clip)
+        changes = plan_changes(db, args.recorded, args.filename, args.uploaded, args.clip, args.submitted)
 
         by_field: dict[str, int] = {}
         for _af, new in changes:

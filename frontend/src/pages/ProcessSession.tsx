@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
+import { SongSelect } from "../components/InlineSongPicker";
 import { FolderOpen, Scan, Scissors, Play, Plus, Trash2, Check, Video, Folder, ChevronUp, X, Upload } from "lucide-react";
 
 interface Clip {
@@ -624,11 +625,13 @@ export default function ProcessSession() {
                 </div>
                 {/* Metadata row */}
                 <div className="flex items-center gap-2 ml-8">
-                  <select value={clip.song_id || ""} onChange={(e) => updateClip(i, "song_id", e.target.value ? Number(e.target.value) : null)}
-                    className="px-2 py-1 rounded border text-xs outline-none" style={inputStyle}>
-                    <option value="">Link to song...</option>
-                    {songs.map((s) => <option key={s.id} value={s.id}>{s.title}{s.artist ? ` — ${s.artist}` : ""}</option>)}
-                  </select>
+                  <SongSelect
+                    songs={songs}
+                    value={clip.song_id}
+                    onChange={(songId) => updateClip(i, "song_id", songId)}
+                    placeholder="Link to song…"
+                    className="px-2 py-1 rounded border text-xs text-left outline-none"
+                  />
                   <div className="flex gap-1">
                     {QUICK_TAGS.map((tag) => (
                       <button key={tag} onClick={() => toggleClipTag(i, tag)}

@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
+import { SongSelect } from "../components/InlineSongPicker";
 import { Upload, FileAudio, Check, Plus, X, Scissors } from "lucide-react";
 
 const inputStyle = { borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" };
@@ -152,15 +153,14 @@ function FileCard({ pending, songs, onChange, onRemove, onUpload }: {
 
           <div className="mb-3">
             <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Link to song</label>
-            <div className="flex gap-2">
-              <select value={pending.songId || ""} onChange={(e) => onChange({ songId: e.target.value ? Number(e.target.value) : null, createTitle: "" })}
-                className="flex-1 px-2 py-1.5 rounded border text-sm outline-none" style={inputStyle}>
-                <option value="">Create new song...</option>
-                {songs.map((s) => (
-                  <option key={s.id} value={s.id}>{s.title}{s.artist ? ` — ${s.artist}` : ""} ({s.type})</option>
-                ))}
-              </select>
-            </div>
+            <SongSelect
+              songs={songs}
+              value={pending.songId}
+              onChange={(songId) => onChange({ songId, createTitle: songId ? "" : pending.createTitle })}
+              allowCreate={false}
+              placeholder="Search to link an existing song…"
+              className="w-full px-2 py-1.5 rounded border text-sm text-left outline-none"
+            />
             {!pending.songId && (
               <input value={pending.createTitle} onChange={(e) => onChange({ createTitle: e.target.value })}
                 placeholder="New song title..."
