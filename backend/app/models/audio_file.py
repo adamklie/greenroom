@@ -25,6 +25,9 @@ class AudioFile(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     song_id: Mapped[int | None] = mapped_column(ForeignKey("songs.id"), nullable=True)
+    # v2 project scoping. Nullable in Phase 3a (backfilled from the row's
+    # song/session project); the access filter in Phase 3b reads it directly.
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
     file_path: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     file_type: Mapped[str | None] = mapped_column(String, nullable=True)
     identifier: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)

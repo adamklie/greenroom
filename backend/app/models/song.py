@@ -19,8 +19,10 @@ class Song(Base):
     # Status progression (optional)
     status: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # Project / band context (optional)
+    # Project / band context (optional) — legacy free-text label, kept for
+    # rollback; v2 authority is project_id below.
     project: Mapped[str | None] = mapped_column(String, nullable=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
 
     # Structured music fields
     key: Mapped[str | None] = mapped_column(String, nullable=True)

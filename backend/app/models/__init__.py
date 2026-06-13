@@ -9,6 +9,7 @@ from app.models.lyrics_version import LyricsVersion
 from app.models.option import Option, DEFAULT_OPTIONS
 from app.models.song_tab import SongTab
 from app.models.user import User, MagicToken
+from app.models.project import Project, ProjectMember
 
 __all__ = [
     "Song",
@@ -27,4 +28,6 @@ __all__ = [
     "SongTab",
     "User",
     "MagicToken",
+    "Project",
+    "ProjectMember",
 ]

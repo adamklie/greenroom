@@ -100,6 +100,13 @@ class Settings(BaseSettings):
     # public domain (e.g. https://greenroom.example.com).
     allowed_origins: str = "http://localhost:5173,http://localhost:5175,http://localhost:5176"
 
+    # --- Multi-project (v2, Phase 3) ---
+    # Master switch for project-scoped access control. When False (default),
+    # the app behaves exactly like V1 — no query scoping, global roles, and the
+    # new project_id columns are inert. Flipped to True in Phase 3b, after the
+    # schema + backfill are live and verified, to enforce per-project access.
+    multi_project: bool = False
+
     @property
     def database_url(self) -> str:
         return f"sqlite:///{self.db_path}"
