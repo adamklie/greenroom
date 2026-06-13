@@ -9,12 +9,23 @@ export function setForbiddenHandler(fn: ((message: string) => void) | null) {
   forbiddenHandler = fn;
 }
 
+// Active project id, sent as X-Greenroom-Project on every request so the
+// backend can scope the response. Set by the ProjectProvider when the user
+// switches projects. Null = unset (the backend ignores the header while the
+// multi_project flag is off, so this is harmless in V1).
+let activeProjectId: number | null = null;
+export function setActiveProject(id: number | null) {
+  activeProjectId = id;
+}
+
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   // credentials: 'include' is critical — without it the browser strips
   // the greenroom_session cookie and every authed request becomes 401.
   // Same-origin in dev (proxy) and prod (single server), so 'include' is
   // safe here.
-  const res = await fetch(url, { credentials: "include", ...init });
+  const headers = new Headers(init?.headers);
+  if (activeProjectId != null) headers.set("X-Greenroom-Project", String(activeProjectId));
+  const res = await fetch(url, { credentials: "include", ...init, headers });
   if (res.status === 403 && forbiddenHandler) {
     forbiddenHandler("Viewer mode — ask the admin for edit access");
   }
@@ -240,15 +251,39 @@ export interface CurrentUser {
   role: "viewer" | "editor" | "admin";
 }
 
+export interface Project {
+  id: number;
+  name: string;
+  role: string; // the caller's role in this project ('owner'|'editor'|'viewer', or 'admin')
+}
+
+export interface ProjectMember {
+  id: number;
+  user_id: number;
+  email: string;
+  role: string;
+}
+
 export const api = {
   health: {
-    get: () => json<{ status: string; app: string; version: string }>(`${BASE}/health`),
+    get: () => json<{ status: string; app: string; version: string; multi_project: boolean }>(`${BASE}/health`),
   },
   auth: {
     me: () => json<CurrentUser>(`${BASE}/auth/me`),
     requestMagicLink: (email: string) =>
       post<{ ok: boolean; message: string }>(`${BASE}/auth/request`, { email }),
     logout: () => post<{ ok: boolean }>(`${BASE}/auth/logout`, {}),
+  },
+  projects: {
+    list: () => json<Project[]>(`${BASE}/projects`),
+    create: (name: string) => post<Project>(`${BASE}/projects`, { name }),
+    members: (projectId: number) => json<ProjectMember[]>(`${BASE}/projects/${projectId}/members`),
+    addMember: (projectId: number, email: string, role: string) =>
+      post<ProjectMember>(`${BASE}/projects/${projectId}/members`, { email, role }),
+    updateMember: (projectId: number, memberId: number, role: string) =>
+      patch<ProjectMember>(`${BASE}/projects/${projectId}/members/${memberId}`, { role }),
+    removeMember: (projectId: number, memberId: number) =>
+      json<void>(`${BASE}/projects/${projectId}/members/${memberId}`, { method: "DELETE" }),
   },
   dashboard: {
     get: () => json<DashboardResponse>(`${BASE}/dashboard`),

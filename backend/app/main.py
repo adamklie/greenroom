@@ -84,7 +84,15 @@ app.include_router(tabs_router.router)
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "app": "greenroom", "version": APP_VERSION}
+    # multi_project lets the frontend decide whether to show the project
+    # switcher — it stays hidden (and the app behaves like V1) while the flag is
+    # off, even though the enforcement code is already deployed.
+    return {
+        "status": "ok",
+        "app": "greenroom",
+        "version": APP_VERSION,
+        "multi_project": settings.multi_project,
+    }
 
 
 # Serve the built React SPA when a static directory is configured.
