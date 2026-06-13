@@ -206,13 +206,17 @@ async def upload_raw(
     safe_name = _sanitize_filename(file.filename)
 
     # Buffer upload to a tempfile so the (potentially multi-GB) body never
-    # sits in memory. Same pattern as upload.py.
+    # sits in memory. Same pattern as upload.py. Bind `staged` to the temp
+    # path *before* copying so the finally-block can always clean it up — a
+    # mid-copy failure (e.g. ENOSPC on a full disk) would otherwise leak the
+    # partial multi-GB file because delete=False keeps it on disk.
     suffix = Path(safe_name).suffix or ".mp4"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tf:
-        shutil.copyfileobj(file.file, tf)
-        staged = Path(tf.name)
+    tf = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    staged = Path(tf.name)
 
     try:
+        with tf:
+            shutil.copyfileobj(file.file, tf)
         size_bytes = staged.stat().st_size
 
         if is_cloud_backend():

@@ -4,6 +4,13 @@ All notable changes to Greenroom are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- GoPro raw upload (`/api/gopro/upload-raw`): bind the tempfile path before
+  copying so a mid-copy failure (e.g. a full disk on a multi-GB upload) can no
+  longer leak the partial temp file.
+
 ## [1.1.0] - 2026-06-13
 
 UI cleanup and polish pass. No data model or API contract changes.
