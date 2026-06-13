@@ -4,6 +4,16 @@ All notable changes to Greenroom are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- v2 multi-project groundwork (Phase 3a) — behind the default-off
+  `GREENROOM_MULTI_PROJECT` flag, so **no behavior change yet**: `projects` and
+  `project_members` tables, a nullable `project_id` on songs / sessions / audio
+  files / takes / setlists (migration `f1a2b3c4d5e6`), and
+  `scripts/backfill_projects.py` to populate it from the legacy `project`
+  string. Additive and reversible (clean downgrade; legacy `project` retained).
+
 ## [1.2.1] - 2026-06-13
 
 ### Fixed

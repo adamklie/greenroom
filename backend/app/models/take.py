@@ -12,6 +12,7 @@ class Take(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     session_id: Mapped[int] = mapped_column(ForeignKey("practice_sessions.id"))
     song_id: Mapped[int | None] = mapped_column(ForeignKey("songs.id"), nullable=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
     clip_name: Mapped[str] = mapped_column(String, nullable=False)
     source_video: Mapped[str | None] = mapped_column(String, nullable=True)
     start_time: Mapped[str | None] = mapped_column(String, nullable=True)
