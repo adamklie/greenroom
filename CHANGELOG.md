@@ -20,6 +20,11 @@ All notable changes to Greenroom are documented here. Format follows
   `/api/projects` CRUD + membership API. Read isolation is enforced centrally by
   a `do_orm_execute` query filter (fails closed; covers relationship loads).
   HTTP- and ORM-level isolation test suites added.
+- v2 multi-project frontend (Phase 3b) — a sidebar **project switcher** and basic
+  **members/sharing** panel, driven by `/api/projects`; the API client sends the
+  active project as `X-Greenroom-Project` on every request. All gated on the
+  `multi_project` flag now reported by `/api/health`, so the UI is unchanged
+  (no switcher, legacy project pickers intact) while the flag is off.
 
 ### Changed
 - The ops/maintenance endpoints (integrity, file health/move/consolidate, file

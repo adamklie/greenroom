@@ -34,6 +34,8 @@ import Login from "./auth/Login";
 import { useCurrentUser } from "./auth/useCurrentUser";
 import { api, setForbiddenHandler } from "./api/client";
 import { ThemeProvider, useTheme } from "./theme";
+import { ProjectProvider, useProject } from "./project";
+import ProjectSwitcher from "./components/ProjectSwitcher";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -81,6 +83,7 @@ function ForbiddenToast() {
 function AppShell() {
   const { theme, toggleTheme } = useTheme();
   const { user } = useCurrentUser();
+  const { multiProject } = useProject();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -120,6 +123,11 @@ function AppShell() {
             Song record keeping
           </p>
         </div>
+        {multiProject && (
+          <div className="px-3 pb-3">
+            <ProjectSwitcher />
+          </div>
+        )}
         <div className="flex-1 px-3 space-y-1 overflow-y-auto">
           {navItems
             .filter((item) => !("adminOnly" in item) || user?.role === "admin")
@@ -208,7 +216,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route
           path="*"
-          element={user ? <AppShell /> : <Login />}
+          element={user ? <ProjectProvider><AppShell /></ProjectProvider> : <Login />}
         />
       </Routes>
     </ThemeProvider>
