@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Info, Palette, Download, FolderKanban, Trash2 } from "lucide-react";
+import { Info, Palette, Download, FolderKanban, Trash2, GripVertical } from "lucide-react";
 import { api, type Project } from "../api/client";
 import { useTheme } from "../theme";
 import { useProject } from "../project";
@@ -237,28 +237,58 @@ function ProjectEditor({ project }: { project: Project }) {
 
 function ProjectSettings() {
   const { multiProject, projects, activeProjectId } = useProject();
+  const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<number | null>(activeProjectId);
+  const [dragId, setDragId] = useState<number | null>(null);
+  const reorder = useMutation({
+    mutationFn: (ids: number[]) => api.projects.reorder(ids),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects"] }),
+  });
   if (!multiProject) return null;
   const selected = projects.find((p) => p.id === (selectedId ?? activeProjectId)) ?? projects[0];
 
+  const onDrop = (targetId: number) => {
+    if (dragId == null || dragId === targetId) { setDragId(null); return; }
+    const ids = projects.map((p) => p.id);
+    const from = ids.indexOf(dragId);
+    const to = ids.indexOf(targetId);
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    reorder.mutate(ids);
+    setDragId(null);
+  };
+
   return (
     <div className="rounded-xl p-5 border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
-      <h3 className="font-semibold mb-3 flex items-center gap-2">
+      <h3 className="font-semibold mb-1 flex items-center gap-2">
         <FolderKanban size={18} style={{ color: "var(--accent)" }} />
         Project settings
       </h3>
+      <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+        Drag to reorder; click to edit.
+      </p>
       {projects.length === 0 ? (
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>No projects yet.</p>
       ) : (
         <>
-          <select
-            value={selected?.id ?? ""}
-            onChange={(e) => setSelectedId(Number(e.target.value))}
-            className="w-full mb-4 px-2 py-1.5 rounded border text-sm outline-none"
-            style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text)" }}
-          >
-            {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <div className="rounded-lg border mb-4 divide-y" style={{ borderColor: "var(--border)" }}>
+            {projects.map((p) => (
+              <div
+                key={p.id}
+                draggable
+                onDragStart={() => setDragId(p.id)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => onDrop(p.id)}
+                onClick={() => setSelectedId(p.id)}
+                className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer"
+                style={{ background: p.id === selected?.id ? "var(--bg-hover)" : "transparent", opacity: dragId === p.id ? 0.4 : 1 }}
+              >
+                <GripVertical size={14} style={{ color: "var(--text-muted)", cursor: "grab" }} />
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: p.color || "var(--border)" }} />
+                <span className="flex-1 truncate" style={{ color: "var(--text)" }}>{p.name}</span>
+                <span className="text-xs uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>{p.role}</span>
+              </div>
+            ))}
+          </div>
           {selected && <ProjectEditor key={selected.id} project={selected} />}
         </>
       )}

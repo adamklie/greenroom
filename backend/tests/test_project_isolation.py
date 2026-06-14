@@ -410,6 +410,14 @@ def test_update_project_description_and_color(client, iso):
     assert res.json()["color"] == "#10b981"
 
 
+def test_reorder_projects(client, iso):
+    _as(client, iso.admin)
+    client.post("/api/projects/reorder", json={"ordered_ids": [iso.pb, iso.pa]})
+    res = client.get("/api/projects")
+    order = [p["id"] for p in res.json()]
+    assert order.index(iso.pb) < order.index(iso.pa)
+
+
 def test_cannot_delete_nonempty_project(client, iso):
     _as(client, iso.ua)  # PA has SongA
     res = client.delete(f"/api/projects/{iso.pa}")
