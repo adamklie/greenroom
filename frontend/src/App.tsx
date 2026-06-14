@@ -19,14 +19,12 @@ import {
   IdeasIcon,
   SetlistsIcon,
   SessionsIcon,
-  ProcessIcon,
   GreenroomLogo,
 } from "./components/GreenroomIcons";
 import Dashboard from "./pages/Dashboard";
 import Songs from "./pages/Songs";
 import Sessions from "./pages/Sessions";
 import SetlistBuilder from "./pages/SetlistBuilder";
-import ProcessSession from "./pages/ProcessSession";
 import Import from "./pages/Import";
 import Library from "./pages/Library";
 import Schemas from "./pages/Schemas";
@@ -49,11 +47,10 @@ const navItems = [
   { to: "/ideas", icon: IdeasIcon, label: "Ideas" },
   { to: "/setlists", icon: SetlistsIcon, label: "Setlists" },
   { to: "/sessions", icon: SessionsIcon, label: "Sessions" },
-  { to: "/process", icon: ProcessIcon, label: "Process" },
-  { to: "/feedback", icon: MessageSquare, label: "Feedback" },
   { to: "/schemas", icon: Database, label: "Schemas", adminOnly: true },
   { to: "/trash", icon: Trash2, label: "Trash & Cleanup" },
   { to: "/settings", icon: Settings2, label: "Settings" },
+  { to: "/feedback", icon: MessageSquare, label: "Feedback" },
 ];
 
 /**
@@ -174,7 +171,6 @@ function AppShell() {
           <Route path="/originals" element={<Songs songType="original" title="Originals" />} />
           <Route path="/ideas" element={<Songs songType="idea" title="Ideas" />} />
           <Route path="/sessions" element={<Sessions />} />
-          <Route path="/process" element={<ProcessSession />} />
           <Route path="/library" element={<Library />} />
           <Route path="/setlists" element={<SetlistBuilder />} />
           <Route path="/import" element={<Import />} />
