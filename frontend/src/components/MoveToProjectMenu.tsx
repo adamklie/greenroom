@@ -33,7 +33,11 @@ export default function MoveToProjectMenu({
   const targets = projects.filter((p) => p.id !== activeProjectId);
 
   const move = useMutation({
-    mutationFn: (targetId: number) => api.projects.move(kind, ids, targetId),
+    mutationFn: (targetId: number) =>
+      kind === "audio_file"
+        ? api.projects.moveRecordingsBulk(ids, targetId)        // bulk recordings auto-split by title+artist
+        : api.projects.move(kind, ids, targetId),               // song/session/take/setlist move whole
+
     onSuccess: (r) => {
       // Moved items leave the active project, so refresh the scoped data views.
       queryClient.invalidateQueries({

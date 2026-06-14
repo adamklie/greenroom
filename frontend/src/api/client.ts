@@ -272,6 +272,13 @@ export interface ProjectMember {
   role: string;
 }
 
+export interface SongBrief {
+  id: number;
+  title: string;
+  artist: string | null;
+  type: string | null;
+}
+
 export const api = {
   health: {
     get: () => json<{ status: string; app: string; version: string; multi_project: boolean }>(`${BASE}/health`),
@@ -292,9 +299,18 @@ export const api = {
       patch<ProjectMember>(`${BASE}/projects/${projectId}/members/${memberId}`, { role }),
     removeMember: (projectId: number, memberId: number) =>
       json<void>(`${BASE}/projects/${projectId}/members/${memberId}`, { method: "DELETE" }),
-    move: (kind: "song" | "session" | "audio_file" | "take" | "setlist", ids: number[], targetProjectId: number) =>
+    move: (kind: "song" | "session" | "take" | "setlist", ids: number[], targetProjectId: number) =>
       post<{ moved: number; target_project_id: number }>(`${BASE}/projects/move`, {
         kind, ids, target_project_id: targetProjectId,
+      }),
+    songs: (projectId: number) => json<SongBrief[]>(`${BASE}/projects/${projectId}/songs`),
+    moveRecording: (audioFileId: number, targetProjectId: number, songId: number | null, copyMetadata = true) =>
+      post<{ moved: number; song_id: number; target_project_id: number }>(`${BASE}/projects/move-recording`, {
+        audio_file_id: audioFileId, target_project_id: targetProjectId, song_id: songId, copy_metadata: copyMetadata,
+      }),
+    moveRecordingsBulk: (audioFileIds: number[], targetProjectId: number) =>
+      post<{ moved: number; target_project_id: number }>(`${BASE}/projects/move-recordings`, {
+        audio_file_ids: audioFileIds, target_project_id: targetProjectId,
       }),
   },
   dashboard: {

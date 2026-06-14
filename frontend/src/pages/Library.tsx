@@ -2,9 +2,11 @@ import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type AudioFile } from "../api/client";
-import { Search, FileAudio, FileVideo, Columns3, Trash2, RotateCcw, Download } from "lucide-react";
+import { Search, FileAudio, FileVideo, Columns3, Trash2, RotateCcw, Download, FolderInput } from "lucide-react";
 import { InlineSongPicker, type SongOption } from "../components/InlineSongPicker";
 import MoveToProjectMenu from "../components/MoveToProjectMenu";
+import MoveRecordingModal from "../components/MoveRecordingModal";
+import { useProject } from "../project";
 
 const SOURCE_OPTIONS = ["", "phone", "logic_pro", "garageband", "suno_ai", "collaborator", "download", "gopro", "unknown"];
 const ROLE_OPTIONS = ["", "recording", "demo", "reference", "backing_track", "final_mix", "stem"];
@@ -135,12 +137,13 @@ interface RowProps {
   onDelete: (id: number) => void;
   onRestore: (id: number) => void;
   onSongCreated: () => void;
+  onMove?: (af: AudioFile) => void;
 }
 
 const LibraryRow = memo(function LibraryRow({
   af, cols, songs, sessions, isExpanded, isSelected, isEditingSong, isExtracting,
   onToggleExpand, onToggleSelect, onStartEditSong, onStopEditSong,
-  onSave, onSaveSong, onExtract, onDelete, onRestore, onSongCreated,
+  onSave, onSaveSong, onExtract, onDelete, onRestore, onSongCreated, onMove,
 }: RowProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const afAny = af as Record<string, any>;
@@ -349,6 +352,13 @@ const LibraryRow = memo(function LibraryRow({
 
       <td className="px-1 py-2">
         <div className="flex items-center gap-1">
+          {onMove && (
+            <button onClick={(e) => { e.stopPropagation(); onMove(af); }}
+              className="p-1 rounded hover:bg-white/10" title="Move to another project"
+              style={{ color: "var(--text-muted)" }}>
+              <FolderInput size={12} />
+            </button>
+          )}
           <a href={api.media.audioFileDownloadUrl(af.id)} download
             className="p-1 rounded hover:bg-white/10" title="Download"
             style={{ color: "var(--text-muted)" }} onClick={(e) => e.stopPropagation()}>
@@ -374,6 +384,8 @@ const LibraryRow = memo(function LibraryRow({
 });
 
 export default function Library() {
+  const { multiProject } = useProject();
+  const [movingAf, setMovingAf] = useState<AudioFile | null>(null);
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
   useEffect(() => {
@@ -796,6 +808,7 @@ export default function Library() {
                   onDelete={onDelete}
                   onRestore={onRestore}
                   onSongCreated={onSongCreated}
+                  onMove={multiProject ? setMovingAf : undefined}
                 />
               ))}
               {botPad > 0 && <tr style={{ height: botPad }}><td colSpan={colCount} style={{ padding: 0 }} /></tr>}
@@ -803,6 +816,7 @@ export default function Library() {
           </table>
         </div>
       )}
+      {movingAf && <MoveRecordingModal af={movingAf} onClose={() => setMovingAf(null)} />}
     </div>
   );
 }
