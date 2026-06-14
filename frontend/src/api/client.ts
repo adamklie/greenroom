@@ -292,6 +292,7 @@ export const api = {
   projects: {
     list: () => json<Project[]>(`${BASE}/projects`),
     create: (name: string) => post<Project>(`${BASE}/projects`, { name }),
+    update: (projectId: number, name: string) => patch<Project>(`${BASE}/projects/${projectId}`, { name }),
     members: (projectId: number) => json<ProjectMember[]>(`${BASE}/projects/${projectId}/members`),
     addMember: (projectId: number, email: string, role: string) =>
       post<ProjectMember>(`${BASE}/projects/${projectId}/members`, { email, role }),
