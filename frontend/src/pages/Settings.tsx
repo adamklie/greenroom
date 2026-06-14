@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Info, Palette, Download } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Info, Palette, Download, FolderKanban, Check } from "lucide-react";
 import { api } from "../api/client";
 import { useTheme } from "../theme";
+import { useProject } from "../project";
 
 function StatRow({ label, value }: { label: string; value: string | number }) {
   return (
@@ -144,6 +145,57 @@ function DataBackup() {
   );
 }
 
+function ProjectRow({ id, name, role }: { id: number; name: string; role: string }) {
+  const queryClient = useQueryClient();
+  const [value, setValue] = useState(name);
+  const canEdit = role === "owner" || role === "admin";
+  const rename = useMutation({
+    mutationFn: () => api.projects.update(id, value.trim()),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects"] }),
+  });
+  const dirty = value.trim() !== name && value.trim() !== "";
+  return (
+    <div className="flex items-center gap-2 py-1.5">
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        disabled={!canEdit}
+        onKeyDown={(e) => { if (e.key === "Enter" && dirty) rename.mutate(); }}
+        className="flex-1 px-2 py-1 rounded border text-sm bg-transparent outline-none"
+        style={{ borderColor: "var(--border)", color: "var(--text)", opacity: canEdit ? 1 : 0.6 }}
+      />
+      <span className="text-xs uppercase tracking-wide w-14 text-right" style={{ color: "var(--text-muted)" }}>{role}</span>
+      {canEdit && (
+        <button onClick={() => rename.mutate()} disabled={!dirty || rename.isPending}
+          className="p-1 rounded" title="Save name"
+          style={{ color: dirty ? "var(--accent)" : "var(--text-muted)", opacity: dirty ? 1 : 0.4 }}>
+          <Check size={16} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Projects() {
+  const { multiProject, projects } = useProject();
+  if (!multiProject) return null;
+  return (
+    <div className="rounded-xl p-5 border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
+      <h3 className="font-semibold mb-3 flex items-center gap-2">
+        <FolderKanban size={18} style={{ color: "var(--accent)" }} />
+        Projects
+      </h3>
+      <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+        Rename projects you own. Manage members from the switcher in the sidebar.
+      </p>
+      <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+        {projects.map((p) => <ProjectRow key={p.id} id={p.id} name={p.name} role={p.role} />)}
+        {projects.length === 0 && <p className="text-sm" style={{ color: "var(--text-muted)" }}>No projects yet.</p>}
+      </div>
+    </div>
+  );
+}
+
 export default function Settings() {
   return (
     <div className="max-w-2xl">
@@ -154,6 +206,7 @@ export default function Settings() {
 
       <div className="space-y-6">
         <AppInfo />
+        <Projects />
         <DataBackup />
         <Appearance />
       </div>

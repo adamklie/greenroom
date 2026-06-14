@@ -389,6 +389,19 @@ def test_move_ignores_items_outside_source_scope(client, iso, db):
     assert db.query(Song).get(iso.sb).project_id == iso.pb  # unchanged
 
 
+def test_owner_can_rename_project(client, iso, db):
+    _as(client, iso.ua)  # owner of PA
+    res = client.patch(f"/api/projects/{iso.pa}", json={"name": "Solo Stuff"})
+    assert res.status_code == 200
+    assert res.json()["name"] == "Solo Stuff"
+
+
+def test_non_owner_cannot_rename_project(client, iso):
+    _as(client, iso.uc)  # viewer of PA
+    res = client.patch(f"/api/projects/{iso.pa}", json={"name": "Nope"})
+    assert res.status_code == 403
+
+
 # ---------- ops endpoints are admin-only ----------
 
 def test_filebrowser_forbidden_for_non_admin(client, iso):

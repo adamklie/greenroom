@@ -39,6 +39,10 @@ class ProjectCreate(BaseModel):
     name: str
 
 
+class ProjectUpdate(BaseModel):
+    name: str
+
+
 class MemberRead(BaseModel):
     id: int
     user_id: int
@@ -139,6 +143,39 @@ def create_project(
     db.add(ProjectMember(project_id=project.id, user_id=user.id, role="owner"))
     db.commit()
     return ProjectRead(id=project.id, name=project.name, role="owner")
+
+
+@router.patch("/{project_id}", response_model=ProjectRead)
+def update_project(
+    project_id: int,
+    data: ProjectUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_viewer),
+):
+    """Rename a project. Owner or global admin only; the new name must be unique
+    among the projects this user owns."""
+    project = _get_project_or_404(project_id, db)
+    _owns_or_admin(project_id, user, db)
+    name = data.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Project name is required")
+    clash = (
+        db.query(Project)
+        .join(ProjectMember, ProjectMember.project_id == Project.id)
+        .filter(
+            ProjectMember.user_id == user.id,
+            ProjectMember.role == "owner",
+            Project.name == name,
+            Project.id != project_id,
+        )
+        .first()
+    )
+    if clash is not None:
+        raise HTTPException(status_code=409, detail="You already have a project with that name")
+    project.name = name
+    db.commit()
+    role = "admin" if user.role == "admin" else "owner"
+    return ProjectRead(id=project.id, name=project.name, role=role)
 
 
 @router.get("/{project_id}/members", response_model=list[MemberRead])
