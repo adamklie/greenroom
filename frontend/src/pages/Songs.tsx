@@ -485,7 +485,7 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
         style={{ background: dragging ? "var(--accent)" : "var(--border)", opacity: dragging ? 1 : 0.3 }} />
       <div className="flex-1 overflow-y-auto p-6">
       <div className="flex justify-between items-start mb-4">
-        <MoveToProjectMenu kind="song" ids={[songId]} onMoved={onClose} compact />
+        <MoveToProjectMenu kind="song" ids={[songId]} onMoved={onClose} compact align="left" />
         <button onClick={onClose} className="p-1 rounded hover:bg-white/10 ml-auto"><X size={18} /></button>
       </div>
 
@@ -714,6 +714,26 @@ export default function Songs({ songType, title }: { songType: string; title: st
     updateStatus.mutate({ id: song.id, status: next });
   };
 
+  // Bulk selection for move + metadata changes across many songs at once.
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const selectedIds = [...selected];
+  const clearSel = () => setSelected(new Set());
+  const toggleSel = (id: number) =>
+    setSelected((prev) => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  const bulkUpdate = useMutation({
+    mutationFn: ({ ids, data }: { ids: number[]; data: Record<string, unknown> }) =>
+      Promise.all(ids.map((id) => api.songs.update(id, data))),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["songs"] }); clearSel(); },
+  });
+  const bulkDeleteMut = useMutation({
+    mutationFn: (ids: number[]) => Promise.all(ids.map((id) => api.songs.delete(id))),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["songs"] }); clearSel(); },
+  });
+
   const statuses = STATUSES_BY_TYPE[songType] || STATUSES_BY_TYPE.cover;
 
   const toggleSort = (key: string) => {
@@ -808,14 +828,49 @@ export default function Songs({ songType, title }: { songType: string; title: st
         <span className="self-center text-sm" style={{ color: "var(--text-muted)" }}>{songs.length} songs</span>
       </div>
 
+      {selected.size > 0 && (
+        <div className="flex gap-3 mb-3 flex-wrap items-center rounded-lg border px-3 py-2"
+          style={{ borderColor: "var(--accent)", background: "var(--bg-card)" }}>
+          <span className="text-sm font-medium">{selected.size} selected</span>
+          <select value="" onChange={(e) => { if (e.target.value) bulkUpdate.mutate({ ids: selectedIds, data: { status: e.target.value } }); }}
+            className="px-2 py-1 rounded border text-xs outline-none"
+            style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-card)" }}>
+            <option value="">Set status…</option>
+            {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value="" onChange={(e) => { if (e.target.value) bulkUpdate.mutate({ ids: selectedIds, data: { type: e.target.value } }); }}
+            className="px-2 py-1 rounded border text-xs outline-none"
+            style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-card)" }}>
+            <option value="">Set type…</option>
+            <option value="cover">cover</option>
+            <option value="original">original</option>
+            <option value="idea">idea</option>
+          </select>
+          <button onClick={() => { if (confirm(`Delete ${selectedIds.length} song(s)? They can be restored within 30 days.`)) bulkDeleteMut.mutate(selectedIds); }}
+            className="flex items-center gap-1 px-2 py-1 rounded border text-xs"
+            style={{ borderColor: "var(--danger, #ef4444)", color: "var(--danger, #ef4444)" }}>
+            <Trash2 size={12} /> Delete
+          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <MoveToProjectMenu kind="song" ids={selectedIds} onMoved={clearSel} compact />
+            <button onClick={clearSel} className="px-2 py-1 rounded text-xs" style={{ color: "var(--text-muted)" }}>Clear</button>
+          </div>
+        </div>
+      )}
+
       {isLoading ? <div style={{ color: "var(--text-muted)" }}>Loading...</div> : (
         <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)" }}>
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: "var(--bg-card)" }}>
+                <th className="px-3 py-3 w-8">
+                  <input type="checkbox"
+                    checked={sorted.length > 0 && sorted.every((s) => selected.has(s.id))}
+                    onChange={(e) => setSelected(e.target.checked ? new Set(sorted.map((s) => s.id)) : new Set())} />
+                </th>
                 <SortTh k="title" className="text-left">Song</SortTh>
                 {songType === "cover" && <SortTh k="artist" className="text-left">Artist</SortTh>}
-                <SortTh k="project" className="text-left">Project</SortTh>
+                {!multiProject && <SortTh k="project" className="text-left">Project</SortTh>}
                 <SortTh k="status" className="text-left">Status</SortTh>
                 <SortTh k="key" className="text-center">Key</SortTh>
                 <SortTh k="tracks" className="text-center">Tracks</SortTh>
@@ -829,6 +884,9 @@ export default function Songs({ songType, title }: { songType: string; title: st
                   onClick={() => setSelectedId(song.id)}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+                  <td className="px-3 py-3 w-8" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={selected.has(song.id)} onChange={() => toggleSel(song.id)} />
+                  </td>
                   <td className="px-4 py-3 font-medium flex items-center gap-2">
                     {song.has_audio ? <Play size={14} style={{ color: "var(--green)" }} /> : <Music size={14} style={{ color: "var(--text-muted)" }} />}
                     {song.title}
@@ -841,7 +899,9 @@ export default function Songs({ songType, title }: { songType: string; title: st
                   {songType === "cover" && (
                     <td className="px-4 py-3" style={{ color: "var(--text-muted)" }}>{song.artist || "—"}</td>
                   )}
-                  <td className="px-4 py-3" style={{ color: "var(--text-muted)" }}>{PROJECT_LABELS[song.project] || song.project}</td>
+                  {!multiProject && (
+                    <td className="px-4 py-3" style={{ color: "var(--text-muted)" }}>{PROJECT_LABELS[song.project] || song.project}</td>
+                  )}
                   <td className="px-4 py-3">
                     <StatusBadge status={song.status} onClick={(e) => { e.stopPropagation(); cycleStatus(song); }} />
                   </td>

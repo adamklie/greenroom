@@ -18,11 +18,13 @@ export default function MoveToProjectMenu({
   ids,
   onMoved,
   compact = false,
+  align = "right",
 }: {
   kind: Kind;
   ids: number[];
   onMoved?: (moved: number) => void;
   compact?: boolean;
+  align?: "left" | "right";
 }) {
   const { multiProject, projects, activeProjectId } = useProject();
   const [open, setOpen] = useState(false);
@@ -57,7 +59,7 @@ export default function MoveToProjectMenu({
         <ChevronDown size={12} style={{ color: "var(--text-muted)" }} />
       </button>
       {open && (
-        <div className="absolute right-0 mt-1 z-50 rounded-lg border shadow-lg py-1 min-w-40" style={CARD}>
+        <div className={`absolute ${align === "left" ? "left-0" : "right-0"} mt-1 z-50 rounded-lg border shadow-lg py-1 min-w-44 max-w-64`} style={CARD}>
           {targets.map((p) => (
             <button
               key={p.id}
