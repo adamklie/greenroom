@@ -141,18 +141,31 @@ def _active_project_id(request: Request) -> int:
         raise HTTPException(status_code=400, detail=f"Invalid {PROJECT_HEADER} header")
 
 
+def _optional_project_id(request: Request) -> int | None:
+    """Like _active_project_id but never raises — returns None when no valid
+    project is named. Used for the admin path, where 'no project selected' means
+    'unscoped' rather than an error."""
+    raw = request.headers.get(PROJECT_HEADER) or request.cookies.get(PROJECT_COOKIE)
+    if raw and raw.lstrip("-").isdigit():
+        return int(raw)
+    return None
+
+
 def require_project_role(min_role: str):
     """Project-scoped role gate — the v2 replacement for require_viewer/editor on
     data routes. As a side effect it sets the request's read scope (the
     do_orm_execute filter in database.py) so reads see only the active project.
 
     Behavior matrix (resolved in this order):
-      - dev bypass (auth_required=False): synthetic admin, UNSCOPED (project
-        isolation is a documented no-op in dev).
       - flag off (multi_project=False): gate on the global User.role exactly like
-        the old require_* deps; no scope set → V1 behavior.
-      - flag on, global admin: allowed and UNSCOPED (admin sees every project).
-      - flag on, non-admin: require the X-Greenroom-Project header, a
+        the old require_* deps; no scope set → V1 behavior. (Dev bypass yields a
+        synthetic admin, so this stays a no-op in dev.)
+      - flag on, global admin (incl. the dev-bypass synthetic admin): may reach
+        ANY project without a membership row. Scoped to the active project when
+        one is named (so the switcher works for admins too) — otherwise UNSCOPED
+        (sees every project). Ops routes use require_admin, not this gate, so
+        they stay cross-project regardless.
+      - flag on, non-admin: require the X-Greenroom-Project header/cookie, a
         project_members row in that project, and a per-project role >= min_role;
         scope the request to {project_id} and reset on teardown.
 
@@ -167,11 +180,7 @@ def require_project_role(min_role: str):
     global_required = _ROLE_RANK[min_role]
 
     async def dep(request: Request, db: Session = Depends(get_db)):
-        if not settings.auth_required:
-            yield _synthetic_admin()
-            return
-
-        user = _read_cookie_user(request, db)
+        user = _synthetic_admin() if not settings.auth_required else _read_cookie_user(request, db)
         if user is None:
             raise HTTPException(status_code=401, detail="Not authenticated")
 
@@ -182,19 +191,24 @@ def require_project_role(min_role: str):
             return
 
         if user.role == "admin":
-            yield user  # unscoped: a global admin sees every project
-            return
-
-        project_id = _active_project_id(request)
-        member = (
-            db.query(ProjectMember)
-            .filter_by(project_id=project_id, user_id=user.id)
-            .first()
-        )
-        if member is None:
-            raise HTTPException(status_code=403, detail="Not a member of this project")
-        if _PROJECT_RANK.get(member.role, 0) < project_required:
-            raise HTTPException(status_code=403, detail="Insufficient project role")
+            # Privileged: any project, no membership required. Scope to the
+            # active one if named so the switcher filters the admin's view too;
+            # unscoped when none is selected.
+            project_id = _optional_project_id(request)
+            if project_id is None:
+                yield user
+                return
+        else:
+            project_id = _active_project_id(request)
+            member = (
+                db.query(ProjectMember)
+                .filter_by(project_id=project_id, user_id=user.id)
+                .first()
+            )
+            if member is None:
+                raise HTTPException(status_code=403, detail="Not a member of this project")
+            if _PROJECT_RANK.get(member.role, 0) < project_required:
+                raise HTTPException(status_code=403, detail="Insufficient project role")
 
         token = scoping.set_scope({project_id})
         try:
