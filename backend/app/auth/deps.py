@@ -28,8 +28,14 @@ from app.config import settings
 from app.database import get_db
 from app.models import ProjectMember, User
 
-# Header the frontend sends to name the active project (Phase 3b).
+# Header the frontend sends to name the active project (Phase 3b). It also
+# mirrors the value into a same-named cookie so native browser requests
+# (<audio src>, downloads, the AlphaTab fetch) — which can't set custom headers
+# — are still scoped; the gate falls back to the cookie when the header is
+# absent. The cookie only *narrows* scope: membership is still verified, so a
+# forged value can't reach a project the user doesn't belong to.
 PROJECT_HEADER = "X-Greenroom-Project"
+PROJECT_COOKIE = "greenroom_project"
 
 # Avoid an `from app.auth.router import COOKIE_NAME` cycle (router imports
 # from this module too). Keep the cookie name canonical here and re-use it
@@ -122,9 +128,11 @@ _PROJECT_RANK = {"viewer": 1, "editor": 2, "owner": 3}
 
 
 def _active_project_id(request: Request) -> int:
-    """Read + validate the X-Greenroom-Project header. Raises 400 if absent or
-    non-integer. Existence/membership is checked by the caller."""
-    raw = request.headers.get(PROJECT_HEADER)
+    """Resolve the active project from the X-Greenroom-Project header, falling
+    back to the greenroom_project cookie (for native requests that can't set the
+    header). Raises 400 if neither is present or the value isn't an integer.
+    Existence/membership is checked by the caller."""
+    raw = request.headers.get(PROJECT_HEADER) or request.cookies.get(PROJECT_COOKIE)
     if not raw:
         raise HTTPException(status_code=400, detail=f"Missing {PROJECT_HEADER} header")
     try:

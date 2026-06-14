@@ -16,6 +16,14 @@ export function setForbiddenHandler(fn: ((message: string) => void) | null) {
 let activeProjectId: number | null = null;
 export function setActiveProject(id: number | null) {
   activeProjectId = id;
+  // Mirror into a cookie so native browser requests that can't set the header
+  // (<audio src>, downloads, the AlphaTab tab fetch) are still scoped. The
+  // backend reads the header first and falls back to this cookie.
+  if (id != null) {
+    document.cookie = `greenroom_project=${id}; path=/; SameSite=Lax`;
+  } else {
+    document.cookie = "greenroom_project=; path=/; Max-Age=0; SameSite=Lax";
+  }
 }
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
