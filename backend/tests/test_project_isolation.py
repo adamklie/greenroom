@@ -310,6 +310,21 @@ def test_move_song_cascades_recordings(client, iso, db):
     assert db.query(AudioFile).get(iso.afa).project_id == iso.pb
 
 
+def test_move_recording_moves_its_song(client, iso, db):
+    _as(client, iso.admin)
+    # Moving a recording that belongs to a song moves the whole song with it, so
+    # they never end up split across projects (the Library-bulk-move bug).
+    res = client.post(
+        "/api/projects/move",
+        json={"kind": "audio_file", "ids": [iso.afa], "target_project_id": iso.pb},
+        headers=_h(iso.pa),
+    )
+    assert res.status_code == 200
+    db.expire_all()
+    assert db.query(AudioFile).get(iso.afa).project_id == iso.pb
+    assert db.query(Song).get(iso.sa).project_id == iso.pb  # the song followed
+
+
 def test_cannot_move_into_uneditable_project(client, iso):
     _as(client, iso.ua)  # owner of PA, not a member of PB
     res = client.post(

@@ -273,8 +273,13 @@ def move_items(
     The request is scoped (project_editor) to the *source* project, so the
     lookups below only find items the caller can currently see — you can't move
     rows out of a project you don't have access to. The *target* is validated
-    separately (admin or owner/editor there). Moving a song or session cascades
-    project_id to its recordings/takes so a song never gets split from its media.
+    separately (admin or owner/editor there).
+
+    A song and its media always move together: moving a song (or a recording/take
+    that belongs to one) reassigns the song AND every recording and take linked
+    to it. This keeps the invariant that a song and its media share one project —
+    so moving a recording from the Library can't strand it in a different project
+    than its song.
     """
     if req.kind not in _MOVABLE_KINDS:
         raise HTTPException(status_code=400, detail="Unknown item kind")
@@ -287,17 +292,20 @@ def move_items(
 
     tid = req.target_project_id
 
-    if req.kind == "song":
-        songs = db.query(Song).filter(Song.id.in_(req.ids)).all()
-        sids = [s.id for s in songs]
-        for s in songs:
+    def move_songs(song_ids: set[int]) -> None:
+        """Move whole songs: the song row + every recording and take linked to it."""
+        if not song_ids:
+            return
+        for s in db.query(Song).filter(Song.id.in_(song_ids)).all():
             s.project_id = tid
-        if sids:
-            for af in db.query(AudioFile).filter(AudioFile.song_id.in_(sids)).all():
-                af.project_id = tid
-            for t in db.query(Take).filter(Take.song_id.in_(sids)).all():
-                t.project_id = tid
-        moved = len(songs)
+        for af in db.query(AudioFile).filter(AudioFile.song_id.in_(song_ids)).all():
+            af.project_id = tid
+        for t in db.query(Take).filter(Take.song_id.in_(song_ids)).all():
+            t.project_id = tid
+
+    if req.kind == "song":
+        moved = db.query(Song).filter(Song.id.in_(req.ids)).count()
+        move_songs(set(req.ids))
     elif req.kind == "session":
         sessions = db.query(PracticeSession).filter(PracticeSession.id.in_(req.ids)).all()
         sess_ids = [s.id for s in sessions]
@@ -309,9 +317,19 @@ def move_items(
             for t in db.query(Take).filter(Take.session_id.in_(sess_ids)).all():
                 t.project_id = tid
         moved = len(sessions)
-    else:
-        model = {"audio_file": AudioFile, "take": Take, "setlist": Setlist}[req.kind]
+    elif req.kind in ("audio_file", "take"):
+        # A recording/take that belongs to a song moves the whole song so they
+        # never split; one without a song (an unattached clip) moves on its own.
+        model = AudioFile if req.kind == "audio_file" else Take
         rows = db.query(model).filter(model.id.in_(req.ids)).all()
+        song_ids = {r.song_id for r in rows if r.song_id}
+        for r in rows:
+            if r.song_id is None:
+                r.project_id = tid
+        move_songs(song_ids)
+        moved = len(rows)
+    else:  # setlist
+        rows = db.query(Setlist).filter(Setlist.id.in_(req.ids)).all()
         for r in rows:
             r.project_id = tid
         moved = len(rows)
