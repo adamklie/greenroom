@@ -310,19 +310,58 @@ def test_move_song_cascades_recordings(client, iso, db):
     assert db.query(AudioFile).get(iso.afa).project_id == iso.pb
 
 
-def test_move_recording_moves_its_song(client, iso, db):
+def test_split_recording_creates_song_copy(client, iso, db):
     _as(client, iso.admin)
-    # Moving a recording that belongs to a song moves the whole song with it, so
-    # they never end up split across projects (the Library-bulk-move bug).
+    # Splitting a recording into PB (no target song chosen) copies its song into
+    # PB and links the recording there; the source song stays in PA.
     res = client.post(
-        "/api/projects/move",
-        json={"kind": "audio_file", "ids": [iso.afa], "target_project_id": iso.pb},
+        "/api/projects/move-recording",
+        json={"audio_file_id": iso.afa, "target_project_id": iso.pb},
+        headers=_h(iso.pa),
+    )
+    assert res.status_code == 200
+    new_song_id = res.json()["song_id"]
+    db.expire_all()
+    afa = db.query(AudioFile).get(iso.afa)
+    assert afa.project_id == iso.pb
+    assert afa.song_id == new_song_id and new_song_id != iso.sa
+    assert db.query(Song).get(iso.sa).project_id == iso.pa  # source song untouched
+    copy = db.query(Song).get(new_song_id)
+    assert copy.project_id == iso.pb and copy.title == "SongA"
+
+
+def test_split_recording_links_existing_song(client, iso, db):
+    _as(client, iso.admin)
+    res = client.post(
+        "/api/projects/move-recording",
+        json={"audio_file_id": iso.afa, "target_project_id": iso.pb, "song_id": iso.sb},
         headers=_h(iso.pa),
     )
     assert res.status_code == 200
     db.expire_all()
+    afa = db.query(AudioFile).get(iso.afa)
+    assert afa.project_id == iso.pb and afa.song_id == iso.sb
+
+
+def test_bulk_split_recordings(client, iso, db):
+    _as(client, iso.admin)
+    res = client.post(
+        "/api/projects/move-recordings",
+        json={"audio_file_ids": [iso.afa], "target_project_id": iso.pb},
+        headers=_h(iso.pa),
+    )
+    assert res.status_code == 200
+    assert res.json()["moved"] == 1
+    db.expire_all()
     assert db.query(AudioFile).get(iso.afa).project_id == iso.pb
-    assert db.query(Song).get(iso.sa).project_id == iso.pb  # the song followed
+    assert db.query(Song).get(iso.sa).project_id == iso.pa  # source song stays
+
+
+def test_list_project_songs_for_picker(client, iso):
+    _as(client, iso.admin)
+    res = client.get(f"/api/projects/{iso.pb}/songs")
+    assert res.status_code == 200
+    assert {s["title"] for s in res.json()} == {"SongB"}
 
 
 def test_cannot_move_into_uneditable_project(client, iso):

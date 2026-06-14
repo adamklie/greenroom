@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app import scoping
 from app.auth.deps import project_editor, require_viewer
 from app.database import get_db
 from app.models import AudioFile, PracticeSession, Project, ProjectMember, Setlist, Song, Take, User
@@ -58,6 +59,25 @@ class MoveRequest(BaseModel):
     kind: str  # song | session | audio_file | take | setlist
     ids: list[int]
     target_project_id: int
+
+
+class MoveRecordingRequest(BaseModel):
+    audio_file_id: int
+    target_project_id: int
+    # Link the recording to this existing song in the target project. If omitted,
+    # create a new song there (a copy of the recording's current song).
+    song_id: int | None = None
+    # When creating a new song, copy the optional metadata (key/tempo/tuning/
+    # vibe/lyrics/notes) from the source song. Title/artist/type are always copied.
+    copy_metadata: bool = True
+
+
+class SongBrief(BaseModel):
+    id: int
+    title: str
+    artist: str | None = None
+    type: str | None = None
+    model_config = {"from_attributes": True}
 
 
 def _owns_or_admin(project_id: int, user: User, db: Session) -> None:
@@ -250,7 +270,9 @@ def remove_member(
     db.commit()
 
 
-_MOVABLE_KINDS = {"song", "session", "audio_file", "take", "setlist"}
+# Recordings (audio_file) are NOT here: they split via /move-recording(s) so a
+# recording can land in a project without dragging its whole song along.
+_MOVABLE_KINDS = {"song", "session", "take", "setlist"}
 
 
 def _can_edit_project(user: User, project_id: int, db: Session) -> bool:
@@ -317,11 +339,11 @@ def move_items(
             for t in db.query(Take).filter(Take.session_id.in_(sess_ids)).all():
                 t.project_id = tid
         moved = len(sessions)
-    elif req.kind in ("audio_file", "take"):
-        # A recording/take that belongs to a song moves the whole song so they
-        # never split; one without a song (an unattached clip) moves on its own.
-        model = AudioFile if req.kind == "audio_file" else Take
-        rows = db.query(model).filter(model.id.in_(req.ids)).all()
+    elif req.kind == "take":
+        # A take that belongs to a song moves the whole song so they don't split;
+        # one without a song moves on its own. (Recordings split instead — see
+        # /move-recording and /move-recordings.)
+        rows = db.query(Take).filter(Take.id.in_(req.ids)).all()
         song_ids = {r.song_id for r in rows if r.song_id}
         for r in rows:
             if r.song_id is None:
@@ -336,3 +358,144 @@ def move_items(
 
     db.commit()
     return {"moved": moved, "target_project_id": tid}
+
+
+def _accessible_project_or_403(project_id: int, user: User, db: Session) -> None:
+    """Allow if the user is a global admin or a member of the project."""
+    if user.role == "admin":
+        return
+    if db.query(ProjectMember).filter_by(project_id=project_id, user_id=user.id).first() is None:
+        raise HTTPException(status_code=403, detail="Not a member of that project")
+
+
+@router.get("/{project_id}/songs", response_model=list[SongBrief])
+def list_project_songs(
+    project_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_viewer),
+):
+    """Songs in a specific project — used to populate the 'choose a song' picker
+    when splitting a recording into another project (which the caller isn't
+    currently scoped to). require_viewer sets no scope, so the explicit
+    project_id filter is what restricts the rows; membership is checked first."""
+    _get_project_or_404(project_id, db)
+    _accessible_project_or_403(project_id, user, db)
+    rows = (
+        db.query(Song)
+        .filter(Song.project_id == project_id, Song.status != "deleted")
+        .order_by(Song.title)
+        .all()
+    )
+    return rows
+
+
+def _copy_song_into(source: Song, project_id: int, copy_metadata: bool, db: Session) -> Song:
+    """Create a new Song in `project_id` from `source`. Title/artist/type/status
+    are always copied (identity); the rest only when copy_metadata is set."""
+    new = Song(
+        title=source.title,
+        artist=source.artist,
+        type=source.type or "idea",
+        status=source.status or "idea",
+        project=source.project or "solo",  # legacy string kept in sync
+        project_id=project_id,
+    )
+    if copy_metadata:
+        new.key = source.key
+        new.tempo_bpm = source.tempo_bpm
+        new.tuning = source.tuning
+        new.vibe = source.vibe
+        new.lyrics = source.lyrics
+        new.notes = source.notes
+    db.add(new)
+    db.flush()
+    return new
+
+
+@router.post("/move-recording")
+def move_recording(
+    req: MoveRecordingRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(project_editor),
+):
+    """Split a single recording into another project, attaching it to a song
+    there — an existing one (song_id) or a fresh copy of its current song. The
+    source song and its other recordings are left untouched."""
+    if db.query(Project).filter(Project.id == req.target_project_id).first() is None:
+        raise HTTPException(status_code=404, detail="Target project not found")
+    if not _can_edit_project(user, req.target_project_id, db):
+        raise HTTPException(status_code=403, detail="You can't move items into that project")
+
+    # af is found within the request's source scope, so you can only split a
+    # recording you can see. The target song lives in another project, so resolve
+    # it unscoped.
+    af = db.query(AudioFile).filter(AudioFile.id == req.audio_file_id).first()
+    if af is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    source_song = db.query(Song).filter(Song.id == af.song_id).first() if af.song_id else None
+
+    with scoping.scoped(None):
+        if req.song_id is not None:
+            target_song = (
+                db.query(Song)
+                .filter(Song.id == req.song_id, Song.project_id == req.target_project_id)
+                .first()
+            )
+            if target_song is None:
+                raise HTTPException(status_code=400, detail="Chosen song isn't in the target project")
+        else:
+            if source_song is None:
+                raise HTTPException(status_code=400, detail="Recording has no song to copy; pick a target song")
+            target_song = _copy_song_into(source_song, req.target_project_id, req.copy_metadata, db)
+
+    af.song_id = target_song.id
+    af.project_id = req.target_project_id
+    db.commit()
+    return {"moved": 1, "song_id": target_song.id, "target_project_id": req.target_project_id}
+
+
+class MoveRecordingsBulkRequest(BaseModel):
+    audio_file_ids: list[int]
+    target_project_id: int
+
+
+@router.post("/move-recordings")
+def move_recordings_bulk(
+    req: MoveRecordingsBulkRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(project_editor),
+):
+    """Split many recordings into a target project at once. Each recording is
+    linked to a song in the target with the same title+artist as its current
+    song — created (copying metadata) if none exists. Recordings with no song
+    just move. The source songs and their other recordings stay put."""
+    if db.query(Project).filter(Project.id == req.target_project_id).first() is None:
+        raise HTTPException(status_code=404, detail="Target project not found")
+    if not _can_edit_project(user, req.target_project_id, db):
+        raise HTTPException(status_code=403, detail="You can't move items into that project")
+    if not req.audio_file_ids:
+        return {"moved": 0, "target_project_id": req.target_project_id}
+
+    afs = db.query(AudioFile).filter(AudioFile.id.in_(req.audio_file_ids)).all()  # source-scoped
+    src_song_ids = {af.song_id for af in afs if af.song_id}
+
+    tid = req.target_project_id
+    with scoping.scoped(None):
+        sources = {s.id: s for s in db.query(Song).filter(Song.id.in_(src_song_ids)).all()} if src_song_ids else {}
+        # Index existing target songs by (title, artist) for matching/dedup.
+        by_key: dict[tuple, Song] = {}
+        for s in db.query(Song).filter(Song.project_id == tid, Song.status != "deleted").all():
+            by_key.setdefault((s.title, s.artist), s)
+        for af in afs:
+            src = sources.get(af.song_id) if af.song_id else None
+            if src is not None:
+                key = (src.title, src.artist)
+                dest = by_key.get(key)
+                if dest is None:
+                    dest = _copy_song_into(src, tid, True, db)
+                    by_key[key] = dest
+                af.song_id = dest.id
+            af.project_id = tid
+
+    db.commit()
+    return {"moved": len(afs), "target_project_id": tid}
