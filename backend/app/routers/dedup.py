@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_editor, require_viewer
+from app.auth.deps import require_admin
 from app.database import get_db
 from app.models import AudioFile, Song, Take
 
@@ -53,7 +53,7 @@ def _similarity(a: str, b: str) -> float:
 
 
 @router.get("/duplicates", response_model=list[DuplicateGroup])
-def find_duplicates(fuzzy: bool = Query(False), threshold: float = Query(0.8), db: Session = Depends(get_db), _user=Depends(require_viewer)):
+def find_duplicates(fuzzy: bool = Query(False), threshold: float = Query(0.8), db: Session = Depends(get_db), _user=Depends(require_admin)):
     """Find songs with matching title+artist. Set fuzzy=true for approximate matching."""
     songs = db.query(Song).filter(Song.status != "deleted").all()
 
@@ -146,7 +146,7 @@ def find_duplicates(fuzzy: bool = Query(False), threshold: float = Query(0.8), d
 
 
 @router.post("/merge")
-def merge_songs(req: MergeRequest, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def merge_songs(req: MergeRequest, db: Session = Depends(get_db), _user=Depends(require_admin)):
     """Merge duplicate songs: move all audio files and takes to keep_id.
 
     Merged-away songs are soft-deleted (status='deleted') rather than hard

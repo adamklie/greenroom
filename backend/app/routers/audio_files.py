@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.audio_file import generate_identifier
 
-from app.auth.deps import require_editor, require_viewer
+from app.auth.deps import project_editor, project_viewer
 from app.config import settings
 from app.database import get_db
 from app.models import AudioFile, Song
@@ -18,6 +18,17 @@ from app.services.autosync import compute_organized_path, resolve_path, _cleanup
 from app.services.vault import CLOUD_UNSUPPORTED_MESSAGE, is_cloud_backend, resolve_audio_path
 
 router = APIRouter(prefix="/api/audio-files", tags=["audio-files"])
+
+
+def _require_accessible_song(song_id: int | None, db: Session) -> None:
+    """Reject reassigning an audio file to a song outside the active project.
+
+    The read filter blocks *reading* other projects' rows, but a written FK
+    value isn't filtered — so validate it explicitly: a scoped lookup of the
+    target song returns None when it belongs to another project. None song_id
+    (unassign) is always allowed."""
+    if song_id is not None and db.query(Song).get(song_id) is None:
+        raise HTTPException(400, "song_id refers to a song you can't access")
 
 
 def _af_to_read(af: AudioFile) -> AudioFileRead:
@@ -82,7 +93,7 @@ def list_audio_files(
     search: str | None = Query(None),
     include_deleted: bool = Query(False),
     db: Session = Depends(get_db),
-    _user=Depends(require_viewer),
+    _user=Depends(project_viewer),
 ):
     """List all audio files with optional filters. Hides role='deleted' unless include_deleted=true."""
     # selectinload the relationships _af_to_read touches, otherwise each row
@@ -120,7 +131,7 @@ def list_audio_files(
 
 
 @router.get("/{audio_file_id}", response_model=AudioFileRead)
-def get_audio_file(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(require_viewer)):
+def get_audio_file(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(project_viewer)):
     af = db.query(AudioFile).get(audio_file_id)
     if not af:
         raise HTTPException(404, "Audio file not found")
@@ -128,7 +139,7 @@ def get_audio_file(audio_file_id: int, db: Session = Depends(get_db), _user=Depe
 
 
 @router.patch("/bulk", response_model=list[AudioFileRead])
-def bulk_update_audio_files(payload: AudioFileBulkUpdate, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def bulk_update_audio_files(payload: AudioFileBulkUpdate, db: Session = Depends(get_db), _user=Depends(project_editor)):
     """Apply the same field changes to many audio files in a single transaction.
 
     Declared before /{audio_file_id} so "bulk" isn't parsed as an int id.
@@ -138,6 +149,9 @@ def bulk_update_audio_files(payload: AudioFileBulkUpdate, db: Session = Depends(
     changes = payload.data.model_dump(exclude_unset=True)
     if not payload.ids or not changes:
         return []
+
+    if "song_id" in changes:
+        _require_accessible_song(changes["song_id"], db)
 
     files = (
         db.query(AudioFile)
@@ -164,13 +178,15 @@ def bulk_update_audio_files(payload: AudioFileBulkUpdate, db: Session = Depends(
 
 
 @router.patch("/{audio_file_id}", response_model=AudioFileRead)
-def update_audio_file(audio_file_id: int, data: AudioFileUpdate, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def update_audio_file(audio_file_id: int, data: AudioFileUpdate, db: Session = Depends(get_db), _user=Depends(project_editor)):
     """Update audio file metadata. If song_id changes, file auto-moves."""
     af = db.query(AudioFile).get(audio_file_id)
     if not af:
         raise HTTPException(404, "Audio file not found")
 
     changes = data.model_dump(exclude_unset=True)
+    if "song_id" in changes:
+        _require_accessible_song(changes["song_id"], db)
     song_changed = "song_id" in changes and changes["song_id"] != af.song_id
 
     for field, value in changes.items():
@@ -187,7 +203,7 @@ def update_audio_file(audio_file_id: int, data: AudioFileUpdate, db: Session = D
 
 
 @router.delete("/{audio_file_id}")
-def delete_audio_file(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def delete_audio_file(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(project_editor)):
     """Soft-delete: in local mode, move the file to _trash/; in cloud mode,
     flip role='deleted' in the DB only.
 
@@ -229,7 +245,7 @@ def delete_audio_file(audio_file_id: int, db: Session = Depends(get_db), _user=D
 
 
 @router.post("/{audio_file_id}/restore", response_model=AudioFileRead)
-def restore_audio_file(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def restore_audio_file(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(project_editor)):
     """Undo a soft-delete. Cloud: clear role='deleted'. Local: move the file
     back out of _trash/ to its organized location (mirrors delete_audio_file)."""
     af = db.query(AudioFile).get(audio_file_id)
@@ -254,7 +270,7 @@ FFMPEG = "/Users/adamklie/opt/ffmpeg" if Path("/Users/adamklie/opt/ffmpeg").exis
 
 
 @router.post("/{audio_file_id}/extract-audio", response_model=AudioFileRead)
-def extract_audio(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def extract_audio(audio_file_id: int, db: Session = Depends(get_db), _user=Depends(project_editor)):
     """Create an audio (m4a) sibling for a video AudioFile.
 
     Requires local ffmpeg + filesystem access. In cloud mode, the source video

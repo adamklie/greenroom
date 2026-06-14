@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_editor, require_viewer
+from app.auth.deps import project_editor, project_viewer
 from app.config import settings
 from app.database import get_db
 from app.models import Song, SongTab
@@ -26,28 +26,40 @@ def _resolve_tab_path(file_path: str) -> Path:
     return settings.music_dir / file_path
 
 
+def _require_song_access(song_id: int, db: Session) -> None:
+    """A SongTab carries no project_id of its own, so the read filter can't scope
+    it directly. Gate every by-id tab route on access to its parent Song: the
+    scoped lookup returns None for a song outside the active project → 404."""
+    if db.query(Song).get(song_id) is None:
+        raise HTTPException(404, "Tab not found")
+
+
 @router.get("", response_model=list[SongTabRead])
-def list_tabs(song_id: int | None = Query(None), db: Session = Depends(get_db), _user=Depends(require_viewer)):
-    q = db.query(SongTab)
+def list_tabs(song_id: int | None = Query(None), db: Session = Depends(get_db), _user=Depends(project_viewer)):
+    # Inner-join Song so the project scope filter on Song restricts tabs to the
+    # active project (SongTab itself isn't a scoped model).
+    q = db.query(SongTab).join(Song, SongTab.song_id == Song.id)
     if song_id is not None:
         q = q.filter(SongTab.song_id == song_id)
     return q.order_by(SongTab.is_primary.desc(), SongTab.created_at.desc()).all()
 
 
 @router.get("/{tab_id}", response_model=SongTabRead)
-def get_tab(tab_id: int, db: Session = Depends(get_db), _user=Depends(require_viewer)):
+def get_tab(tab_id: int, db: Session = Depends(get_db), _user=Depends(project_viewer)):
     tab = db.query(SongTab).get(tab_id)
     if not tab:
         raise HTTPException(404, "Tab not found")
+    _require_song_access(tab.song_id, db)
     return tab
 
 
 @router.get("/{tab_id}/file")
-def serve_tab_file(tab_id: int, db: Session = Depends(get_db), _user=Depends(require_viewer)):
+def serve_tab_file(tab_id: int, db: Session = Depends(get_db), _user=Depends(project_viewer)):
     """Serve the raw .gp/.gp5/.gpx file for AlphaTab to parse."""
     tab = db.query(SongTab).get(tab_id)
     if not tab:
         raise HTTPException(404, "Tab not found")
+    _require_song_access(tab.song_id, db)
     full = _resolve_tab_path(tab.file_path)
     if not full.exists():
         raise HTTPException(404, f"File missing on disk: {tab.file_path}")
@@ -67,7 +79,7 @@ async def upload_tab(
     is_primary: bool = Form(False),
     notes: str | None = Form(None),
     db: Session = Depends(get_db),
-    _user=Depends(require_editor),
+    _user=Depends(project_editor),
 ):
     """Upload a Guitar Pro tab file and link it to a song.
 
@@ -127,10 +139,11 @@ async def upload_tab(
 
 
 @router.patch("/{tab_id}", response_model=SongTabRead)
-def update_tab(tab_id: int, data: SongTabUpdate, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def update_tab(tab_id: int, data: SongTabUpdate, db: Session = Depends(get_db), _user=Depends(project_editor)):
     tab = db.query(SongTab).get(tab_id)
     if not tab:
         raise HTTPException(404, "Tab not found")
+    _require_song_access(tab.song_id, db)
 
     changes = data.model_dump(exclude_unset=True)
     # If setting primary, unset others in same song
@@ -147,7 +160,7 @@ def update_tab(tab_id: int, data: SongTabUpdate, db: Session = Depends(get_db), 
 
 
 @router.delete("/{tab_id}")
-def delete_tab(tab_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def delete_tab(tab_id: int, db: Session = Depends(get_db), _user=Depends(project_editor)):
     """Delete a tab.
 
     Cloud mode: not supported yet — symmetric with the upload restriction.
@@ -159,6 +172,7 @@ def delete_tab(tab_id: int, db: Session = Depends(get_db), _user=Depends(require
     tab = db.query(SongTab).get(tab_id)
     if not tab:
         raise HTTPException(404, "Tab not found")
+    _require_song_access(tab.song_id, db)
 
     full = _resolve_tab_path(tab.file_path)
     if full.exists():

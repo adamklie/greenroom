@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_viewer
+from app.auth.deps import project_viewer
 from app.database import get_db
 from app.models import AudioFile, PracticeSession, Song, Take
 from app.schemas.dashboard import (
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
 @router.get("", response_model=DashboardResponse)
-def get_dashboard(db: Session = Depends(get_db), _user=Depends(require_viewer)):
+def get_dashboard(db: Session = Depends(get_db), _user=Depends(project_viewer)):
     total_songs = db.query(func.count(Song.id)).scalar()
     total_sessions = db.query(func.count(PracticeSession.id)).scalar()
     total_takes = db.query(func.count(Take.id)).scalar()

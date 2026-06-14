@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_editor, require_viewer
+from app.auth.deps import project_editor, project_viewer
 from app.database import get_db
 from app.models import AudioFile, PracticeSession, Tag, Take
 from app.schemas.audio_file import AudioFileRead
@@ -26,7 +26,7 @@ def _take_to_read(t: Take) -> TakeRead:
 def list_sessions(
     project: str | None = Query(None),
     db: Session = Depends(get_db),
-    _user=Depends(require_viewer),
+    _user=Depends(project_viewer),
 ):
     q = db.query(PracticeSession)
     if project:
@@ -51,7 +51,7 @@ def list_sessions(
 
 
 @router.get("/{session_id}", response_model=SessionDetail)
-def get_session(session_id: int, db: Session = Depends(get_db), _user=Depends(require_viewer)):
+def get_session(session_id: int, db: Session = Depends(get_db), _user=Depends(project_viewer)):
     session = db.query(PracticeSession).get(session_id)
     if not session:
         raise HTTPException(404, "Session not found")
@@ -84,7 +84,7 @@ def best_takes(
     song_id: int | None = Query(None),
     dimension: str = Query("overall"),
     db: Session = Depends(get_db),
-    _user=Depends(require_viewer),
+    _user=Depends(project_viewer),
 ):
     """Get highest-rated takes. Filter by dimension (overall, vocals, guitar, etc.)."""
     rating_col = getattr(Take, f"rating_{dimension}", Take.rating_overall)
@@ -98,7 +98,7 @@ def best_takes(
 # --- Take CRUD ---
 
 @router.patch("/takes/{take_id}", response_model=TakeRead)
-def update_take(take_id: int, data: TakeUpdate, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def update_take(take_id: int, data: TakeUpdate, db: Session = Depends(get_db), _user=Depends(project_editor)):
     take = db.query(Take).get(take_id)
     if not take:
         raise HTTPException(404, "Take not found")
@@ -110,7 +110,7 @@ def update_take(take_id: int, data: TakeUpdate, db: Session = Depends(get_db), _
 
 
 @router.post("/takes/{take_id}/tags")
-def add_take_tag(take_id: int, tag_name: str = Query(...), db: Session = Depends(get_db), _user=Depends(require_editor)):
+def add_take_tag(take_id: int, tag_name: str = Query(...), db: Session = Depends(get_db), _user=Depends(project_editor)):
     take = db.query(Take).get(take_id)
     if not take:
         raise HTTPException(404, "Take not found")
@@ -126,7 +126,7 @@ def add_take_tag(take_id: int, tag_name: str = Query(...), db: Session = Depends
 
 
 @router.delete("/takes/{take_id}/tags/{tag_name}")
-def remove_take_tag(take_id: int, tag_name: str, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def remove_take_tag(take_id: int, tag_name: str, db: Session = Depends(get_db), _user=Depends(project_editor)):
     take = db.query(Take).get(take_id)
     if not take:
         raise HTTPException(404, "Take not found")

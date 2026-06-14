@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_editor, require_viewer
+from app.auth.deps import project_editor, project_viewer
 from app.config import settings
 from app.database import get_db
 from app.services.gopro_processor import (
@@ -67,7 +67,7 @@ class ProcessRequest(BaseModel):
 
 
 @router.get("/list-videos")
-def get_video_list(directory: str, _user=Depends(require_viewer)):
+def get_video_list(directory: str, _user=Depends(project_viewer)):
     """List video files in a local directory. Not meaningful in cloud mode —
     the Fly machine has no GoPro source library mounted."""
     if is_cloud_backend():
@@ -77,7 +77,7 @@ def get_video_list(directory: str, _user=Depends(require_viewer)):
 
 
 @router.post("/analyze")
-def analyze(req: AnalyzeRequest, _user=Depends(require_editor)):
+def analyze(req: AnalyzeRequest, _user=Depends(project_editor)):
     """Analyze video using energy-based gap detection.
 
     Requires local file access + ffmpeg. Not supported in cloud mode.
@@ -120,7 +120,7 @@ def analyze(req: AnalyzeRequest, _user=Depends(require_editor)):
 
 
 @router.post("/process")
-def process(req: ProcessRequest, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def process(req: ProcessRequest, db: Session = Depends(get_db), _user=Depends(project_editor)):
     """Process marked clips.
 
     Local mode: `source_path` is a filesystem path to the raw video. ffmpeg
@@ -136,6 +136,16 @@ def process(req: ProcessRequest, db: Session = Depends(get_db), _user=Depends(re
         session_date = date.fromisoformat(req.session_date)
     except ValueError:
         raise HTTPException(400, f"Invalid date: {req.session_date}")
+
+    # Reject clip FKs that point outside the active project — process() writes
+    # song_id straight onto new AudioFile rows, and the read filter doesn't cover
+    # written values (a scoped lookup returns None for a cross-project row).
+    from app.models import PracticeSession, Song
+    for c in req.clips:
+        if c.song_id is not None and db.query(Song).get(c.song_id) is None:
+            raise HTTPException(400, "A clip references a song you can't access")
+    if req.existing_session_id is not None and db.query(PracticeSession).get(req.existing_session_id) is None:
+        raise HTTPException(404, "Session not found")
 
     if is_cloud_backend():
         # In cloud mode, source_path is the R2 key (e.g. "raw/...mp4"). The
@@ -183,7 +193,7 @@ def process(req: ProcessRequest, db: Session = Depends(get_db), _user=Depends(re
 @router.post("/upload-raw")
 async def upload_raw(
     file: UploadFile = File(...),
-    _user=Depends(require_editor),
+    _user=Depends(project_editor),
 ):
     """Stream a raw GoPro video into storage and return a handle.
 
@@ -343,7 +353,7 @@ def _choose_part_size(size_bytes: int) -> int:
 
 
 @router.post("/multipart-init")
-def multipart_init(req: MultipartInitRequest, _user=Depends(require_editor)):
+def multipart_init(req: MultipartInitRequest, _user=Depends(project_editor)):
     """Start a multipart upload and hand back presigned PUT URLs per part.
 
     Cloud mode only — local mode has no R2 to upload to (use /upload-raw).
@@ -409,7 +419,7 @@ def multipart_init(req: MultipartInitRequest, _user=Depends(require_editor)):
 
 
 @router.post("/multipart-complete")
-def multipart_complete(req: MultipartCompleteRequest, _user=Depends(require_editor)):
+def multipart_complete(req: MultipartCompleteRequest, _user=Depends(project_editor)):
     """Finalize the multipart upload and return a presigned playback URL.
 
     Cloud mode only.
@@ -457,7 +467,7 @@ def multipart_complete(req: MultipartCompleteRequest, _user=Depends(require_edit
 
 
 @router.post("/multipart-abort")
-def multipart_abort(req: MultipartAbortRequest, _user=Depends(require_editor)):
+def multipart_abort(req: MultipartAbortRequest, _user=Depends(project_editor)):
     """Abort an in-progress multipart upload. Idempotent.
 
     R2 returns NoSuchUpload if the upload was already completed or already

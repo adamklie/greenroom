@@ -1,0 +1,271 @@
+"""HTTP-level project isolation tests (v2 Phase 3b).
+
+The ORM-level spec lives in test_scoping.py; this is the end-to-end proof that
+the request stack — require_project_role gate + X-Greenroom-Project header +
+do_orm_execute filter + before_flush stamp — keeps one project's data away from
+another project's members over real HTTP, while admin and the dev-bypass see
+everything.
+
+All tests run with auth_required=True AND multi_project=True (the prod-on
+config). Two projects, each owned by a different user, plus a viewer to exercise
+per-project role gating.
+"""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+import pytest
+
+from app.auth.jwt import encode_token
+from app.auth.router import COOKIE_NAME
+from app.config import settings
+from app.models import AudioFile, Project, ProjectMember, Song, User
+
+PROJECT_HEADER = "X-Greenroom-Project"
+
+
+@pytest.fixture
+def iso(db, monkeypatch):
+    """Flag-on, auth-on world: users A (owner of PA), B (owner of PB), C (viewer
+    of PA), plus a global admin. Each project has one song + one audio file.
+
+    Everything is exposed as plain ids and then `expunge_all()`'d, so the shared
+    test session starts each request with an empty identity map — matching prod,
+    where each request gets a fresh session and a PK `.get()` therefore issues a
+    SELECT that the scope filter can act on (a cached object would bypass it)."""
+    monkeypatch.setattr(settings, "auth_required", True)
+    monkeypatch.setattr(settings, "multi_project", True)
+
+    admin = User(email="admin@t", role="admin")
+    ua = User(email="a@t", role="editor")
+    ub = User(email="b@t", role="editor")
+    uc = User(email="c@t", role="editor")  # global editor, but only a VIEWER of PA
+    db.add_all([admin, ua, ub, uc])
+    db.flush()
+
+    pa, pb = Project(name="PA"), Project(name="PB")
+    db.add_all([pa, pb])
+    db.flush()
+    db.add_all([
+        ProjectMember(project_id=pa.id, user_id=ua.id, role="owner"),
+        ProjectMember(project_id=pb.id, user_id=ub.id, role="owner"),
+        ProjectMember(project_id=pa.id, user_id=uc.id, role="viewer"),
+    ])
+
+    sa = Song(title="SongA", type="cover", status="idea", project="x", project_id=pa.id)
+    sb = Song(title="SongB", type="cover", status="idea", project="x", project_id=pb.id)
+    db.add_all([sa, sb])
+    db.flush()
+    afa = AudioFile(file_path="a.mp3", file_type="mp3", project_id=pa.id, song_id=sa.id)
+    afb = AudioFile(file_path="b.mp3", file_type="mp3", project_id=pb.id, song_id=sb.id)
+    db.add_all([afa, afb])
+    db.commit()
+
+    ns = SimpleNamespace(
+        admin=(admin.id, admin.role), ua=(ua.id, ua.role),
+        ub=(ub.id, ub.role), uc=(uc.id, uc.role),
+        pa=pa.id, pb=pb.id, sa=sa.id, sb=sb.id, afa=afa.id, afb=afb.id,
+    )
+    db.expunge_all()
+    return ns
+
+
+def _as(client, user: tuple[int, str]):
+    uid, role = user
+    client.cookies.set(COOKIE_NAME, encode_token(user_id=uid, role=role))
+
+
+def _h(project_id: int) -> dict:
+    return {PROJECT_HEADER: str(project_id)}
+
+
+# ---------- read isolation ----------
+
+def test_list_songs_scoped_to_active_project(client, iso):
+    _as(client, iso.ua)
+    res = client.get("/api/songs", headers=_h(iso.pa))
+    assert res.status_code == 200
+    assert {s["title"] for s in res.json()} == {"SongA"}
+
+
+def test_get_other_projects_song_is_404(client, iso):
+    _as(client, iso.ua)
+    res = client.get(f"/api/songs/{iso.sb}", headers=_h(iso.pa))
+    assert res.status_code == 404
+
+
+def test_patch_other_projects_song_is_404(client, iso):
+    _as(client, iso.ua)
+    res = client.patch(f"/api/songs/{iso.sb}", json={"title": "hax"}, headers=_h(iso.pa))
+    assert res.status_code == 404
+
+
+def test_delete_other_projects_song_is_404(client, iso):
+    _as(client, iso.ua)
+    res = client.delete(f"/api/songs/{iso.sb}", headers=_h(iso.pa))
+    assert res.status_code == 404
+
+
+def test_stream_other_projects_audio_is_404(client, iso):
+    _as(client, iso.ua)
+    res = client.get(f"/api/media/audio/{iso.afb}", headers=_h(iso.pa))
+    assert res.status_code == 404
+
+
+# ---------- gate behavior ----------
+
+def test_missing_project_header_is_400(client, iso):
+    _as(client, iso.ua)
+    res = client.get("/api/songs")  # no X-Greenroom-Project
+    assert res.status_code == 400
+
+
+def test_header_for_unjoined_project_is_403(client, iso):
+    _as(client, iso.ua)  # A is not a member of PB
+    res = client.get("/api/songs", headers=_h(iso.pb))
+    assert res.status_code == 403
+
+
+def test_viewer_cannot_write(client, iso):
+    _as(client, iso.uc)  # C is only a viewer of PA
+    res = client.patch(f"/api/songs/{iso.sa}", json={"title": "nope"}, headers=_h(iso.pa))
+    assert res.status_code == 403
+
+
+def test_viewer_can_read(client, iso):
+    _as(client, iso.uc)
+    res = client.get(f"/api/songs/{iso.sa}", headers=_h(iso.pa))
+    assert res.status_code == 200
+
+
+# ---------- cross-project write validation ----------
+
+def test_cannot_reassign_audio_to_other_projects_song(client, iso):
+    _as(client, iso.ua)
+    # A owns afa + sa; try to point afa at SongB (project PB) → rejected.
+    res = client.patch(
+        f"/api/audio-files/{iso.afa}",
+        json={"song_id": iso.sb},
+        headers=_h(iso.pa),
+    )
+    assert res.status_code == 400
+
+
+def test_cannot_trim_other_projects_audio(client, iso):
+    _as(client, iso.ua)
+    # afb belongs to PB; the scoped .get() returns None → 404 before any ffmpeg.
+    res = client.post(
+        f"/api/audio-files/{iso.afb}/trim",
+        json={"start_time": 0.0, "end_time": 1.0},
+        headers=_h(iso.pa),
+    )
+    assert res.status_code == 404
+
+
+# ---------- write stamping ----------
+
+def test_created_song_inherits_active_project(client, iso, db):
+    _as(client, iso.ua)
+    res = client.post("/api/songs", json={"title": "Fresh"}, headers=_h(iso.pa))
+    assert res.status_code == 200
+    new_id = res.json()["id"]
+    created = db.query(Song).get(new_id)
+    assert created.project_id == iso.pa
+
+
+# ---------- aggregates respect scope ----------
+
+def test_dashboard_counts_are_scoped(client, iso):
+    _as(client, iso.ua)
+    res = client.get("/api/dashboard", headers=_h(iso.pa))
+    assert res.status_code == 200
+    stats = res.json()["stats"]
+    # PA has exactly one song and one audio file; PB's are invisible.
+    assert stats["total_songs"] == 1
+    assert stats["total_audio_files"] == 1
+
+
+# ---------- admin + dev bypass ----------
+
+def test_admin_sees_all_projects(client, iso):
+    _as(client, iso.admin)
+    # Admin is unscoped: even with PA's header, sees both songs.
+    res = client.get("/api/songs", headers=_h(iso.pa))
+    assert res.status_code == 200
+    assert {s["title"] for s in res.json()} == {"SongA", "SongB"}
+
+
+def test_admin_can_read_any_project_song(client, iso):
+    _as(client, iso.admin)
+    res = client.get(f"/api/songs/{iso.sb}", headers=_h(iso.pa))
+    assert res.status_code == 200
+
+
+def test_dev_bypass_is_unscoped(client, iso, monkeypatch):
+    monkeypatch.setattr(settings, "auth_required", False)  # dev: synthetic admin
+    res = client.get("/api/songs")  # no auth, no header
+    assert res.status_code == 200
+    assert {s["title"] for s in res.json()} == {"SongA", "SongB"}
+
+
+# ---------- projects API ----------
+
+def test_list_projects_returns_only_memberships(client, iso):
+    _as(client, iso.ua)
+    res = client.get("/api/projects")
+    assert res.status_code == 200
+    assert [p["name"] for p in res.json()] == ["PA"]
+    assert res.json()[0]["role"] == "owner"
+
+
+def test_admin_lists_all_projects(client, iso):
+    _as(client, iso.admin)
+    res = client.get("/api/projects")
+    assert {p["name"] for p in res.json()} == {"PA", "PB"}
+
+
+def test_create_project_makes_creator_owner(client, iso, db):
+    _as(client, iso.ub)
+    res = client.post("/api/projects", json={"name": "New Band"})
+    assert res.status_code == 201
+    assert res.json()["role"] == "owner"
+    pid = res.json()["id"]
+    m = db.query(ProjectMember).filter_by(project_id=pid, user_id=iso.ub[0]).first()
+    assert m is not None and m.role == "owner"
+
+
+def test_owner_can_add_existing_member(client, iso, db):
+    _as(client, iso.ua)
+    res = client.post(
+        f"/api/projects/{iso.pa}/members",
+        json={"email": "b@t", "role": "editor"},
+    )
+    assert res.status_code == 201
+    assert res.json()["role"] == "editor"
+
+
+def test_add_unknown_email_is_404(client, iso):
+    _as(client, iso.ua)
+    res = client.post(
+        f"/api/projects/{iso.pa}/members",
+        json={"email": "nobody@nowhere", "role": "editor"},
+    )
+    assert res.status_code == 404
+
+
+def test_non_owner_cannot_add_member(client, iso):
+    _as(client, iso.uc)  # viewer of PA, not owner
+    res = client.post(
+        f"/api/projects/{iso.pa}/members",
+        json={"email": "b@t", "role": "editor"},
+    )
+    assert res.status_code == 403
+
+
+# ---------- ops endpoints are admin-only ----------
+
+def test_filebrowser_forbidden_for_non_admin(client, iso):
+    _as(client, iso.ua)
+    res = client.get("/api/browse", headers=_h(iso.pa))
+    assert res.status_code == 403

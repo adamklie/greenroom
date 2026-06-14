@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_editor, require_viewer
+from app.auth.deps import project_editor, project_viewer
 from app.database import get_db
 from app.models import Setlist, SetlistItem, Song
 from app.schemas.setlist import (
@@ -14,6 +14,18 @@ from app.schemas.setlist import (
 )
 
 router = APIRouter(prefix="/api/setlists", tags=["setlists"])
+
+
+def _require_accessible_songs(items, db: Session) -> None:
+    """Every setlist item must reference a song in the active project. A written
+    FK isn't covered by the read filter, so check the requested ids against a
+    scoped lookup (which only returns songs in scope) in a single query."""
+    wanted = {i.song_id for i in items if i.song_id is not None}
+    if not wanted:
+        return
+    found = {sid for (sid,) in db.query(Song.id).filter(Song.id.in_(wanted)).all()}
+    if wanted - found:
+        raise HTTPException(400, "Setlist references songs you can't access")
 
 
 def _setlist_to_read(setlist: Setlist, db: Session) -> SetlistRead:
@@ -46,13 +58,14 @@ def _setlist_to_read(setlist: Setlist, db: Session) -> SetlistRead:
 
 
 @router.get("", response_model=list[SetlistRead])
-def list_setlists(db: Session = Depends(get_db), _user=Depends(require_viewer)):
+def list_setlists(db: Session = Depends(get_db), _user=Depends(project_viewer)):
     setlists = db.query(Setlist).order_by(Setlist.updated_at.desc()).all()
     return [_setlist_to_read(s, db) for s in setlists]
 
 
 @router.post("", response_model=SetlistRead)
-def create_setlist(data: SetlistCreate, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def create_setlist(data: SetlistCreate, db: Session = Depends(get_db), _user=Depends(project_editor)):
+    _require_accessible_songs(data.items, db)
     setlist = Setlist(name=data.name, description=data.description, config=data.config)
     db.add(setlist)
     db.flush()
@@ -72,7 +85,7 @@ def create_setlist(data: SetlistCreate, db: Session = Depends(get_db), _user=Dep
 
 
 @router.get("/{setlist_id}", response_model=SetlistRead)
-def get_setlist(setlist_id: int, db: Session = Depends(get_db), _user=Depends(require_viewer)):
+def get_setlist(setlist_id: int, db: Session = Depends(get_db), _user=Depends(project_viewer)):
     setlist = db.query(Setlist).get(setlist_id)
     if not setlist:
         raise HTTPException(404, "Setlist not found")
@@ -80,7 +93,7 @@ def get_setlist(setlist_id: int, db: Session = Depends(get_db), _user=Depends(re
 
 
 @router.patch("/{setlist_id}", response_model=SetlistRead)
-def update_setlist(setlist_id: int, data: SetlistUpdate, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def update_setlist(setlist_id: int, data: SetlistUpdate, db: Session = Depends(get_db), _user=Depends(project_editor)):
     setlist = db.query(Setlist).get(setlist_id)
     if not setlist:
         raise HTTPException(404, "Setlist not found")
@@ -93,6 +106,7 @@ def update_setlist(setlist_id: int, data: SetlistUpdate, db: Session = Depends(g
         setlist.config = data.config
 
     if data.items is not None:
+        _require_accessible_songs(data.items, db)
         # Replace all items
         db.query(SetlistItem).filter(SetlistItem.setlist_id == setlist_id).delete()
         for item_data in data.items:
@@ -111,7 +125,7 @@ def update_setlist(setlist_id: int, data: SetlistUpdate, db: Session = Depends(g
 
 
 @router.delete("/{setlist_id}")
-def delete_setlist(setlist_id: int, db: Session = Depends(get_db), _user=Depends(require_editor)):
+def delete_setlist(setlist_id: int, db: Session = Depends(get_db), _user=Depends(project_editor)):
     setlist = db.query(Setlist).get(setlist_id)
     if not setlist:
         raise HTTPException(404, "Setlist not found")
