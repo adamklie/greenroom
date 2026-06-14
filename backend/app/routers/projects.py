@@ -18,9 +18,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_viewer
+from app.auth.deps import project_editor, require_viewer
 from app.database import get_db
-from app.models import Project, ProjectMember, User
+from app.models import AudioFile, PracticeSession, Project, ProjectMember, Setlist, Song, Take, User
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -52,6 +52,12 @@ class MemberAdd(BaseModel):
 
 class MemberRoleUpdate(BaseModel):
     role: str
+
+
+class MoveRequest(BaseModel):
+    kind: str  # song | session | audio_file | take | setlist
+    ids: list[int]
+    target_project_id: int
 
 
 def _owns_or_admin(project_id: int, user: User, db: Session) -> None:
@@ -242,3 +248,73 @@ def remove_member(
             raise HTTPException(status_code=400, detail="A project must keep at least one owner")
     db.delete(member)
     db.commit()
+
+
+_MOVABLE_KINDS = {"song", "session", "audio_file", "take", "setlist"}
+
+
+def _can_edit_project(user: User, project_id: int, db: Session) -> bool:
+    """A move's target requires edit rights there: a global admin, or an
+    owner/editor membership row."""
+    if user.role == "admin":
+        return True
+    member = db.query(ProjectMember).filter_by(project_id=project_id, user_id=user.id).first()
+    return member is not None and member.role in ("owner", "editor")
+
+
+@router.post("/move")
+def move_items(
+    req: MoveRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(project_editor),
+):
+    """Reassign project-scoped items to another project.
+
+    The request is scoped (project_editor) to the *source* project, so the
+    lookups below only find items the caller can currently see — you can't move
+    rows out of a project you don't have access to. The *target* is validated
+    separately (admin or owner/editor there). Moving a song or session cascades
+    project_id to its recordings/takes so a song never gets split from its media.
+    """
+    if req.kind not in _MOVABLE_KINDS:
+        raise HTTPException(status_code=400, detail="Unknown item kind")
+    if not req.ids:
+        return {"moved": 0, "target_project_id": req.target_project_id}
+    if db.query(Project).filter(Project.id == req.target_project_id).first() is None:
+        raise HTTPException(status_code=404, detail="Target project not found")
+    if not _can_edit_project(user, req.target_project_id, db):
+        raise HTTPException(status_code=403, detail="You can't move items into that project")
+
+    tid = req.target_project_id
+
+    if req.kind == "song":
+        songs = db.query(Song).filter(Song.id.in_(req.ids)).all()
+        sids = [s.id for s in songs]
+        for s in songs:
+            s.project_id = tid
+        if sids:
+            for af in db.query(AudioFile).filter(AudioFile.song_id.in_(sids)).all():
+                af.project_id = tid
+            for t in db.query(Take).filter(Take.song_id.in_(sids)).all():
+                t.project_id = tid
+        moved = len(songs)
+    elif req.kind == "session":
+        sessions = db.query(PracticeSession).filter(PracticeSession.id.in_(req.ids)).all()
+        sess_ids = [s.id for s in sessions]
+        for s in sessions:
+            s.project_id = tid
+        if sess_ids:
+            for af in db.query(AudioFile).filter(AudioFile.session_id.in_(sess_ids)).all():
+                af.project_id = tid
+            for t in db.query(Take).filter(Take.session_id.in_(sess_ids)).all():
+                t.project_id = tid
+        moved = len(sessions)
+    else:
+        model = {"audio_file": AudioFile, "take": Take, "setlist": Setlist}[req.kind]
+        rows = db.query(model).filter(model.id.in_(req.ids)).all()
+        for r in rows:
+            r.project_id = tid
+        moved = len(rows)
+
+    db.commit()
+    return {"moved": moved, "target_project_id": tid}

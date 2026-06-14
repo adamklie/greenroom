@@ -36,6 +36,15 @@ All notable changes to Greenroom are documented here. Format follows
   without a membership row, and the cross-project ops tools (admin-only) are
   unaffected. With no project selected, admins remain unscoped.
 
+### Added
+- Move items between projects (v2) — reassign songs, sessions, audio files,
+  takes, and setlists to another project via `POST /api/projects/move` and a
+  "Move to…" menu in the song detail panel, the Library bulk toolbar, and the
+  Sessions/Setlists cards. Moving a song or session cascades `project_id` to its
+  recordings/takes so media never gets split from its song. The request is
+  scoped to the source project (you can't move items you can't see) and the
+  target requires owner/editor (or admin) rights.
+
 ### Changed
 - Brand refresh: custom Greenroom waveform-G icon set for the nine content nav
   tabs, a logo lockup in the sidebar, a matching favicon, and a wordmark +

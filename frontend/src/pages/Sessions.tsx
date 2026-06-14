@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Session, type AudioFile } from "../api/client";
 import { ChevronDown, ChevronRight, Star, Video, FileAudio } from "lucide-react";
+import MoveToProjectMenu from "../components/MoveToProjectMenu";
 
 const RATING_DIMENSIONS = [
   { key: "rating_overall", label: "Overall" },
@@ -99,15 +100,18 @@ function SessionCard({ session }: { session: Session }) {
 
   return (
     <div className="rounded-xl border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
-      <button onClick={() => setExpanded(!expanded)} className="w-full flex items-center justify-between p-5 text-left">
-        <div className="flex items-center gap-3">
-          {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-          <div>
-            <div className="font-semibold">{session.date}</div>
-            <div className="text-xs" style={{ color: "var(--text-muted)" }}>{session.track_count} recordings</div>
+      <div className="flex items-center pr-4">
+        <button onClick={() => setExpanded(!expanded)} className="flex-1 flex items-center justify-between p-5 text-left">
+          <div className="flex items-center gap-3">
+            {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+            <div>
+              <div className="font-semibold">{session.date}</div>
+              <div className="text-xs" style={{ color: "var(--text-muted)" }}>{session.track_count} recordings</div>
+            </div>
           </div>
-        </div>
-      </button>
+        </button>
+        <MoveToProjectMenu kind="session" ids={[session.id]} compact />
+      </div>
       {expanded && detail && (
         <div className="px-5 pb-5 space-y-3">
           {detail.audio_files.map((af) => <RecordingCard key={af.id} af={af} />)}

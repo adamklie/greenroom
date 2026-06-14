@@ -5,6 +5,7 @@ import { api, type Song, type AudioFile } from "../api/client";
 import { Search, X, Play, Music, Tag, ArrowUpRight, Plus, Trash2, ChevronDown, ChevronRight, Scissors, FileMusic, Upload, RotateCcw } from "lucide-react";
 import { TabViewer } from "../components/TabViewer";
 import { useProject } from "../project";
+import MoveToProjectMenu from "../components/MoveToProjectMenu";
 
 const STATUS_COLORS: Record<string, string> = {
   idea: "var(--text-muted)", learning: "var(--blue)", rehearsed: "var(--yellow)",
@@ -421,6 +422,7 @@ function SongTabsSection({ songId }: { songId: number }) {
 }
 
 function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => void }) {
+  const { multiProject } = useProject();
   const { data: song } = useQuery({
     queryKey: ["song", songId],
     queryFn: () => api.songs.get(songId),
@@ -483,6 +485,7 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
         style={{ background: dragging ? "var(--accent)" : "var(--border)", opacity: dragging ? 1 : 0.3 }} />
       <div className="flex-1 overflow-y-auto p-6">
       <div className="flex justify-between items-start mb-4">
+        <MoveToProjectMenu kind="song" ids={[songId]} onMoved={onClose} compact />
         <button onClick={onClose} className="p-1 rounded hover:bg-white/10 ml-auto"><X size={18} /></button>
       </div>
 
@@ -507,9 +510,13 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
         <EditableField label="Status" value={song.status}
           options={STATUSES_BY_TYPE[song.type] || ALL_STATUSES}
           onChange={(v) => save("status", v)} />
-        <EditableField label="Project" value={song.project}
-          options={PROJECTS.filter(p => p !== "all")}
-          onChange={(v) => save("project", v)} />
+        {/* Legacy project string — under multi-project, project membership is
+            authoritative and changed via "Move to…", so hide this. */}
+        {!multiProject && (
+          <EditableField label="Project" value={song.project}
+            options={PROJECTS.filter(p => p !== "all")}
+            onChange={(v) => save("project", v)} />
+        )}
       </div>
 
       {/* Structured music fields (editable) */}
