@@ -312,9 +312,6 @@ export default function SetlistBuilder() {
             <ListMusic size={24} style={{ color: "var(--text-muted)" }} />
           </div>
           <p className="font-medium">No setlists yet</p>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-            Create a setlist to plan your gigs and open mic performances
-          </p>
         </div>
       )}
 

@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, type RecentSong, type RecentAudioFile, type RecentSession } from "../api/client";
-import { Music, Radio, Disc3, PenTool, Lightbulb, Target, ArrowRight, Clock, FileAudio, CalendarDays, Upload } from "lucide-react";
+import { Music, Target, ArrowRight, Clock, FileAudio, CalendarDays, Upload } from "lucide-react";
+import { LibraryIcon, CoversIcon, OriginalsIcon, IdeasIcon, SessionsIcon } from "../components/GreenroomIcons";
 
 function StatCard({ label, value, icon: Icon, color }: {
   label: string; value: number | string; icon: React.ElementType; color: string;
@@ -116,14 +117,17 @@ export default function Dashboard() {
         </Link>
       </div>
 
+      {/* All totals, up top */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <StatCard label="Total Songs" value={stats.total_songs} icon={LibraryIcon} color="var(--accent)" />
+        <StatCard label="Sessions" value={stats.total_sessions} icon={SessionsIcon} color="var(--blue)" />
+        <StatCard label="Covers" value={stats.songs_by_type["cover"] || 0} icon={CoversIcon} color="var(--blue)" />
+        <StatCard label="Originals" value={stats.songs_by_type["original"] || 0} icon={OriginalsIcon} color="var(--green)" />
+        <StatCard label="Ideas" value={stats.songs_by_type["idea"] || 0} icon={IdeasIcon} color="var(--yellow)" />
+      </div>
+
       {/* Focus Songs */}
       <FocusSongs />
-
-      {/* Top stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
-        <StatCard label="Total Songs" value={stats.total_songs} icon={Music} color="var(--accent)" />
-        <StatCard label="Practice Sessions" value={stats.total_sessions} icon={Radio} color="var(--blue)" />
-      </div>
 
       {/* Recent additions */}
       <RecentAdditions
@@ -132,45 +136,6 @@ export default function Dashboard() {
         sessions={data.recent_sessions}
       />
 
-      {/* Three pillars */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        <div className="rounded-xl p-5 border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
-          <div className="flex items-center gap-2 mb-2">
-            <Disc3 size={18} style={{ color: "var(--blue)" }} />
-            <span className="text-sm" style={{ color: "var(--text-muted)" }}>Covers</span>
-          </div>
-          <div className="text-3xl font-bold">{stats.songs_by_type["cover"] || 0}</div>
-        </div>
-        <div className="rounded-xl p-5 border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
-          <div className="flex items-center gap-2 mb-2">
-            <PenTool size={18} style={{ color: "var(--green)" }} />
-            <span className="text-sm" style={{ color: "var(--text-muted)" }}>Originals</span>
-          </div>
-          <div className="text-3xl font-bold">{stats.songs_by_type["original"] || 0}</div>
-        </div>
-        <div className="rounded-xl p-5 border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
-          <div className="flex items-center gap-2 mb-2">
-            <Lightbulb size={18} style={{ color: "var(--yellow)" }} />
-            <span className="text-sm" style={{ color: "var(--text-muted)" }}>Ideas</span>
-          </div>
-          <div className="text-3xl font-bold">{stats.songs_by_type["idea"] || 0}</div>
-        </div>
-      </div>
-
-      {/* Songs by project */}
-      <div className="rounded-xl p-5 border mt-8" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
-        <h3 className="font-semibold mb-3">Songs by Project</h3>
-        <div className="flex gap-6 flex-wrap">
-          {Object.entries(stats.songs_by_project).map(([project, count]) => (
-            <div key={project} className="text-center">
-              <div className="text-2xl font-bold">{count}</div>
-              <div className="text-xs capitalize" style={{ color: "var(--text-muted)" }}>
-                {project.replace("_", " ")}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
