@@ -47,6 +47,10 @@ class ProjectUpdate(BaseModel):
     color: str | None = None
 
 
+class ReorderRequest(BaseModel):
+    ordered_ids: list[int]
+
+
 class MemberRead(BaseModel):
     id: int
     user_id: int
@@ -100,16 +104,18 @@ def _get_project_or_404(project_id: int, db: Session) -> Project:
 @router.get("", response_model=list[ProjectRead])
 def list_projects(db: Session = Depends(get_db), user: User = Depends(require_viewer)):
     """Projects the caller can switch to. A global admin sees every project."""
+    # Custom order: by position (NULLs last), then name.
+    order = (Project.position.is_(None), Project.position, Project.name)
     if user.role == "admin":
         return [
             ProjectRead(id=p.id, name=p.name, role="admin", description=p.description, color=p.color)
-            for p in db.query(Project).order_by(Project.name).all()
+            for p in db.query(Project).order_by(*order).all()
         ]
     rows = (
         db.query(Project, ProjectMember.role)
         .join(ProjectMember, ProjectMember.project_id == Project.id)
         .filter(ProjectMember.user_id == user.id)
-        .order_by(Project.name)
+        .order_by(*order)
         .all()
     )
     return [
@@ -150,6 +156,28 @@ def create_project(
     db.add(ProjectMember(project_id=project.id, user_id=user.id, role="owner"))
     db.commit()
     return ProjectRead(id=project.id, name=project.name, role="owner")
+
+
+@router.post("/reorder")
+def reorder_projects(
+    req: ReorderRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_viewer),
+):
+    """Set the custom switcher order. Assigns position = index for each project
+    the caller can access; ids they can't access are ignored."""
+    if user.role == "admin":
+        accessible = {pid for (pid,) in db.query(Project.id).all()}
+    else:
+        accessible = {
+            pid for (pid,) in
+            db.query(ProjectMember.project_id).filter(ProjectMember.user_id == user.id).all()
+        }
+    for i, pid in enumerate(req.ordered_ids):
+        if pid in accessible:
+            db.query(Project).filter(Project.id == pid).update({"position": i})
+    db.commit()
+    return {"ok": True}
 
 
 @router.patch("/{project_id}", response_model=ProjectRead)

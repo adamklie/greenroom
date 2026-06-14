@@ -297,6 +297,7 @@ export const api = {
     update: (projectId: number, data: { name?: string; description?: string | null; color?: string | null }) =>
       patch<Project>(`${BASE}/projects/${projectId}`, data),
     remove: (projectId: number) => json<void>(`${BASE}/projects/${projectId}`, { method: "DELETE" }),
+    reorder: (orderedIds: number[]) => post<{ ok: boolean }>(`${BASE}/projects/reorder`, { ordered_ids: orderedIds }),
     members: (projectId: number) => json<ProjectMember[]>(`${BASE}/projects/${projectId}/members`),
     addMember: (projectId: number, email: string, role: string) =>
       post<ProjectMember>(`${BASE}/projects/${projectId}/members`, { email, role }),
