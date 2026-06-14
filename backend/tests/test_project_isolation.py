@@ -139,6 +139,26 @@ def test_viewer_can_read(client, iso):
     assert res.status_code == 200
 
 
+# ---------- project cookie fallback (native requests) ----------
+
+def test_cookie_scopes_request_without_header(client, iso):
+    _as(client, iso.ua)
+    # Native requests (audio/tab/download) can't set the header; the cookie does.
+    client.cookies.set("greenroom_project", str(iso.pa))
+    res = client.get("/api/songs")  # no X-Greenroom-Project header
+    assert res.status_code == 200
+    assert {s["title"] for s in res.json()} == {"SongA"}
+
+
+def test_header_takes_precedence_over_cookie(client, iso):
+    _as(client, iso.ua)
+    # Cookie names PA (a project A belongs to) but the header names PB (it
+    # doesn't) — the header wins, so membership fails → 403, proving precedence.
+    client.cookies.set("greenroom_project", str(iso.pa))
+    res = client.get("/api/songs", headers=_h(iso.pb))
+    assert res.status_code == 403
+
+
 # ---------- cross-project write validation ----------
 
 def test_cannot_reassign_audio_to_other_projects_song(client, iso):

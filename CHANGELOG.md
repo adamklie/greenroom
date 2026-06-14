@@ -25,6 +25,11 @@ All notable changes to Greenroom are documented here. Format follows
   active project as `X-Greenroom-Project` on every request. All gated on the
   `multi_project` flag now reported by `/api/health`, so the UI is unchanged
   (no switcher, legacy project pickers intact) while the flag is off.
+- v2 project scoping for native browser requests — the active project is mirrored
+  into a `greenroom_project` cookie, which the auth gate reads as a fallback to
+  the header. This scopes `<audio>`/download/tab requests (which can't send a
+  custom header) once the flag is on; membership is still verified, so the cookie
+  only narrows scope. Unblocks the eventual flag flip.
 
 ### Changed
 - The ops/maintenance endpoints (integrity, file health/move/consolidate, file
