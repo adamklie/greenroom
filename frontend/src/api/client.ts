@@ -304,13 +304,17 @@ export const api = {
         kind, ids, target_project_id: targetProjectId,
       }),
     songs: (projectId: number) => json<SongBrief[]>(`${BASE}/projects/${projectId}/songs`),
-    moveRecording: (audioFileId: number, targetProjectId: number, songId: number | null, copyMetadata = true) =>
-      post<{ moved: number; song_id: number; target_project_id: number }>(`${BASE}/projects/move-recording`, {
-        audio_file_id: audioFileId, target_project_id: targetProjectId, song_id: songId, copy_metadata: copyMetadata,
-      }),
-    moveRecordingsBulk: (audioFileIds: number[], targetProjectId: number) =>
-      post<{ moved: number; target_project_id: number }>(`${BASE}/projects/move-recordings`, {
-        audio_file_ids: audioFileIds, target_project_id: targetProjectId,
+    moveRecordings: (
+      audioFileIds: number[],
+      targetProjectId: number,
+      opts?: { songId?: number | null; createSong?: boolean; copyMetadata?: boolean },
+    ) =>
+      post<{ moved: number; target_project_id: number; song_id: number | null }>(`${BASE}/projects/move-recordings`, {
+        audio_file_ids: audioFileIds,
+        target_project_id: targetProjectId,
+        song_id: opts?.songId ?? null,
+        create_song: opts?.createSong ?? false,
+        copy_metadata: opts?.copyMetadata ?? false,
       }),
   },
   dashboard: {

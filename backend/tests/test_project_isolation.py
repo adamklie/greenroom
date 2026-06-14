@@ -312,11 +312,11 @@ def test_move_song_cascades_recordings(client, iso, db):
 
 def test_split_recording_creates_song_copy(client, iso, db):
     _as(client, iso.admin)
-    # Splitting a recording into PB (no target song chosen) copies its song into
-    # PB and links the recording there; the source song stays in PA.
+    # create_song: copy the source song into PB and link the recording there; the
+    # source song stays in PA.
     res = client.post(
-        "/api/projects/move-recording",
-        json={"audio_file_id": iso.afa, "target_project_id": iso.pb},
+        "/api/projects/move-recordings",
+        json={"audio_file_ids": [iso.afa], "target_project_id": iso.pb, "create_song": True},
         headers=_h(iso.pa),
     )
     assert res.status_code == 200
@@ -333,8 +333,8 @@ def test_split_recording_creates_song_copy(client, iso, db):
 def test_split_recording_links_existing_song(client, iso, db):
     _as(client, iso.admin)
     res = client.post(
-        "/api/projects/move-recording",
-        json={"audio_file_id": iso.afa, "target_project_id": iso.pb, "song_id": iso.sb},
+        "/api/projects/move-recordings",
+        json={"audio_file_ids": [iso.afa], "target_project_id": iso.pb, "song_id": iso.sb},
         headers=_h(iso.pa),
     )
     assert res.status_code == 200
@@ -343,8 +343,9 @@ def test_split_recording_links_existing_song(client, iso, db):
     assert afa.project_id == iso.pb and afa.song_id == iso.sb
 
 
-def test_bulk_split_recordings(client, iso, db):
+def test_bulk_split_recordings_auto_match(client, iso, db):
     _as(client, iso.admin)
+    # No song_id / create_song → auto-match by title+artist (creates "SongA" in PB).
     res = client.post(
         "/api/projects/move-recordings",
         json={"audio_file_ids": [iso.afa], "target_project_id": iso.pb},

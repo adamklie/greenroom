@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type AudioFile } from "../api/client";
 import { Search, FileAudio, FileVideo, Columns3, Trash2, RotateCcw, Download, FolderInput } from "lucide-react";
 import { InlineSongPicker, type SongOption } from "../components/InlineSongPicker";
-import MoveToProjectMenu from "../components/MoveToProjectMenu";
 import MoveRecordingModal from "../components/MoveRecordingModal";
 import { useProject } from "../project";
 
@@ -385,7 +384,7 @@ const LibraryRow = memo(function LibraryRow({
 
 export default function Library() {
   const { multiProject } = useProject();
-  const [movingAf, setMovingAf] = useState<AudioFile | null>(null);
+  const [movingAfs, setMovingAfs] = useState<AudioFile[] | null>(null);
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
   useEffect(() => {
@@ -756,7 +755,13 @@ export default function Library() {
             <Trash2 size={12} /> Delete
           </button>
           <div className="ml-auto flex items-center gap-2">
-            <MoveToProjectMenu kind="audio_file" ids={selectedIds} onMoved={() => setSelected(new Set())} compact />
+            {multiProject && (
+              <button onClick={() => setMovingAfs(sorted.filter((af) => selected.has(af.id)))}
+                className="flex items-center gap-1.5 px-2 py-1 rounded border text-xs hover:opacity-80"
+                style={{ borderColor: "var(--border)", color: "var(--text)" }}>
+                <FolderInput size={13} /> Move
+              </button>
+            )}
             <button onClick={() => setSelected(new Set())}
               className="px-2 py-1 rounded text-xs" style={{ color: "var(--text-muted)" }}>
               Clear
@@ -808,7 +813,7 @@ export default function Library() {
                   onDelete={onDelete}
                   onRestore={onRestore}
                   onSongCreated={onSongCreated}
-                  onMove={multiProject ? setMovingAf : undefined}
+                  onMove={multiProject ? (af) => setMovingAfs([af]) : undefined}
                 />
               ))}
               {botPad > 0 && <tr style={{ height: botPad }}><td colSpan={colCount} style={{ padding: 0 }} /></tr>}
@@ -816,7 +821,7 @@ export default function Library() {
           </table>
         </div>
       )}
-      {movingAf && <MoveRecordingModal af={movingAf} onClose={() => setMovingAf(null)} />}
+      {movingAfs && <MoveRecordingModal afs={movingAfs} onClose={() => setMovingAfs(null)} onMoved={() => setSelected(new Set())} />}
     </div>
   );
 }
