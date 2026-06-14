@@ -402,6 +402,29 @@ def test_non_owner_cannot_rename_project(client, iso):
     assert res.status_code == 403
 
 
+def test_update_project_description_and_color(client, iso):
+    _as(client, iso.ua)
+    res = client.patch(f"/api/projects/{iso.pa}", json={"description": "My solo stuff", "color": "#10b981"})
+    assert res.status_code == 200
+    assert res.json()["description"] == "My solo stuff"
+    assert res.json()["color"] == "#10b981"
+
+
+def test_cannot_delete_nonempty_project(client, iso):
+    _as(client, iso.ua)  # PA has SongA
+    res = client.delete(f"/api/projects/{iso.pa}")
+    assert res.status_code == 409
+
+
+def test_delete_empty_project(client, iso, db):
+    _as(client, iso.admin)
+    pid = client.post("/api/projects", json={"name": "Temp"}).json()["id"]
+    res = client.delete(f"/api/projects/{pid}")
+    assert res.status_code == 204
+    db.expire_all()
+    assert db.query(Project).get(pid) is None
+
+
 # ---------- ops endpoints are admin-only ----------
 
 def test_filebrowser_forbidden_for_non_admin(client, iso):

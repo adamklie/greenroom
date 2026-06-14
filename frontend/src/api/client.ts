@@ -263,6 +263,8 @@ export interface Project {
   id: number;
   name: string;
   role: string; // the caller's role in this project ('owner'|'editor'|'viewer', or 'admin')
+  description: string | null;
+  color: string | null;
 }
 
 export interface ProjectMember {
@@ -292,7 +294,9 @@ export const api = {
   projects: {
     list: () => json<Project[]>(`${BASE}/projects`),
     create: (name: string) => post<Project>(`${BASE}/projects`, { name }),
-    update: (projectId: number, name: string) => patch<Project>(`${BASE}/projects/${projectId}`, { name }),
+    update: (projectId: number, data: { name?: string; description?: string | null; color?: string | null }) =>
+      patch<Project>(`${BASE}/projects/${projectId}`, data),
+    remove: (projectId: number) => json<void>(`${BASE}/projects/${projectId}`, { method: "DELETE" }),
     members: (projectId: number) => json<ProjectMember[]>(`${BASE}/projects/${projectId}/members`),
     addMember: (projectId: number, email: string, role: string) =>
       post<ProjectMember>(`${BASE}/projects/${projectId}/members`, { email, role }),

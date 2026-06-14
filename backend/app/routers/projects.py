@@ -32,6 +32,8 @@ class ProjectRead(BaseModel):
     id: int
     name: str
     role: str  # the caller's role in this project ('admin' for the global admin)
+    description: str | None = None
+    color: str | None = None
     model_config = {"from_attributes": True}
 
 
@@ -40,7 +42,9 @@ class ProjectCreate(BaseModel):
 
 
 class ProjectUpdate(BaseModel):
-    name: str
+    name: str | None = None
+    description: str | None = None
+    color: str | None = None
 
 
 class MemberRead(BaseModel):
@@ -98,7 +102,7 @@ def list_projects(db: Session = Depends(get_db), user: User = Depends(require_vi
     """Projects the caller can switch to. A global admin sees every project."""
     if user.role == "admin":
         return [
-            ProjectRead(id=p.id, name=p.name, role="admin")
+            ProjectRead(id=p.id, name=p.name, role="admin", description=p.description, color=p.color)
             for p in db.query(Project).order_by(Project.name).all()
         ]
     rows = (
@@ -108,7 +112,10 @@ def list_projects(db: Session = Depends(get_db), user: User = Depends(require_vi
         .order_by(Project.name)
         .all()
     )
-    return [ProjectRead(id=p.id, name=p.name, role=role) for p, role in rows]
+    return [
+        ProjectRead(id=p.id, name=p.name, role=role, description=p.description, color=p.color)
+        for p, role in rows
+    ]
 
 
 @router.post("", response_model=ProjectRead, status_code=201)
@@ -152,30 +159,65 @@ def update_project(
     db: Session = Depends(get_db),
     user: User = Depends(require_viewer),
 ):
-    """Rename a project. Owner or global admin only; the new name must be unique
-    among the projects this user owns."""
+    """Edit project metadata (name / description / color). Owner or global admin
+    only; a new name must be unique among the projects this user owns."""
     project = _get_project_or_404(project_id, db)
     _owns_or_admin(project_id, user, db)
-    name = data.name.strip()
-    if not name:
-        raise HTTPException(status_code=400, detail="Project name is required")
-    clash = (
-        db.query(Project)
-        .join(ProjectMember, ProjectMember.project_id == Project.id)
-        .filter(
-            ProjectMember.user_id == user.id,
-            ProjectMember.role == "owner",
-            Project.name == name,
-            Project.id != project_id,
+    fields = data.model_dump(exclude_unset=True)
+
+    if "name" in fields:
+        name = (fields["name"] or "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Project name is required")
+        clash = (
+            db.query(Project)
+            .join(ProjectMember, ProjectMember.project_id == Project.id)
+            .filter(
+                ProjectMember.user_id == user.id,
+                ProjectMember.role == "owner",
+                Project.name == name,
+                Project.id != project_id,
+            )
+            .first()
         )
-        .first()
-    )
-    if clash is not None:
-        raise HTTPException(status_code=409, detail="You already have a project with that name")
-    project.name = name
+        if clash is not None:
+            raise HTTPException(status_code=409, detail="You already have a project with that name")
+        project.name = name
+    if "description" in fields:
+        project.description = (fields["description"] or "").strip() or None
+    if "color" in fields:
+        project.color = fields["color"] or None
+
     db.commit()
     role = "admin" if user.role == "admin" else "owner"
-    return ProjectRead(id=project.id, name=project.name, role=role)
+    return ProjectRead(id=project.id, name=project.name, role=role,
+                       description=project.description, color=project.color)
+
+
+@router.delete("/{project_id}", status_code=204)
+def delete_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_viewer),
+):
+    """Delete a project. Owner or global admin only, and only when it holds no
+    content — move or delete its songs/recordings/sessions/setlists first."""
+    _get_project_or_404(project_id, db)
+    _owns_or_admin(project_id, user, db)
+    with scoping.scoped(None):  # count across the project regardless of caller scope
+        counts = {
+            "songs": db.query(Song).filter(Song.project_id == project_id).count(),
+            "recordings": db.query(AudioFile).filter(AudioFile.project_id == project_id).count(),
+            "sessions": db.query(PracticeSession).filter(PracticeSession.project_id == project_id).count(),
+            "setlists": db.query(Setlist).filter(Setlist.project_id == project_id).count(),
+            "takes": db.query(Take).filter(Take.project_id == project_id).count(),
+        }
+    if any(counts.values()):
+        nonempty = ", ".join(f"{n} {k}" for k, n in counts.items() if n)
+        raise HTTPException(status_code=409, detail=f"Project isn't empty ({nonempty}). Move or delete its content first.")
+    db.query(ProjectMember).filter(ProjectMember.project_id == project_id).delete()
+    db.query(Project).filter(Project.id == project_id).delete()
+    db.commit()
 
 
 @router.get("/{project_id}/members", response_model=list[MemberRead])
