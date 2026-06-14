@@ -2,10 +2,11 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { api, type Song, type AudioFile } from "../api/client";
-import { Search, X, Play, Music, Tag, ArrowUpRight, Plus, Trash2, ChevronDown, ChevronRight, Scissors, FileMusic, Upload, RotateCcw } from "lucide-react";
+import { Search, X, Play, Music, Tag, ArrowUpRight, Plus, Trash2, ChevronDown, ChevronRight, Scissors, FileMusic, Upload, RotateCcw, FolderInput } from "lucide-react";
 import { TabViewer } from "../components/TabViewer";
 import { useProject } from "../project";
 import MoveToProjectMenu from "../components/MoveToProjectMenu";
+import MoveRecordingModal from "../components/MoveRecordingModal";
 
 const STATUS_COLORS: Record<string, string> = {
   idea: "var(--text-muted)", learning: "var(--blue)", rehearsed: "var(--yellow)",
@@ -106,8 +107,10 @@ function StarPicker({ value, onChange, size = 10 }: { value: number | null; onCh
 }
 
 function SongAudioFileRow({ af, onUpdate }: { af: AudioFile; onUpdate: () => void }) {
+  const { multiProject } = useProject();
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
+  const [moving, setMoving] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [showTrim, setShowTrim] = useState(false);
   const [trimStart, setTrimStart] = useState("");
@@ -177,12 +180,21 @@ function SongAudioFileRow({ af, onUpdate }: { af: AudioFile; onUpdate: () => voi
           <StarPicker value={af.rating_overall} onChange={(n) => save("rating_overall", n)} />
         </td>
         <td className="px-1 py-1.5" onClick={(e) => e.stopPropagation()}>
-          <button onClick={() => { if (confirm("Delete?")) deleteMut.mutate(); }}
-            className="p-0.5 rounded hover:bg-white/10" style={{ color: "var(--text-muted)" }}>
-            <Trash2 size={11} />
-          </button>
+          <div className="flex items-center gap-1">
+            {multiProject && (
+              <button onClick={() => setMoving(true)} title="Move to another project"
+                className="p-0.5 rounded hover:bg-white/10" style={{ color: "var(--text-muted)" }}>
+                <FolderInput size={11} />
+              </button>
+            )}
+            <button onClick={() => { if (confirm("Delete?")) deleteMut.mutate(); }}
+              className="p-0.5 rounded hover:bg-white/10" style={{ color: "var(--text-muted)" }}>
+              <Trash2 size={11} />
+            </button>
+          </div>
         </td>
       </tr>
+      {moving && <MoveRecordingModal afs={[af]} onClose={() => setMoving(false)} onMoved={onUpdate} />}
       {expanded && (
         <tr style={{ borderColor: "var(--border)" }}>
           <td colSpan={5} className="px-3 py-3" style={{ background: "var(--bg)" }}>

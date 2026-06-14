@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Session, type AudioFile } from "../api/client";
-import { ChevronDown, ChevronRight, Star, Video, FileAudio } from "lucide-react";
+import { ChevronDown, ChevronRight, Star, Video, FileAudio, FolderInput } from "lucide-react";
 import MoveToProjectMenu from "../components/MoveToProjectMenu";
+import MoveRecordingModal from "../components/MoveRecordingModal";
+import { useProject } from "../project";
 
 const RATING_DIMENSIONS = [
   { key: "rating_overall", label: "Overall" },
@@ -61,6 +63,8 @@ function AudioFileRating({ af }: { af: AudioFile }) {
 }
 
 function RecordingCard({ af }: { af: AudioFile }) {
+  const { multiProject } = useProject();
+  const [moving, setMoving] = useState(false);
   const isVideo = af.file_type && ["mp4", "mov", "m4v"].includes(af.file_type);
   return (
     <div className="rounded-lg p-4 border" style={{ background: "var(--bg)", borderColor: "var(--border)" }}>
@@ -72,10 +76,19 @@ function RecordingCard({ af }: { af: AudioFile }) {
             {af.file_type}
           </span>
         </div>
-        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-          {af.start_time && af.end_time ? `${af.start_time} - ${af.end_time}` : ""}
-        </span>
+        <div className="flex items-center gap-2">
+          {multiProject && (
+            <button onClick={() => setMoving(true)} title="Move to another project"
+              className="p-0.5 rounded hover:bg-white/10" style={{ color: "var(--text-muted)" }}>
+              <FolderInput size={14} />
+            </button>
+          )}
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+            {af.start_time && af.end_time ? `${af.start_time} - ${af.end_time}` : ""}
+          </span>
+        </div>
       </div>
+      {moving && <MoveRecordingModal afs={[af]} onClose={() => setMoving(false)} />}
       {isVideo ? (
         <video controls className="w-full rounded mb-2" style={{ maxHeight: 200 }}>
           <source src={api.media.audioFileUrl(af.id)} />
@@ -186,7 +199,7 @@ export default function Sessions() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Practice Sessions</h2>
+      <h2 className="text-2xl font-bold mb-6">Sessions</h2>
       <div className="flex gap-1 mb-6 p-1 rounded-lg w-fit" style={{ background: "var(--bg-card)" }}>
         <button onClick={() => setTab("sessions")}
           className="px-4 py-2 rounded-md text-sm font-medium"

@@ -4,7 +4,7 @@ import { FolderInput, ChevronDown } from "lucide-react";
 import { api } from "../api/client";
 import { useProject } from "../project";
 
-type Kind = "song" | "session" | "audio_file" | "take" | "setlist";
+type Kind = "song" | "session" | "take" | "setlist";
 
 const CARD = { background: "var(--bg-card)", borderColor: "var(--border)" } as const;
 
@@ -33,10 +33,7 @@ export default function MoveToProjectMenu({
   const targets = projects.filter((p) => p.id !== activeProjectId);
 
   const move = useMutation({
-    mutationFn: (targetId: number) =>
-      kind === "audio_file"
-        ? api.projects.moveRecordingsBulk(ids, targetId)        // bulk recordings auto-split by title+artist
-        : api.projects.move(kind, ids, targetId),               // song/session/take/setlist move whole
+    mutationFn: (targetId: number) => api.projects.move(kind, ids, targetId),
 
     onSuccess: (r) => {
       // Moved items leave the active project, so refresh the scoped data views.
