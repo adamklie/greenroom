@@ -1,8 +1,20 @@
-# Greenroom
+<p align="center">
+  <img src="./greenroom-wordmark.svg" alt="Greenroom" height="56" />
+</p>
 
-[![Test](https://github.com/adamklie/greenroom/actions/workflows/test.yml/badge.svg)](https://github.com/adamklie/greenroom/actions/workflows/test.yml)
+<p align="center"><em>The Google Drive for musicians — songbook, recording library, and practice diary.</em></p>
 
-The badge above reflects the latest `Test` workflow run on `main` — backend pytest plus frontend `tsc && vite build`, both run on every push and on PRs to `main`. Green means the 60-test backend suite passed and the TypeScript build had no type errors at that revision.
+<p align="center">
+  <a href="https://github.com/adamklie/greenroom/actions/workflows/test.yml"><img src="https://github.com/adamklie/greenroom/actions/workflows/test.yml/badge.svg" alt="Test" /></a>
+  <img src="https://img.shields.io/badge/React-10b981?style=flat-square&logo=react&logoColor=white" alt="React" />
+  <img src="https://img.shields.io/badge/TypeScript-10b981?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Vite-10b981?style=flat-square&logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/Tailwind-10b981?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" />
+  <img src="https://img.shields.io/badge/FastAPI-10b981?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/SQLite-10b981?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" />
+</p>
+
+The Test badge above reflects the latest `Test` workflow run on `main` — backend pytest plus frontend `tsc && vite build`, both run on every push and on PRs to `main`. Green means the backend suite passed and the TypeScript build had no type errors at that revision.
 
 A private app for tracking your band's songs, recordings, and practice sessions. Think of it as a digital songbook + recording library + practice diary.
 
