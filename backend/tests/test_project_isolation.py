@@ -293,6 +293,47 @@ def test_non_owner_cannot_add_member(client, iso):
     assert res.status_code == 403
 
 
+# ---------- move items between projects ----------
+
+def test_move_song_cascades_recordings(client, iso, db):
+    _as(client, iso.admin)  # admin can edit any target
+    res = client.post(
+        "/api/projects/move",
+        json={"kind": "song", "ids": [iso.sa], "target_project_id": iso.pb},
+        headers=_h(iso.pa),  # source = PA
+    )
+    assert res.status_code == 200
+    assert res.json()["moved"] == 1
+    db.expire_all()
+    assert db.query(Song).get(iso.sa).project_id == iso.pb
+    # The song's recording moves with it.
+    assert db.query(AudioFile).get(iso.afa).project_id == iso.pb
+
+
+def test_cannot_move_into_uneditable_project(client, iso):
+    _as(client, iso.ua)  # owner of PA, not a member of PB
+    res = client.post(
+        "/api/projects/move",
+        json={"kind": "song", "ids": [iso.sa], "target_project_id": iso.pb},
+        headers=_h(iso.pa),
+    )
+    assert res.status_code == 403
+
+
+def test_move_ignores_items_outside_source_scope(client, iso, db):
+    _as(client, iso.ua)  # scoped to PA; can edit PA
+    # Try to pull PB's song into PA — it isn't visible in PA scope, so nothing moves.
+    res = client.post(
+        "/api/projects/move",
+        json={"kind": "song", "ids": [iso.sb], "target_project_id": iso.pa},
+        headers=_h(iso.pa),
+    )
+    assert res.status_code == 200
+    assert res.json()["moved"] == 0
+    db.expire_all()
+    assert db.query(Song).get(iso.sb).project_id == iso.pb  # unchanged
+
+
 # ---------- ops endpoints are admin-only ----------
 
 def test_filebrowser_forbidden_for_non_admin(client, iso):

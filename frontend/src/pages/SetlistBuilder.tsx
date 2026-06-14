@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Song, type Setlist } from "../api/client";
 import { Plus, Trash2, Clock, GripVertical, X, ListMusic } from "lucide-react";
+import MoveToProjectMenu from "../components/MoveToProjectMenu";
 
 interface DraftItem {
   song_id: number;
@@ -33,13 +34,16 @@ function SetlistCard({ setlist, onSelect }: { setlist: Setlist; onSelect: () => 
     >
       <div className="flex justify-between items-start mb-2">
         <h3 className="font-semibold">{setlist.name}</h3>
-        <button
-          onClick={(e) => { e.stopPropagation(); deleteMut.mutate(); }}
-          className="p-1 rounded hover:bg-white/10"
-          style={{ color: "var(--text-muted)" }}
-        >
-          <Trash2 size={14} />
-        </button>
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <MoveToProjectMenu kind="setlist" ids={[setlist.id]} compact />
+          <button
+            onClick={(e) => { e.stopPropagation(); deleteMut.mutate(); }}
+            className="p-1 rounded hover:bg-white/10"
+            style={{ color: "var(--text-muted)" }}
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
       <div className="flex gap-4 text-sm" style={{ color: "var(--text-muted)" }}>
         <span>{setlist.song_count} songs</span>

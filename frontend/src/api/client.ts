@@ -292,6 +292,10 @@ export const api = {
       patch<ProjectMember>(`${BASE}/projects/${projectId}/members/${memberId}`, { role }),
     removeMember: (projectId: number, memberId: number) =>
       json<void>(`${BASE}/projects/${projectId}/members/${memberId}`, { method: "DELETE" }),
+    move: (kind: "song" | "session" | "audio_file" | "take" | "setlist", ids: number[], targetProjectId: number) =>
+      post<{ moved: number; target_project_id: number }>(`${BASE}/projects/move`, {
+        kind, ids, target_project_id: targetProjectId,
+      }),
   },
   dashboard: {
     get: () => json<DashboardResponse>(`${BASE}/dashboard`),

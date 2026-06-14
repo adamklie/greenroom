@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type AudioFile } from "../api/client";
 import { Search, FileAudio, FileVideo, Columns3, Trash2, RotateCcw, Download } from "lucide-react";
 import { InlineSongPicker, type SongOption } from "../components/InlineSongPicker";
+import MoveToProjectMenu from "../components/MoveToProjectMenu";
 
 const SOURCE_OPTIONS = ["", "phone", "logic_pro", "garageband", "suno_ai", "collaborator", "download", "gopro", "unknown"];
 const ROLE_OPTIONS = ["", "recording", "demo", "reference", "backing_track", "final_mix", "stem"];
@@ -742,10 +743,13 @@ export default function Library() {
             style={{ borderColor: "var(--danger, #ef4444)", color: "var(--danger, #ef4444)" }}>
             <Trash2 size={12} /> Delete
           </button>
-          <button onClick={() => setSelected(new Set())}
-            className="px-2 py-1 rounded text-xs ml-auto" style={{ color: "var(--text-muted)" }}>
-            Clear
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <MoveToProjectMenu kind="audio_file" ids={selectedIds} onMoved={() => setSelected(new Set())} compact />
+            <button onClick={() => setSelected(new Set())}
+              className="px-2 py-1 rounded text-xs" style={{ color: "var(--text-muted)" }}>
+              Clear
+            </button>
+          </div>
         </div>
       )}
 
