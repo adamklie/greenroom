@@ -30,6 +30,11 @@ All notable changes to Greenroom are documented here. Format follows
   the header. This scopes `<audio>`/download/tab requests (which can't send a
   custom header) once the flag is on; membership is still verified, so the cookie
   only narrows scope. Unblocks the eventual flag flip.
+- v2 admins are now **scoped to the active project** on data routes (when one is
+  selected) instead of always seeing everything merged — so the project switcher
+  filters an admin's view like any member's. Admins still reach any project
+  without a membership row, and the cross-project ops tools (admin-only) are
+  unaffected. With no project selected, admins remain unscoped.
 
 ### Changed
 - The ops/maintenance endpoints (integrity, file health/move/consolidate, file

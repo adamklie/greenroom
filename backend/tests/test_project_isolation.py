@@ -208,17 +208,27 @@ def test_dashboard_counts_are_scoped(client, iso):
 
 # ---------- admin + dev bypass ----------
 
-def test_admin_sees_all_projects(client, iso):
+def test_admin_unscoped_without_a_project_sees_all(client, iso):
     _as(client, iso.admin)
-    # Admin is unscoped: even with PA's header, sees both songs.
-    res = client.get("/api/songs", headers=_h(iso.pa))
+    # No project selected → admin is unscoped → sees every project's songs.
+    res = client.get("/api/songs")
     assert res.status_code == 200
     assert {s["title"] for s in res.json()} == {"SongA", "SongB"}
 
 
-def test_admin_can_read_any_project_song(client, iso):
+def test_admin_is_scoped_to_active_project(client, iso):
     _as(client, iso.admin)
-    res = client.get(f"/api/songs/{iso.sb}", headers=_h(iso.pa))
+    # With a project selected, the admin's view is scoped like anyone else's —
+    # so the switcher actually filters for admins.
+    res = client.get("/api/songs", headers=_h(iso.pa))
+    assert res.status_code == 200
+    assert {s["title"] for s in res.json()} == {"SongA"}
+
+
+def test_admin_can_reach_any_project_without_membership(client, iso):
+    _as(client, iso.admin)
+    # Admin has no membership row in PB, but can still switch into it.
+    res = client.get(f"/api/songs/{iso.sb}", headers=_h(iso.pb))
     assert res.status_code == 200
 
 
