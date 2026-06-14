@@ -37,6 +37,10 @@ All notable changes to Greenroom are documented here. Format follows
   unaffected. With no project selected, admins remain unscoped.
 
 ### Changed
+- Brand refresh: custom Greenroom waveform-G icon set for the nine content nav
+  tabs, a logo lockup in the sidebar, a matching favicon, and a wordmark +
+  stack badges in the README header (assets in `frontend/src/components/
+  GreenroomIcons.tsx`, `frontend/public/favicon.svg`, `greenroom-wordmark.svg`).
 - The ops/maintenance endpoints (integrity, file health/move/consolidate, file
   browser, raw file streaming, cross-project dedup, and DB backup/restore/export)
   are now **admin-only**, up from editor/viewer. With the multi-project flag off
