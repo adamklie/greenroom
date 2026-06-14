@@ -30,6 +30,8 @@ class Project(Base):
     # is enforced in the app layer when project creation lands (Phase 3b), not as
     # a DB constraint. The Phase 3a backfill stays dup-free via get-or-create.
     name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    color: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )

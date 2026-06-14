@@ -7,6 +7,12 @@ All notable changes to Greenroom are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- v2 project settings — a **Settings → Project settings** section with a project
+  picker, editable **name** + **description**, a **color** (shown as a dot in the
+  sidebar switcher), inline **member management**, and **delete** (empty projects
+  only). Adds `description`/`color` columns to `projects` (migration
+  `b2c3d4e5f6a7`); `PATCH`/`DELETE /api/projects/{id}` and
+  `GET /api/projects/{id}/songs`.
 - v2 multi-project groundwork (Phase 3a) — behind the default-off
   `GREENROOM_MULTI_PROJECT` flag, so **no behavior change yet**: `projects` and
   `project_members` tables, a nullable `project_id` on songs / sessions / audio

@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Info, Palette, Download, FolderKanban, Check } from "lucide-react";
-import { api } from "../api/client";
+import { Info, Palette, Download, FolderKanban, Trash2 } from "lucide-react";
+import { api, type Project } from "../api/client";
 import { useTheme } from "../theme";
 import { useProject } from "../project";
+import ProjectMembersEditor from "../components/ProjectMembersEditor";
 
 function StatRow({ label, value }: { label: string; value: string | number }) {
   return (
@@ -145,53 +146,122 @@ function DataBackup() {
   );
 }
 
-function ProjectRow({ id, name, role }: { id: number; name: string; role: string }) {
+const PROJECT_COLORS = [
+  "#10b981", "#3b82f6", "#eab308", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6b7280",
+];
+
+function ProjectEditor({ project }: { project: Project }) {
   const queryClient = useQueryClient();
-  const [value, setValue] = useState(name);
-  const canEdit = role === "owner" || role === "admin";
-  const rename = useMutation({
-    mutationFn: () => api.projects.update(id, value.trim()),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects"] }),
+  const { setActiveProjectId, projects } = useProject();
+  const canEdit = project.role === "owner" || project.role === "admin";
+  const [name, setName] = useState(project.name);
+  const [description, setDescription] = useState(project.description ?? "");
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["projects"] });
+
+  const save = useMutation({
+    mutationFn: (data: { name?: string; description?: string | null; color?: string | null }) =>
+      api.projects.update(project.id, data),
+    onSuccess: invalidate,
   });
-  const dirty = value.trim() !== name && value.trim() !== "";
+  const del = useMutation({
+    mutationFn: () => api.projects.remove(project.id),
+    onSuccess: () => {
+      const next = projects.find((p) => p.id !== project.id);
+      if (next) setActiveProjectId(next.id);
+      invalidate();
+    },
+    onError: () => alert("Couldn't delete — the project still has content. Move or delete it first."),
+  });
+
   return (
-    <div className="flex items-center gap-2 py-1.5">
-      <input
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        disabled={!canEdit}
-        onKeyDown={(e) => { if (e.key === "Enter" && dirty) rename.mutate(); }}
-        className="flex-1 px-2 py-1 rounded border text-sm bg-transparent outline-none"
-        style={{ borderColor: "var(--border)", color: "var(--text)", opacity: canEdit ? 1 : 0.6 }}
-      />
-      <span className="text-xs uppercase tracking-wide w-14 text-right" style={{ color: "var(--text-muted)" }}>{role}</span>
+    <div className="space-y-4">
+      <div>
+        <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Name</label>
+        <div className="flex gap-2">
+          <input value={name} onChange={(e) => setName(e.target.value)} disabled={!canEdit}
+            className="flex-1 px-2 py-1.5 rounded border text-sm bg-transparent outline-none"
+            style={{ borderColor: "var(--border)", color: "var(--text)" }} />
+          {canEdit && name.trim() && name.trim() !== project.name && (
+            <button onClick={() => save.mutate({ name: name.trim() })}
+              className="px-3 py-1.5 rounded text-sm" style={{ background: "var(--accent)", color: "var(--bg)" }}>Save</button>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Description</label>
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} disabled={!canEdit}
+          rows={2} placeholder="What is this project?"
+          className="w-full px-2 py-1.5 rounded border text-sm bg-transparent outline-none resize-y"
+          style={{ borderColor: "var(--border)", color: "var(--text)" }} />
+        {canEdit && (description ?? "") !== (project.description ?? "") && (
+          <button onClick={() => save.mutate({ description })}
+            className="mt-1 px-3 py-1 rounded text-xs" style={{ background: "var(--accent)", color: "var(--bg)" }}>Save description</button>
+        )}
+      </div>
+
+      <div>
+        <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Color</label>
+        <div className="flex items-center gap-2 flex-wrap">
+          {PROJECT_COLORS.map((c) => (
+            <button key={c} disabled={!canEdit} onClick={() => save.mutate({ color: c })}
+              className="w-6 h-6 rounded-full border-2" title={c}
+              style={{ background: c, borderColor: project.color === c ? "var(--text)" : "transparent" }} />
+          ))}
+          {project.color && canEdit && (
+            <button onClick={() => save.mutate({ color: null })} className="text-xs ml-1" style={{ color: "var(--text-muted)" }}>clear</button>
+          )}
+        </div>
+      </div>
+
       {canEdit && (
-        <button onClick={() => rename.mutate()} disabled={!dirty || rename.isPending}
-          className="p-1 rounded" title="Save name"
-          style={{ color: dirty ? "var(--accent)" : "var(--text-muted)", opacity: dirty ? 1 : 0.4 }}>
-          <Check size={16} />
-        </button>
+        <div>
+          <label className="text-xs block mb-2" style={{ color: "var(--text-muted)" }}>Members</label>
+          <ProjectMembersEditor projectId={project.id} />
+        </div>
+      )}
+
+      {canEdit && (
+        <div className="pt-3 border-t" style={{ borderColor: "var(--border)" }}>
+          <button onClick={() => { if (confirm(`Delete project "${project.name}"? It must be empty.`)) del.mutate(); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded border text-sm"
+            style={{ borderColor: "var(--danger, #ef4444)", color: "var(--danger, #ef4444)" }}>
+            <Trash2 size={14} /> Delete project
+          </button>
+          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Only works when the project has no songs, recordings, sessions, or setlists.</p>
+        </div>
       )}
     </div>
   );
 }
 
-function Projects() {
-  const { multiProject, projects } = useProject();
+function ProjectSettings() {
+  const { multiProject, projects, activeProjectId } = useProject();
+  const [selectedId, setSelectedId] = useState<number | null>(activeProjectId);
   if (!multiProject) return null;
+  const selected = projects.find((p) => p.id === (selectedId ?? activeProjectId)) ?? projects[0];
+
   return (
     <div className="rounded-xl p-5 border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
       <h3 className="font-semibold mb-3 flex items-center gap-2">
         <FolderKanban size={18} style={{ color: "var(--accent)" }} />
-        Projects
+        Project settings
       </h3>
-      <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
-        Rename projects you own. Manage members from the switcher in the sidebar.
-      </p>
-      <div className="divide-y" style={{ borderColor: "var(--border)" }}>
-        {projects.map((p) => <ProjectRow key={p.id} id={p.id} name={p.name} role={p.role} />)}
-        {projects.length === 0 && <p className="text-sm" style={{ color: "var(--text-muted)" }}>No projects yet.</p>}
-      </div>
+      {projects.length === 0 ? (
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>No projects yet.</p>
+      ) : (
+        <>
+          <select
+            value={selected?.id ?? ""}
+            onChange={(e) => setSelectedId(Number(e.target.value))}
+            className="w-full mb-4 px-2 py-1.5 rounded border text-sm outline-none"
+            style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text)" }}
+          >
+            {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          {selected && <ProjectEditor key={selected.id} project={selected} />}
+        </>
+      )}
     </div>
   );
 }
@@ -205,8 +275,8 @@ export default function Settings() {
       </p>
 
       <div className="space-y-6">
+        <ProjectSettings />
         <AppInfo />
-        <Projects />
         <DataBackup />
         <Appearance />
       </div>
