@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { SongSelect } from "../components/InlineSongPicker";
 import { Upload, FileAudio, Check, Plus, X, Scissors } from "lucide-react";
+import { useProject } from "../project";
 
 const inputStyle = { borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" };
 
@@ -88,6 +89,7 @@ function FileCard({ pending, songs, onChange, onRemove, onUpload }: {
   onRemove: () => void;
   onUpload: () => void;
 }) {
+  const { multiProject } = useProject();
   const sizeMb = (pending.file.size / (1024 * 1024)).toFixed(1);
   const isDone = pending.status === "done";
   const isUploading = pending.status === "uploading";
@@ -131,17 +133,21 @@ function FileCard({ pending, songs, onChange, onRemove, onUpload }: {
                 {SOURCE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
-            <div>
-              <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Project</label>
-              <select value={pending.project} onChange={(e) => onChange({ project: e.target.value })}
-                className="w-full px-2 py-1.5 rounded border text-sm outline-none" style={inputStyle}>
-                <option value="solo">Solo</option>
-                <option value="ozone_destructors">Ozone Destructors</option>
-                <option value="sural">Sural</option>
-                <option value="joe">Joe</option>
-                <option value="ideas">Ideas</option>
-              </select>
-            </div>
+            {/* Legacy project picker — under multi-project the active project
+                (sidebar switcher) determines placement, so hide it. */}
+            {!multiProject && (
+              <div>
+                <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Project</label>
+                <select value={pending.project} onChange={(e) => onChange({ project: e.target.value })}
+                  className="w-full px-2 py-1.5 rounded border text-sm outline-none" style={inputStyle}>
+                  <option value="solo">Solo</option>
+                  <option value="ozone_destructors">Ozone Destructors</option>
+                  <option value="sural">Sural</option>
+                  <option value="joe">Joe</option>
+                  <option value="ideas">Ideas</option>
+                </select>
+              </div>
+            )}
             <div>
               <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Role</label>
               <select value={pending.role} onChange={(e) => onChange({ role: e.target.value })}

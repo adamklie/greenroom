@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { api, type Song, type AudioFile } from "../api/client";
 import { Search, X, Play, Music, Tag, ArrowUpRight, Plus, Trash2, ChevronDown, ChevronRight, Scissors, FileMusic, Upload, RotateCcw } from "lucide-react";
 import { TabViewer } from "../components/TabViewer";
+import { useProject } from "../project";
 
 const STATUS_COLORS: Record<string, string> = {
   idea: "var(--text-muted)", learning: "var(--blue)", rehearsed: "var(--yellow)",
@@ -633,6 +634,7 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
 }
 
 export default function Songs({ songType, title }: { songType: string; title: string }) {
+  const { multiProject } = useProject();
   const [searchParams, setSearchParams] = useSearchParams();
   const [project, setProject] = useState("all");
   const [statusFilter, setStatusFilter] = useState("");
@@ -778,11 +780,14 @@ export default function Songs({ songType, title }: { songType: string; title: st
             className="pl-9 pr-4 py-2 rounded-lg border text-sm bg-transparent outline-none"
             style={{ borderColor: "var(--border)", color: "var(--text)" }} />
         </div>
-        <select value={project} onChange={(e) => setProject(e.target.value)}
-          className="px-3 py-2 rounded-lg border text-sm outline-none"
-          style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-card)" }}>
-          {PROJECTS.map((p) => <option key={p} value={p}>{PROJECT_LABELS[p]}</option>)}
-        </select>
+        {/* Legacy project filter — replaced by the sidebar switcher under multi-project. */}
+        {!multiProject && (
+          <select value={project} onChange={(e) => setProject(e.target.value)}
+            className="px-3 py-2 rounded-lg border text-sm outline-none"
+            style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-card)" }}>
+            {PROJECTS.map((p) => <option key={p} value={p}>{PROJECT_LABELS[p]}</option>)}
+          </select>
+        )}
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
           className="px-3 py-2 rounded-lg border text-sm outline-none"
           style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg-card)" }}>
