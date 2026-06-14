@@ -59,10 +59,18 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   }, [multiProject, projects, activeProjectId]);
 
   const setActiveProjectId = (id: number) => {
+    if (id === activeProjectId) return;
     setActiveProjectIdState(id);
     localStorage.setItem(STORAGE_KEY, String(id));
-    // Drop cached data from the previous project so every view refetches scoped.
-    queryClient.invalidateQueries();
+    // Apply the new scope to the API client NOW, before invalidating — otherwise
+    // invalidateQueries() fires the refetch synchronously while the header still
+    // points at the previous project, and the new view loads stale data.
+    setActiveProject(id);
+    // Refetch data views under the new scope, but leave the switcher's own
+    // queries (projects, health) alone so the sidebar/banner don't churn.
+    queryClient.invalidateQueries({
+      predicate: (q) => q.queryKey[0] !== "projects" && q.queryKey[0] !== "health",
+    });
   };
 
   // Push the active id into the API client synchronously during render, so the
