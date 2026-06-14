@@ -6,7 +6,25 @@ All notable changes to Greenroom are documented here. Format follows
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-06-14
+
+**Multi-project is live.** Greenroom is now multi-tenant: the
+`GREENROOM_MULTI_PROJECT` flag is enabled in production, so every user signs in
+to a sidebar **project switcher** and sees only the projects they belong to.
+Per-project **owner / editor / viewer** roles; **invite-only** sharing by email;
+one active project at a time. Read/write isolation is enforced centrally and
+fails closed. No data migration was needed at flip time — production data was
+already backfilled with `project_id` (Phase 3a) and is unchanged.
+
 ### Added
+- Drag-and-drop **project reordering** in Settings → Project settings (a
+  `position` column, migration `c3d4e5f6a7b8`; `POST /api/projects/reorder`),
+  driving the sidebar switcher order.
+- Recording-level **move/split**: moving a single recording to another project
+  splits it into the destination's matching song — creating that song there if
+  needed (optional copy-metadata), via a searchable song picker. Mixed-song bulk
+  moves warn before auto-matching by title+artist. Available anywhere a track is
+  shown (Library, Songs, Sessions).
 - v2 project settings — a **Settings → Project settings** section with a project
   picker, editable **name** + **description**, a **color** (shown as a dot in the
   sidebar switcher), inline **member management**, and **delete** (empty projects
@@ -41,8 +59,6 @@ All notable changes to Greenroom are documented here. Format follows
   filters an admin's view like any member's. Admins still reach any project
   without a membership row, and the cross-project ops tools (admin-only) are
   unaffected. With no project selected, admins remain unscoped.
-
-### Added
 - Move items between projects (v2) — reassign songs, sessions, audio files,
   takes, and setlists to another project via `POST /api/projects/move` and a
   "Move to…" menu in the song detail panel, the Library bulk toolbar, and the
@@ -61,6 +77,17 @@ All notable changes to Greenroom are documented here. Format follows
   are now **admin-only**, up from editor/viewer. With the multi-project flag off
   this only affects non-admin users of those maintenance tools; data routes are
   unchanged.
+- Dashboard reorganized — all totals (songs, sessions, covers, originals, ideas)
+  surfaced at the top using the new icon set; "Songs by Project" removed; Focus
+  Songs retained.
+- Navigation/UX cleanup — removed the in-app **Process** tab (the GoPro clipper
+  is a standalone tool now), moved **Feedback** to the bottom of the nav, renamed
+  "Practice Sessions" → **Sessions**, and dropped the Sessions "Best Tracks" tab
+  and the Setlists empty-state subtitle.
+- Browser-tab favicon now ships **raster fallbacks** (PNG + a multi-size
+  `favicon.ico` + an apple-touch-icon) of the Greenroom G, so the logo shows in
+  browsers that don't render SVG favicons (which previously fell back to the SPA
+  HTML and showed a generic icon).
 
 ## [1.2.1] - 2026-06-13
 
