@@ -36,7 +36,7 @@ def rebuild_audio_files(conn) -> None:
             role VARCHAR DEFAULT 'recording',
             version VARCHAR,
             is_stem INTEGER NOT NULL DEFAULT 0,
-            session_id INTEGER REFERENCES practice_sessions(id),
+            session_id INTEGER REFERENCES sessions(id),
             clip_name TEXT,
             source_file TEXT,
             start_time TEXT,
@@ -106,7 +106,7 @@ def migrate_takes_to_audio_files(conn) -> None:
     takes = conn.execute(text("""
         SELECT t.*, s.date AS session_date, s.project AS session_project
         FROM takes t
-        LEFT JOIN practice_sessions s ON s.id = t.session_id
+        LEFT JOIN sessions s ON s.id = t.session_id
     """)).mappings().all()
 
     if not takes:
@@ -221,7 +221,7 @@ def backfill_recorded_at_for_existing(conn) -> None:
     result = conn.execute(text("""
         UPDATE audio_files
         SET recorded_at = (
-            SELECT date FROM practice_sessions WHERE id = audio_files.session_id
+            SELECT date FROM sessions WHERE id = audio_files.session_id
         )
         WHERE recorded_at IS NULL AND session_id IS NOT NULL
     """))
@@ -239,7 +239,7 @@ def backfill_role_and_source(conn) -> None:
     result = conn.execute(text("""
         UPDATE audio_files
         SET source = (
-            SELECT project FROM practice_sessions WHERE id = audio_files.session_id
+            SELECT project FROM sessions WHERE id = audio_files.session_id
         )
         WHERE session_id IS NOT NULL AND source IS NULL
     """))

@@ -6,6 +6,22 @@ All notable changes to Greenroom are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+- Import tab can **group an upload into a session**: a "Group these files into a
+  session" toggle reveals a session **name** + **date**, creates one session, and
+  attaches every uploaded file to it (`POST /api/sessions`; `/api/upload` accepts
+  `session_id`). Plus an **"Upload folder"** button (whole-folder selection).
+- Sessions now have an optional **name** (UI shows it as the title, falling back
+  to the date). Adds a nullable `name` column.
+
+### Changed
+- Imported **video files keep their video** (the clip plays as video; audio
+  extracts on demand) instead of being stripped to m4a on upload.
+- Renamed the DB table `practice_sessions` → `sessions` to match what the API
+  and UI already call them (migration `d4e5f6a7b8c9`; child FK references
+  repointed). The Python model class stays `PracticeSession` to avoid colliding
+  with SQLAlchemy's `Session`.
+
 ## [2.0.0] - 2026-06-14
 
 **Multi-project is live.** Greenroom is now multi-tenant: the

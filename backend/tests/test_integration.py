@@ -157,7 +157,7 @@ def test_upload_happy_path(client, db, sample_audio_file_path):
     assert payload["song_id"] is not None
     assert payload["identifier"].startswith("AF")
     assert payload["filename"].endswith(".m4a")
-    assert payload["extracted_audio"] is False  # m4a, not a video
+    assert payload["is_video"] is False  # m4a, not a video
 
     # Row landed in DB
     af = db.get(AudioFile, payload["audio_file_id"])

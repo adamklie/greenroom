@@ -10,7 +10,7 @@ class Take(Base):
     __tablename__ = "takes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    session_id: Mapped[int] = mapped_column(ForeignKey("practice_sessions.id"))
+    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"))
     song_id: Mapped[int | None] = mapped_column(ForeignKey("songs.id"), nullable=True)
     project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
     clip_name: Mapped[str] = mapped_column(String, nullable=False)

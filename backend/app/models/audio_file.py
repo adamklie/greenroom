@@ -41,7 +41,7 @@ class AudioFile(Base):
 
     # Practice session context (null for non-session recordings)
     session_id: Mapped[int | None] = mapped_column(
-        ForeignKey("practice_sessions.id"), nullable=True
+        ForeignKey("sessions.id"), nullable=True
     )
     clip_name: Mapped[str | None] = mapped_column(String, nullable=True)
     source_file: Mapped[str | None] = mapped_column(String, nullable=True)

@@ -15,7 +15,7 @@ def migrate():
     with engine.connect() as conn:
         # 1. Add session columns to audio_files (if not exist)
         new_cols = {
-            "session_id": "INTEGER REFERENCES practice_sessions(id)",
+            "session_id": "INTEGER REFERENCES sessions(id)",
             "clip_name": "TEXT",
             "source_video": "TEXT",
             "start_time": "TEXT",

@@ -2,14 +2,62 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app import scoping
 from app.auth.deps import project_editor, project_viewer
 from app.database import get_db
-from app.models import AudioFile, PracticeSession, Tag, Take
+from app.models import AudioFile, PracticeSession, Project, Tag, Take
 from app.schemas.audio_file import AudioFileRead
-from app.schemas.session import SessionDetail, SessionRead
+from app.schemas.session import SessionCreate, SessionDetail, SessionRead
 from app.schemas.take import TakeRead, TakeUpdate
+from app.scoping import get_scope
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+
+
+@router.post("", response_model=SessionRead, status_code=201)
+def create_session(
+    data: SessionCreate,
+    db: Session = Depends(get_db),
+    _user=Depends(project_editor),
+):
+    """Create a session in the active project. The before_flush event stamps
+    project_id from the active scope; we require exactly one active project so
+    a session always has a home (admins must select one in the switcher)."""
+    scope = get_scope()
+    if not scope or len(scope) != 1:
+        raise HTTPException(400, "Select a project before creating a session")
+    (project_id,) = tuple(scope)
+    project = db.query(Project).get(project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    name = (data.name or "").strip() or None
+    base = f"{project.name}/Sessions/{data.date.isoformat()}"
+    if name:
+        base += f" - {name}"
+    # folder_path is globally unique — dedupe across all projects (two users may
+    # each have a 'Solo' with a same-named session on the same day).
+    folder_path = base
+    with scoping.scoped(None):
+        n = 1
+        while db.query(PracticeSession).filter_by(folder_path=folder_path).first():
+            n += 1
+            folder_path = f"{base} ({n})"
+
+    session = PracticeSession(
+        name=name,
+        date=data.date,
+        project=project.name,  # legacy string; project_id (stamped) is authoritative
+        project_id=project_id,
+        folder_path=folder_path,
+        notes=(data.notes or "").strip() or None,
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    sr = SessionRead.model_validate(session)
+    sr.track_count = 0
+    return sr
 
 
 def _take_to_read(t: Take) -> TakeRead:
