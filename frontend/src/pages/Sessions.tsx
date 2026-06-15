@@ -70,7 +70,7 @@ function RecordingCard({ af }: { af: AudioFile }) {
     <div className="rounded-lg p-4 border" style={{ background: "var(--bg)", borderColor: "var(--border)" }}>
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-sm">{af.song_title || af.clip_name || af.file_path.split("/").pop()}</span>
+          <span className="font-medium text-sm">{af.song_title || af.clip_name || af.submitted_file_name?.split("/").pop() || af.file_path.split("/").pop()}</span>
           {isVideo ? <Video size={14} style={{ color: "var(--text-muted)" }} /> : <FileAudio size={14} style={{ color: "var(--text-muted)" }} />}
           <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}>
             {af.file_type}

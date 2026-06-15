@@ -190,7 +190,7 @@ const LibraryRow = memo(function LibraryRow({
                   )}
                 </div>
                 <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  {af.file_path.split("/").pop() || af.file_path}
+                  {af.submitted_file_name?.split("/").pop() || af.file_path.split("/").pop() || af.file_path}
                 </div>
                 {isExpanded && af.file_type && (
                   af.file_type && ["mp4", "mov"].includes(af.file_type) ? (
