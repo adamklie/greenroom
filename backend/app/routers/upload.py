@@ -87,7 +87,7 @@ async def upload_file(
             file_path=vault_dest.name,  # just the vault filename; vault_dir is implied
             file_type=ext,
             identifier=identifier,
-            submitted_file_name=file.filename,
+            submitted_file_name=Path(file.filename).name,  # strip any folder prefix (webkitdirectory)
             source=source,
             role=role,
             session_id=session_id,

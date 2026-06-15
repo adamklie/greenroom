@@ -130,7 +130,7 @@ function SongAudioFileRow({ af, onUpdate }: { af: AudioFile; onUpdate: () => voi
   });
 
   const save = (field: string, value: unknown) => updateMut.mutate({ [field]: value === "" ? null : value });
-  const displayName = af.submitted_file_name || af.identifier || af.file_path.split("/").pop() || af.file_path;
+  const displayName = af.submitted_file_name?.split("/").pop() || af.identifier || af.file_path.split("/").pop() || af.file_path;
   const iStyle = { borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" };
 
   return (

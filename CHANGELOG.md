@@ -6,6 +6,12 @@ All notable changes to Greenroom are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed
+- Imported recordings now show their **original filename** (e.g. `fly_away.mp4`)
+  in the Library, Songs, and Sessions views instead of the vault identifier, so
+  unassigned clips are identifiable. Folder-upload names are stored/shown as the
+  basename (the `webkitdirectory` folder prefix is stripped).
+
 ## [2.1.0] - 2026-06-15
 
 ### Added
