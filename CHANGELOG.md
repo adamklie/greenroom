@@ -6,6 +6,8 @@ All notable changes to Greenroom are documented here. Format follows
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-06-15
+
 ### Added
 - Import tab can **group an upload into a session**: a "Group these files into a
   session" toggle reveals a session **name** + **date**, creates one session, and
