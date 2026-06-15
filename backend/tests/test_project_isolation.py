@@ -20,7 +20,7 @@ import pytest
 from app.auth.jwt import encode_token
 from app.auth.router import COOKIE_NAME
 from app.config import settings
-from app.models import AudioFile, Project, ProjectMember, Song, User
+from app.models import AudioFile, PracticeSession, Project, ProjectMember, Song, User
 
 PROJECT_HEADER = "X-Greenroom-Project"
 
@@ -438,4 +438,39 @@ def test_delete_empty_project(client, iso, db):
 def test_filebrowser_forbidden_for_non_admin(client, iso):
     _as(client, iso.ua)
     res = client.get("/api/browse", headers=_h(iso.pa))
+    assert res.status_code == 403
+
+
+def test_create_session_named_and_scoped(client, iso, db):
+    _as(client, iso.ua)  # owner of PA
+    res = client.post(
+        "/api/sessions",
+        json={"name": "Tuesday Jam", "date": "2026-06-14"},
+        headers=_h(iso.pa),
+    )
+    assert res.status_code == 201, res.text
+    body = res.json()
+    assert body["name"] == "Tuesday Jam"
+    assert body["date"] == "2026-06-14"
+    # Stamped into the active project.
+    assert db.query(PracticeSession).get(body["id"]).project_id == iso.pa
+
+
+def test_session_not_visible_cross_project(client, iso):
+    _as(client, iso.ua)
+    sid = client.post(
+        "/api/sessions", json={"name": "A jam", "date": "2026-06-14"}, headers=_h(iso.pa)
+    ).json()["id"]
+    # User B (scoped to PB) must not see PA's session.
+    _as(client, iso.ub)
+    res = client.get("/api/sessions", headers=_h(iso.pb))
+    assert res.status_code == 200
+    assert sid not in [s["id"] for s in res.json()]
+
+
+def test_create_session_rejected_for_non_member(client, iso):
+    _as(client, iso.ua)  # A is not a member of PB
+    res = client.post(
+        "/api/sessions", json={"name": "x", "date": "2026-06-14"}, headers=_h(iso.pb)
+    )
     assert res.status_code == 403

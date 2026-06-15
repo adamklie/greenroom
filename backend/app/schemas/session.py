@@ -8,8 +8,15 @@ from app.schemas.audio_file import AudioFileRead
 from app.schemas.take import TakeRead
 
 
+class SessionCreate(BaseModel):
+    name: str | None = None
+    date: date
+    notes: str | None = None
+
+
 class SessionRead(BaseModel):
     id: int
+    name: str | None = None
     date: date
     project: str
     folder_path: str

@@ -118,8 +118,10 @@ function SessionCard({ session }: { session: Session }) {
           <div className="flex items-center gap-3">
             {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
             <div>
-              <div className="font-semibold">{session.date}</div>
-              <div className="text-xs" style={{ color: "var(--text-muted)" }}>{session.track_count} recordings</div>
+              <div className="font-semibold">{session.name || session.date}</div>
+              <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                {session.name ? `${session.date} · ` : ""}{session.track_count} recordings
+              </div>
             </div>
           </div>
         </button>

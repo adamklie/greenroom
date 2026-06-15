@@ -1,10 +1,10 @@
 """File upload: saves imports into the vault as flat {identifier}.{ext} files.
 
-Video files are automatically stripped to audio (m4a) on upload.
+Video files are kept as-is (the clip plays as video; audio extracts on demand),
+matching the practice-clip convention. Uploads can be grouped into a session.
 """
 
 import shutil
-import subprocess
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -14,29 +14,13 @@ from sqlalchemy.orm import Session
 
 from app.auth.deps import project_editor
 from app.database import get_db
-from app.models import AudioFile, Song
+from app.models import AudioFile, PracticeSession, Song
 from app.models.audio_file import generate_identifier
 from app.services.vault import ingest_into_vault
 
 router = APIRouter(prefix="/api/upload", tags=["upload"])
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv"}
-FFMPEG = "/Users/adamklie/opt/ffmpeg"
-if not Path(FFMPEG).exists():
-    FFMPEG = "ffmpeg"
-
-
-def _extract_audio(video_path: Path) -> Path | None:
-    """Extract audio from a video file to m4a. Returns path to audio file or None."""
-    audio_path = video_path.with_suffix(".m4a")
-    try:
-        subprocess.run(
-            [FFMPEG, "-i", str(video_path), "-vn", "-acodec", "aac", "-b:a", "192k", "-y", str(audio_path)],
-            capture_output=True, timeout=120, check=True,
-        )
-        return audio_path
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
-        return None
 
 
 @router.post("")
@@ -49,18 +33,26 @@ async def upload_file(
     source: str = Form("unknown"),
     role: str = Form("recording"),
     notes: str | None = Form(None),
+    session_id: int | None = Form(None),
     db: Session = Depends(get_db),
     _user=Depends(project_editor),
 ):
-    """Upload a file into the vault.
+    """Upload a file into the vault as {identifier}.{ext}.
 
-    The incoming file is buffered to a tempfile, optionally transcoded
-    (video → m4a), then copied into the vault as {identifier}.{ext}.
-    The source the browser sent is not retained after the vault copy
-    is made.
+    The file is buffered to a tempfile then copied into the vault as-is —
+    video files keep their video (audio extracts on demand). Optionally links
+    the recording to a song and/or groups it under a session.
     """
     if not file.filename:
         raise HTTPException(400, "No filename")
+
+    # Validate the session up front (scoped — can't attach to another project's
+    # session). recorded_at is the session date so clips sort by when they happened.
+    session = None
+    if session_id:
+        session = db.query(PracticeSession).get(session_id)
+        if not session:
+            raise HTTPException(404, "Session not found")
 
     # Create song if requested
     song = None
@@ -78,27 +70,17 @@ async def upload_file(
         db.flush()
         song_id = song.id
 
-    # Buffer upload to a tempfile so ffmpeg (if needed) can read from disk.
     suffix = Path(file.filename).suffix
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tf:
         shutil.copyfileobj(file.file, tf)
         staged = Path(tf.name)
 
     try:
+        ext = staged.suffix.lstrip(".").lower()
         is_video = staged.suffix.lower() in VIDEO_EXTENSIONS
-        extracted_audio = False
-        final_staged = staged
-
-        if is_video:
-            extracted = _extract_audio(staged)
-            if extracted and extracted.exists():
-                final_staged = extracted
-                extracted_audio = True
-
-        ext = final_staged.suffix.lstrip(".").lower()
         identifier = generate_identifier(file.filename)
 
-        vault_dest = ingest_into_vault(final_staged, identifier, ext)
+        vault_dest = ingest_into_vault(staged, identifier, ext)
 
         af = AudioFile(
             song_id=song_id,
@@ -108,6 +90,9 @@ async def upload_file(
             submitted_file_name=file.filename,
             source=source,
             role=role,
+            session_id=session_id,
+            video_path=vault_dest.name if is_video else None,
+            recorded_at=datetime.combine(session.date, datetime.min.time()) if session else None,
             uploaded_at=datetime.now(),
         )
         db.add(af)
@@ -118,17 +103,15 @@ async def upload_file(
             "ok": True,
             "audio_file_id": af.id,
             "song_id": song_id,
+            "session_id": session_id,
             "identifier": identifier,
             "filename": vault_dest.name,
-            "extracted_audio": extracted_audio,
-            "original_format": staged.suffix if is_video else None,
+            "is_video": is_video,
         }
     finally:
-        # Clean up tempfiles regardless of success. The vault already has a
-        # copy; the staged upload never belonged on disk long-term.
-        for p in {staged, final_staged}:
-            if p.exists():
-                try:
-                    p.unlink()
-                except OSError:
-                    pass
+        # Clean up the tempfile regardless of success — the vault has the copy.
+        if staged.exists():
+            try:
+                staged.unlink()
+            except OSError:
+                pass

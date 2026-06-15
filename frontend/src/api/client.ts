@@ -210,6 +210,7 @@ export interface SongDetail extends Song {
 
 export interface Session {
   id: number;
+  name: string | null;
   date: string;
   project: string;
   folder_path: string;
@@ -352,6 +353,8 @@ export const api = {
   sessions: {
     list: () => json<Session[]>(`${BASE}/sessions`),
     get: (id: number) => json<SessionDetail>(`${BASE}/sessions/${id}`),
+    create: (body: { name?: string | null; date: string; notes?: string | null }) =>
+      post<Session>(`${BASE}/sessions`, body),
   },
   trash: {
     list: () => json<{
