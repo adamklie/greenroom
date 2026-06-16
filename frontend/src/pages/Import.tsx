@@ -36,6 +36,7 @@ interface PendingFile {
   source: string;
   role: string;
   notes: string;
+  recordedAt: string;
   status: "pending" | "uploading" | "done" | "error";
   error?: string;
   resultId?: number;
@@ -196,6 +197,12 @@ function FileCard({ pending, songs, grouped, onChange, onRemove, onUpload }: {
             )}
           </div>
 
+          <div className="mb-3">
+            <label className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Recorded date (optional)</label>
+            <input type="date" value={pending.recordedAt} onChange={(e) => onChange({ recordedAt: e.target.value })}
+              className="w-full px-2 py-1.5 rounded border text-sm outline-none" style={inputStyle} />
+          </div>
+
           <input value={pending.notes} onChange={(e) => onChange({ notes: e.target.value })}
             placeholder="Notes (optional)..."
             className="w-full px-2 py-1.5 rounded border text-sm outline-none mb-3" style={inputStyle} />
@@ -248,6 +255,7 @@ export default function Import() {
         source: "unknown",
         role: "recording",
         notes: "",
+        recordedAt: "",
         status: "pending" as const,
       };
     });
@@ -293,6 +301,9 @@ export default function Import() {
     formData.append("role", sessionId ? "practice_clip" : pending.role);
     if (pending.notes) formData.append("notes", pending.notes);
     if (sessionId) formData.append("session_id", String(sessionId));
+    // Optional recorded date (ungrouped imports). Session clips inherit the
+    // session date server-side, so only send this when it's explicitly set.
+    if (!sessionId && pending.recordedAt) formData.append("recorded_at", pending.recordedAt);
 
     try {
       const res = await fetch("/api/upload", { method: "POST", body: formData });

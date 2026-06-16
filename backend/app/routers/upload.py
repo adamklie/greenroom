@@ -6,7 +6,7 @@ matching the practice-clip convention. Uploads can be grouped into a session.
 
 import shutil
 import tempfile
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -34,6 +34,7 @@ async def upload_file(
     role: str = Form("recording"),
     notes: str | None = Form(None),
     session_id: int | None = Form(None),
+    recorded_at: str | None = Form(None),
     db: Session = Depends(get_db),
     _user=Depends(project_editor),
 ):
@@ -53,6 +54,18 @@ async def upload_file(
         session = db.query(PracticeSession).get(session_id)
         if not session:
             raise HTTPException(404, "Session not found")
+
+    # Recorded date: an explicit value (YYYY-MM-DD) wins; otherwise a session
+    # clip inherits the session date, and a plain import stays empty.
+    if recorded_at:
+        try:
+            recorded = datetime.combine(date.fromisoformat(recorded_at), datetime.min.time())
+        except ValueError:
+            raise HTTPException(400, "recorded_at must be YYYY-MM-DD")
+    elif session:
+        recorded = datetime.combine(session.date, datetime.min.time())
+    else:
+        recorded = None
 
     # Create song if requested
     song = None
@@ -92,7 +105,7 @@ async def upload_file(
             role=role,
             session_id=session_id,
             video_path=vault_dest.name if is_video else None,
-            recorded_at=datetime.combine(session.date, datetime.min.time()) if session else None,
+            recorded_at=recorded,
             uploaded_at=datetime.now(),
         )
         db.add(af)
