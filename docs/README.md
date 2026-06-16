@@ -18,6 +18,7 @@ See the [main README](../README.md) for stack, costs, and quick start.
 | Doc | For |
 |---|---|
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Fly + R2 + Resend setup. Secrets. First-deploy runbook. |
+| [RELEASING.md](RELEASING.md) | Branch → PR → CI → review → merge → deploy → tag. The live-app release flow. |
 | [MIGRATIONS.md](MIGRATIONS.md) | Alembic conventions. How to ship a schema change. |
 | [REMOVED.md](REMOVED.md) | Features cut during simplify-v2 and why. |
 
