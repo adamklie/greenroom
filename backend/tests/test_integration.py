@@ -195,6 +195,20 @@ def test_upload_with_recorded_at(client, db, sample_audio_file_path):
     assert db.get(AudioFile, r2.json()["audio_file_id"]).recorded_at is None
 
 
+def test_update_submitted_file_name(client, db):
+    """submitted_file_name is editable via PATCH — used to normalize names that
+    were stored with a folder prefix before the strip-prefix import fix."""
+    af = _make_audio_file(
+        db, file_path="legacy/x.mp4", identifier="AFNORM0001",
+        submitted_file_name="2026_06_14/go.mp4",
+    )
+    r = client.patch(f"/api/audio-files/{af.id}", json={"submitted_file_name": "go.mp4"})
+    assert r.status_code == 200, r.text
+    assert r.json()["submitted_file_name"] == "go.mp4"
+    db.refresh(af)
+    assert af.submitted_file_name == "go.mp4"
+
+
 def test_session_detail_shape(client, db):
     """GET /api/sessions/{id} returns linked audio_files with song_title populated.
 
