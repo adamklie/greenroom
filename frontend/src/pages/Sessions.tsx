@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Session, type AudioFile } from "../api/client";
-import { ChevronDown, ChevronRight, Star, Video, FileAudio, FolderInput } from "lucide-react";
+import { ChevronDown, ChevronRight, Star, Video, FileAudio, FolderInput, Pencil } from "lucide-react";
 import MoveToProjectMenu from "../components/MoveToProjectMenu";
 import MoveRecordingModal from "../components/MoveRecordingModal";
 import { useProject } from "../project";
@@ -89,12 +89,14 @@ function RecordingCard({ af }: { af: AudioFile }) {
         </div>
       </div>
       {moving && <MoveRecordingModal afs={[af]} onClose={() => setMoving(false)} />}
+      {/* preload="none" so opening a session doesn't fire one media request
+          per clip — the file loads only when you actually press play. */}
       {isVideo ? (
-        <video controls className="w-full rounded mb-2" style={{ maxHeight: 200 }}>
+        <video controls preload="none" className="w-full rounded mb-2" style={{ maxHeight: 200 }}>
           <source src={api.media.audioFileUrl(af.id)} />
         </video>
       ) : (
-        <audio controls className="w-full h-8 mb-2" style={{ filter: "invert(1) hue-rotate(180deg)" }}>
+        <audio controls preload="none" className="w-full h-8 mb-2" style={{ filter: "invert(1) hue-rotate(180deg)" }}>
           <source src={api.media.audioFileUrl(af.id)} />
         </audio>
       )}
@@ -103,8 +105,55 @@ function RecordingCard({ af }: { af: AudioFile }) {
   );
 }
 
+function SessionEditForm({ session, onDone }: { session: Session; onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState(session.name ?? "");
+  const [date, setDate] = useState(session.date);
+  const [notes, setNotes] = useState(session.notes ?? "");
+  const iStyle = { borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" };
+
+  const mut = useMutation({
+    mutationFn: () => api.sessions.update(session.id, {
+      name: name.trim() || null,
+      date,
+      notes: notes.trim() || null,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["session", session.id] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      onDone();
+    },
+  });
+
+  return (
+    <div className="flex-1 p-4 space-y-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Session name"
+          className="px-2 py-1.5 rounded border text-sm outline-none" style={iStyle} />
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+          className="px-2 py-1.5 rounded border text-sm outline-none" style={iStyle} />
+      </div>
+      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional)" rows={2}
+        className="w-full px-2 py-1.5 rounded border text-sm outline-none" style={iStyle} />
+      <div className="flex items-center gap-2">
+        <button onClick={() => mut.mutate()} disabled={mut.isPending}
+          className="px-3 py-1 rounded text-sm text-white disabled:opacity-50" style={{ background: "var(--accent)" }}>
+          {mut.isPending ? "Saving…" : "Save"}
+        </button>
+        <button onClick={onDone} disabled={mut.isPending}
+          className="px-3 py-1 rounded text-sm border" style={{ borderColor: "var(--border)", color: "var(--text)" }}>
+          Cancel
+        </button>
+        {mut.isError && <span className="text-xs" style={{ color: "var(--red)" }}>Failed to save</span>}
+      </div>
+    </div>
+  );
+}
+
 function SessionCard({ session }: { session: Session }) {
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
   const { data: detail } = useQuery({
     queryKey: ["session", session.id],
     queryFn: () => api.sessions.get(session.id),
@@ -114,20 +163,30 @@ function SessionCard({ session }: { session: Session }) {
   return (
     <div className="rounded-xl border" style={{ background: "var(--bg-card)", borderColor: "var(--border)" }}>
       <div className="flex items-center pr-4">
-        <button onClick={() => setExpanded(!expanded)} className="flex-1 flex items-center justify-between p-5 text-left">
-          <div className="flex items-center gap-3">
-            {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-            <div>
-              <div className="font-semibold">{session.name || session.date}</div>
-              <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-                {session.name ? `${session.date} · ` : ""}{session.track_count} recordings
+        {editing ? (
+          <SessionEditForm session={session} onDone={() => setEditing(false)} />
+        ) : (
+          <button onClick={() => setExpanded(!expanded)} className="flex-1 flex items-center justify-between p-5 text-left">
+            <div className="flex items-center gap-3">
+              {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+              <div>
+                <div className="font-semibold">{session.name || session.date}</div>
+                <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  {session.name ? `${session.date} · ` : ""}{session.track_count} recordings
+                </div>
               </div>
             </div>
-          </div>
-        </button>
+          </button>
+        )}
+        {!editing && (
+          <button onClick={() => setEditing(true)} title="Edit session"
+            className="p-1.5 rounded hover:bg-white/10 mr-1" style={{ color: "var(--text-muted)" }}>
+            <Pencil size={15} />
+          </button>
+        )}
         <MoveToProjectMenu kind="session" ids={[session.id]} compact />
       </div>
-      {expanded && detail && (
+      {expanded && !editing && detail && (
         <div className="px-5 pb-5 space-y-3">
           {detail.audio_files.map((af) => <RecordingCard key={af.id} af={af} />)}
         </div>

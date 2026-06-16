@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -7,7 +9,12 @@ from app.auth.deps import project_editor, project_viewer
 from app.database import get_db
 from app.models import AudioFile, PracticeSession, Project, Tag, Take
 from app.schemas.audio_file import AudioFileRead
-from app.schemas.session import SessionCreate, SessionDetail, SessionRead
+from app.schemas.session import (
+    SessionCreate,
+    SessionDetail,
+    SessionRead,
+    SessionUpdate,
+)
 from app.schemas.take import TakeRead, TakeUpdate
 from app.scoping import get_scope
 
@@ -57,6 +64,51 @@ def create_session(
     db.refresh(session)
     sr = SessionRead.model_validate(session)
     sr.track_count = 0
+    return sr
+
+
+@router.patch("/{session_id}", response_model=SessionRead)
+def update_session(
+    session_id: int,
+    data: SessionUpdate,
+    db: Session = Depends(get_db),
+    _user=Depends(project_editor),
+):
+    """Edit a session's name, date, and/or notes. project_editor scopes the
+    query, so a non-admin can only reach a session in their active project.
+
+    Changing the date re-stamps recorded_at on the session's clips that still
+    carry the old session date (clips uploaded with the session inherit its
+    date) — but leaves any clip whose recorded_at was manually changed alone."""
+    session = db.query(PracticeSession).get(session_id)
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    fields = data.model_dump(exclude_unset=True)
+
+    if "name" in fields:
+        session.name = (fields["name"] or "").strip() or None
+    if "notes" in fields:
+        session.notes = (fields["notes"] or "").strip() or None
+    if fields.get("date") and fields["date"] != session.date:
+        old_midnight = datetime.combine(session.date, datetime.min.time())
+        new_midnight = datetime.combine(fields["date"], datetime.min.time())
+        db.query(AudioFile).filter(
+            AudioFile.session_id == session_id,
+            AudioFile.recorded_at == old_midnight,
+        ).update({AudioFile.recorded_at: new_midnight}, synchronize_session=False)
+        session.date = fields["date"]
+
+    db.commit()
+    db.refresh(session)
+
+    sr = SessionRead.model_validate(session)
+    sr.track_count = (
+        db.query(func.count(AudioFile.id))
+        .filter(AudioFile.session_id == session_id)
+        .scalar()
+        or 0
+    )
     return sr
 
 

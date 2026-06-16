@@ -355,6 +355,8 @@ export const api = {
     get: (id: number) => json<SessionDetail>(`${BASE}/sessions/${id}`),
     create: (body: { name?: string | null; date: string; notes?: string | null }) =>
       post<Session>(`${BASE}/sessions`, body),
+    update: (id: number, body: { name?: string | null; date?: string; notes?: string | null }) =>
+      patch<Session>(`${BASE}/sessions/${id}`, body),
   },
   trash: {
     list: () => json<{

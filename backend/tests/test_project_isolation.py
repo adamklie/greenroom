@@ -474,3 +474,63 @@ def test_create_session_rejected_for_non_member(client, iso):
         "/api/sessions", json={"name": "x", "date": "2026-06-14"}, headers=_h(iso.pb)
     )
     assert res.status_code == 403
+
+
+def test_update_session_name_and_notes(client, iso):
+    _as(client, iso.ua)
+    sid = client.post(
+        "/api/sessions", json={"name": "Old", "date": "2026-06-14"}, headers=_h(iso.pa)
+    ).json()["id"]
+    res = client.patch(
+        f"/api/sessions/{sid}", json={"name": "New name", "notes": "great take"},
+        headers=_h(iso.pa),
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["name"] == "New name"
+    assert body["notes"] == "great take"
+    assert body["date"] == "2026-06-14"  # untouched
+
+
+def test_update_session_date_cascades_to_unmodified_clips(client, iso, db):
+    from datetime import datetime
+
+    _as(client, iso.ua)
+    sid = client.post(
+        "/api/sessions", json={"name": "S", "date": "2026-06-14"}, headers=_h(iso.pa)
+    ).json()["id"]
+    # Two clips: one carrying the session date (inherited), one manually dated.
+    inherited = AudioFile(
+        file_path="i.mp4", file_type="mp4", project_id=iso.pa, session_id=sid,
+        recorded_at=datetime(2026, 6, 14),
+    )
+    overridden = AudioFile(
+        file_path="o.mp4", file_type="mp4", project_id=iso.pa, session_id=sid,
+        recorded_at=datetime(2026, 1, 1),
+    )
+    db.add_all([inherited, overridden])
+    db.commit()
+    iid, oid = inherited.id, overridden.id
+    db.expunge_all()
+
+    res = client.patch(
+        f"/api/sessions/{sid}", json={"date": "2026-06-20"}, headers=_h(iso.pa)
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["date"] == "2026-06-20"
+    # Inherited clip follows the session; the manual override is left alone.
+    assert db.query(AudioFile).get(iid).recorded_at == datetime(2026, 6, 20)
+    assert db.query(AudioFile).get(oid).recorded_at == datetime(2026, 1, 1)
+
+
+def test_update_session_rejected_cross_project(client, iso):
+    _as(client, iso.ua)
+    sid = client.post(
+        "/api/sessions", json={"name": "S", "date": "2026-06-14"}, headers=_h(iso.pa)
+    ).json()["id"]
+    # User B tries to edit PA's session via their own project scope.
+    _as(client, iso.ub)
+    res = client.patch(
+        f"/api/sessions/{sid}", json={"name": "hijack"}, headers=_h(iso.pb)
+    )
+    assert res.status_code == 404  # scoped query can't see it

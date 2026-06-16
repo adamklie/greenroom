@@ -172,6 +172,29 @@ def test_upload_happy_path(client, db, sample_audio_file_path):
     assert vault_path.stat().st_size > 0
 
 
+def test_upload_with_recorded_at(client, db, sample_audio_file_path):
+    """An explicit recorded_at (YYYY-MM-DD) is stored; omitting it leaves it empty."""
+    with sample_audio_file_path.open("rb") as fh:
+        r = client.post(
+            "/api/upload",
+            files={"file": ("dated.m4a", fh, "audio/mp4")},
+            data={"create_song_title": "Dated", "recorded_at": "2026-05-01"},
+        )
+    assert r.status_code == 200, r.text
+    af = db.get(AudioFile, r.json()["audio_file_id"])
+    assert af.recorded_at is not None
+    assert af.recorded_at.date().isoformat() == "2026-05-01"
+
+    with sample_audio_file_path.open("rb") as fh:
+        r2 = client.post(
+            "/api/upload",
+            files={"file": ("undated.m4a", fh, "audio/mp4")},
+            data={"create_song_title": "Undated"},
+        )
+    assert r2.status_code == 200, r2.text
+    assert db.get(AudioFile, r2.json()["audio_file_id"]).recorded_at is None
+
+
 def test_session_detail_shape(client, db):
     """GET /api/sessions/{id} returns linked audio_files with song_title populated.
 

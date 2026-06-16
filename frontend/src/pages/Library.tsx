@@ -46,7 +46,7 @@ const ALL_COLUMNS: Column[] = [
   { key: "clip_name", label: "Clip", defaultVisible: false, sortable: true, width: "w-24" },
   { key: "file_type", label: "Format", defaultVisible: false, sortable: true, width: "w-16" },
   { key: "recorded_at", label: "Recorded", defaultVisible: true, sortable: true, width: "w-28" },
-  { key: "uploaded_at", label: "Uploaded", defaultVisible: false, sortable: true, width: "w-28" },
+  { key: "uploaded_at", label: "Uploaded", defaultVisible: true, sortable: true, width: "w-28" },
   { key: "created_at", label: "Added", defaultVisible: false, sortable: true, width: "w-24" },
 ];
 
