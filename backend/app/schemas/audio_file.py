@@ -57,6 +57,7 @@ class AudioFileUpdate(BaseModel):
     role: str | None = None
     version: str | None = None
     clip_name: str | None = None
+    submitted_file_name: str | None = None
     rating_overall: float | None = None
     rating_vocals: float | None = None
     rating_guitar: float | None = None
