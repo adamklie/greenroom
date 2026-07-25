@@ -10,9 +10,9 @@ from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_admin
+from app.auth.deps import project_editor, project_viewer
 from app.database import get_db
-from app.models import AudioFile, Song, Take
+from app.models import AudioFile, Project, Song, Take
 
 router = APIRouter(prefix="/api/dedup", tags=["dedup"])
 
@@ -53,17 +53,26 @@ def _similarity(a: str, b: str) -> float:
 
 
 @router.get("/duplicates", response_model=list[DuplicateGroup])
-def find_duplicates(fuzzy: bool = Query(False), threshold: float = Query(0.8), db: Session = Depends(get_db), _user=Depends(require_admin)):
-    """Find songs with matching title+artist. Set fuzzy=true for approximate matching."""
+def find_duplicates(fuzzy: bool = Query(False), threshold: float = Query(0.8), db: Session = Depends(get_db), _user=Depends(project_viewer)):
+    """Find songs with matching title+artist. Set fuzzy=true for approximate matching.
+
+    Scoped to the active project (project_viewer sets the request scope), so
+    groups only ever contain songs from the selected project — no cross-project
+    duplicates or merges.
+    """
     songs = db.query(Song).filter(Song.status != "deleted").all()
+
+    # Show the authoritative project (from project_id via the projects table),
+    # not the legacy free-text `Song.project` string, which can be stale.
+    project_names = {p.id: p.name for p in db.query(Project).all()}
 
     def _make_entry(s: Song) -> DuplicateEntry:
         af_count = db.query(func.count(AudioFile.id)).filter(AudioFile.song_id == s.id).scalar()
         take_count = db.query(func.count(Take.id)).filter(Take.song_id == s.id).scalar()
         return DuplicateEntry(
             id=s.id, title=s.title, artist=s.artist, type=s.type,
-            status=s.status, project=s.project, audio_count=af_count,
-            take_count=take_count, notes=s.notes,
+            status=s.status, project=project_names.get(s.project_id) or s.project,
+            audio_count=af_count, take_count=take_count, notes=s.notes,
         )
 
     if not fuzzy:
@@ -146,15 +155,21 @@ def find_duplicates(fuzzy: bool = Query(False), threshold: float = Query(0.8), d
 
 
 @router.post("/merge")
-def merge_songs(req: MergeRequest, db: Session = Depends(get_db), _user=Depends(require_admin)):
+def merge_songs(req: MergeRequest, db: Session = Depends(get_db), _user=Depends(project_editor)):
     """Merge duplicate songs: move all audio files and takes to keep_id.
+
+    Scoped to the active project (project_editor). Both keep and source are
+    loaded with a scoped SELECT (not .get(), which can serve a cross-project row
+    from the identity map), so a song outside the active project simply isn't
+    found — keep_id → 404, a merge_id → skipped. Merges therefore can't cross
+    projects.
 
     Merged-away songs are soft-deleted (status='deleted') rather than hard
     deleted, so a wrong merge can be undone from Trash within 30 days. Their
     audio/takes have already been reassigned to keep_id, so the tombstone has
     no media of its own.
     """
-    keep = db.query(Song).get(req.keep_id)
+    keep = db.query(Song).filter(Song.id == req.keep_id).first()
     if not keep:
         raise HTTPException(404, f"Song {req.keep_id} not found")
 
@@ -165,7 +180,7 @@ def merge_songs(req: MergeRequest, db: Session = Depends(get_db), _user=Depends(
     for merge_id in req.merge_ids:
         if merge_id == req.keep_id:
             continue
-        source = db.query(Song).get(merge_id)
+        source = db.query(Song).filter(Song.id == merge_id).first()
         if not source:
             continue
 
