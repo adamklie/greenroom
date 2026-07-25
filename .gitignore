@@ -42,3 +42,6 @@ backups/
 
 # docker-compose local data dir (DB + vault for the containerized stack)
 local-data/
+
+# Local prod auth cookies for ingest-sessions (never commit)
+.greenroom
