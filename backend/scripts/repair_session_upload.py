@@ -1,9 +1,13 @@
-"""One-off repair: backfill missing clips into an existing prod session.
+"""Sync a local folder of clips into a session, creating the session if needed.
 
-A folder import to prod left only some of the files in the session (the rest
-failed mid-upload). This re-uploads ONLY the files that are missing from the
-session — it diffs the local directory against what the session already
-contains (by submitted filename), so it's idempotent: safe to re-run.
+Uploads ONLY the files the session doesn't already have — it diffs the local
+directory against the session's contents (by submitted filename), so it's
+idempotent: safe to re-run, and re-running after a partial upload backfills
+just the gap. That dedupe is what makes re-runs safe; the vault identifier is
+filename+wall-clock, not content, so it would NOT collapse duplicates itself.
+
+Produces the same rows as the Import page's grouped-session upload: role is
+practice_clip, and recorded_at is inherited from the session date server-side.
 
 Auth: the API gates on the browser session cookie + active project. Grab both
 from your logged-in browser (DevTools > Application > Cookies on
@@ -14,10 +18,10 @@ greenroom-1.fly.dev):
 Usage:
     GR_COOKIE=... GR_PROJECT=... \
       python backend/scripts/repair_session_upload.py \
-        --dir ~/Desktop/music/2026_06_14 --date 2026-06-14 [--apply]
+        --dir ~/Desktop/music/2026_06_14 --date 2026-06-14 [--create] [--apply]
 
-Without --apply it's a dry run: it prints what it WOULD upload and uploads
-nothing.
+Without --apply it's a dry run: it prints what it WOULD create/upload and
+changes nothing.
 """
 
 import argparse
@@ -50,6 +54,11 @@ def main():
     ap.add_argument("--dir", required=True, help="Local directory of clips")
     ap.add_argument("--date", required=True, help="Session date YYYY-MM-DD (to find the session)")
     ap.add_argument("--session-id", type=int, help="Skip the date lookup; target this session id")
+    ap.add_argument("--create", action="store_true",
+                    help="Create the session if no session exists for --date")
+    ap.add_argument("--name", help="Session name when creating (optional; UI falls back to the date)")
+    ap.add_argument("--source", default="unknown",
+                    help="AudioFile source tag (default: unknown, matching the Import page default)")
     ap.add_argument("--apply", action="store_true", help="Actually upload (default: dry run)")
     args = ap.parse_args()
 
@@ -71,17 +80,35 @@ def main():
         r = requests.get(f"{BASE}/api/sessions", headers=headers, timeout=30)
         r.raise_for_status()
         matches = [s for s in r.json() if str(s.get("date")) == args.date]
-        if not matches:
-            sys.exit(f"No session found for date {args.date}. Sessions: "
+        if not matches and args.create:
+            if not args.apply:
+                # Nothing to diff against — a session that doesn't exist has no
+                # files, so every local file is missing.
+                print(f"Would create session {args.name!r} ({args.date}) — "
+                      f"then upload all {len(local)} local files.")
+                print("\nDRY RUN — re-run with --apply to create it and upload.")
+                return
+            body = {"date": args.date}
+            if args.name:
+                body["name"] = args.name
+            r = requests.post(f"{BASE}/api/sessions", headers=headers, json=body, timeout=30)
+            r.raise_for_status()
+            created = r.json()
+            session_id = created["id"]
+            print(f"Created session: id={session_id} name={created.get('name')!r} date={created.get('date')}")
+            matches = None  # created fresh; skip the found-session reporting below
+        elif not matches:
+            sys.exit(f"No session found for date {args.date} (pass --create to make one). Sessions: "
                      + ", ".join(f"{s['id']}:{s.get('name')}({s.get('date')})" for s in r.json()))
-        if len(matches) > 1:
+        elif len(matches) > 1:
             print("Multiple sessions on that date — pass --session-id to disambiguate:")
             for s in matches:
                 print(f"  id={s['id']} name={s.get('name')!r} tracks={s.get('track_count')}")
             sys.exit(1)
-        session_id = matches[0]["id"]
-        print(f"Session: id={session_id} name={matches[0].get('name')!r} "
-              f"date={matches[0].get('date')} existing_tracks={matches[0].get('track_count')}")
+        else:
+            session_id = matches[0]["id"]
+            print(f"Session: id={session_id} name={matches[0].get('name')!r} "
+                  f"date={matches[0].get('date')} existing_tracks={matches[0].get('track_count')}")
 
     # What's already in the session?
     r = requests.get(f"{BASE}/api/sessions/{session_id}", headers=headers, timeout=30)
@@ -111,7 +138,7 @@ def main():
     for p in missing:
         with open(p, "rb") as fh:
             data = {
-                "source": "unknown",
+                "source": args.source,
                 "role": "practice_clip",
                 "project": project,
                 "session_id": str(session_id),

@@ -6,6 +6,8 @@ description: Run the post-practice ingestion pipeline — bootstrap (filesystem 
 
 After a practice session, run the canonical three-step ingestion: filesystem scan → file hashing → DB backup. Each step has its own Makefile target — call them in order.
 
+**This is the local filesystem-scan path** — it makes the local DB notice files already in the vault. To upload loose folders of clips to *prod* as sessions, use [/ingest-sessions](../ingest-sessions/SKILL.md) instead.
+
 ## Instructions
 
 ### 1. Confirm the music directory
