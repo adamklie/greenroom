@@ -157,28 +157,33 @@ export default function ProcessSession() {
   const listMut = useMutation({ mutationFn: () => api.gopro.listVideos(directory) });
 
   // Threshold for switching from single-shot upload (through Fly) to direct-
-  // to-R2 multipart upload. Small files don't benefit from parallel chunks
-  // and the multipart endpoints 501 in local mode anyway — single-shot stays
-  // as the fallback.
-  const MULTIPART_THRESHOLD_BYTES = 25 * 1024 * 1024;
+  // to-R2 multipart upload. Kept low: practice videos are essentially always
+  // larger, and the single-shot path streams the whole body through the 1GB
+  // Fly machine (slow + fragile). Direct-to-R2 is the path we want for any
+  // real file; local mode 501s on multipart-init and falls back below.
+  const MULTIPART_THRESHOLD_BYTES = 5 * 1024 * 1024;
 
-  // Upload large files directly browser→R2 using presigned multipart URLs.
-  // Streams up to 5 chunks in parallel for 2-5x faster uploads on the same
-  // residential link than single-stream through Fly. On any failure, aborts
-  // the multipart upload so R2 doesn't accumulate orphan parts.
-  async function uploadDirectMultipart(file: File) {
-    const init = await api.gopro.multipartInit({
-      filename: file.name,
-      content_type: file.type || "application/octet-stream",
-      size_bytes: file.size,
-    });
-
+  // Upload a file's parts directly browser→R2 using presigned PUT URLs from a
+  // prior multipart-init. Streams up to 5 chunks in parallel for 2-5x faster
+  // uploads than single-stream through Fly, with per-part retry for transient
+  // failures. On unrecoverable failure, aborts the multipart upload so R2
+  // doesn't accumulate orphan parts.
+  //
+  // NOTE: multipart-init is done by the caller so that a local-mode 501 is the
+  // ONLY thing that triggers the single-shot fallback — real R2/CORS/network
+  // errors here always surface to the user instead of silently re-routing a
+  // multi-GB body through Fly.
+  async function uploadDirectMultipart(
+    file: File,
+    init: Awaited<ReturnType<typeof api.gopro.multipartInit>>,
+  ) {
     const parts: { part_number: number; etag: string }[] = [];
     let bytesUploaded = 0;
 
     // Bounded concurrency. 5 streams saturates most residential upstreams
     // without burning the laptop's TCP table. R2 handles parallel PUTs fine.
     const CONCURRENCY = 5;
+    const MAX_ATTEMPTS = 4;
     const queue = Array.from({ length: init.num_parts }, (_, i) => i);
 
     const uploadPart = async (i: number) => {
@@ -187,21 +192,42 @@ export default function ProcessSession() {
       const end = Math.min(start + init.part_size_bytes, file.size);
       const chunk = file.slice(start, end);
 
-      const res = await fetch(init.part_urls[i], { method: "PUT", body: chunk });
-      if (!res.ok) {
-        throw new Error(`Part ${partNumber} failed: ${res.status} ${res.statusText}`);
+      let lastErr: unknown;
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        try {
+          const res = await fetch(init.part_urls[i], { method: "PUT", body: chunk });
+          if (!res.ok) {
+            // 5xx (and 408/429) are worth retrying; 4xx auth/expiry are not.
+            const retryable = res.status >= 500 || res.status === 408 || res.status === 429;
+            const err = new Error(`Part ${partNumber} failed: ${res.status} ${res.statusText}`);
+            if (!retryable) throw err;
+            lastErr = err;
+          } else {
+            const etag = res.headers.get("ETag");
+            if (!etag) {
+              // R2 must expose ETag via CORS ExposeHeaders. Config problem —
+              // retrying won't help, so surface immediately. See DEPLOYMENT.md.
+              throw new Error(
+                `Part ${partNumber}: no ETag in R2 response (check bucket CORS config)`
+              );
+            }
+            parts.push({ part_number: partNumber, etag });
+            bytesUploaded += chunk.size;
+            setUploadProgress({ loaded: bytesUploaded, total: file.size });
+            return;
+          }
+        } catch (err) {
+          // Network errors (fetch rejects) are transient — retry. Re-thrown
+          // non-retryable errors above bubble straight out.
+          if (err instanceof Error && err.message.includes("no ETag")) throw err;
+          lastErr = err;
+        }
+        // Exponential backoff before the next attempt (500ms, 1s, 2s).
+        if (attempt < MAX_ATTEMPTS - 1) {
+          await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
+        }
       }
-      const etag = res.headers.get("ETag");
-      if (!etag) {
-        // R2 must expose ETag via CORS ExposeHeaders. If this fires, CORS
-        // is misconfigured on the bucket — see docs/DEPLOYMENT.md.
-        throw new Error(
-          `Part ${partNumber}: no ETag in R2 response (check bucket CORS config)`
-        );
-      }
-      parts.push({ part_number: partNumber, etag });
-      bytesUploaded += chunk.size;
-      setUploadProgress({ loaded: bytesUploaded, total: file.size });
+      throw lastErr instanceof Error ? lastErr : new Error(`Part ${partNumber} failed after ${MAX_ATTEMPTS} attempts`);
     };
 
     const workers = Array.from({ length: CONCURRENCY }, async () => {
@@ -247,13 +273,24 @@ export default function ProcessSession() {
   const uploadMut = useMutation({
     mutationFn: async (file: File) => {
       if (file.size >= MULTIPART_THRESHOLD_BYTES) {
+        // multipart-init is the ONLY place a local-mode 501 can send us to the
+        // single-shot fallback. Everything after init (part PUTs, complete)
+        // surfaces real errors instead of re-routing a huge body through Fly.
+        let init: Awaited<ReturnType<typeof api.gopro.multipartInit>> | null = null;
         try {
-          return await uploadDirectMultipart(file);
+          init = await api.gopro.multipartInit({
+            filename: file.name,
+            content_type: file.type || "application/octet-stream",
+            size_bytes: file.size,
+          });
         } catch (err) {
-          // If multipart-init 501s (local mode), fall through to the
-          // legacy single-shot path. Any other error is real — re-throw.
+          // 501 = local mode (no R2). Fall through to single-shot. Anything
+          // else (auth, R2 down) is a real error — surface it.
           const msg = err instanceof Error ? err.message : String(err);
           if (!msg.includes("501")) throw err;
+        }
+        if (init) {
+          return await uploadDirectMultipart(file, init);
         }
       }
       return api.gopro.uploadRaw(file, (loaded, total) =>
