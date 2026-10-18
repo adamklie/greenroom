@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link as RouterLink, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ChevronLeft, ExternalLink, FileText, Maximize, Music, Pause, Play, SkipBack, SkipForward, Upload, X,
 } from "lucide-react";
@@ -19,8 +19,6 @@ const fmt = (s: number) =>
   Number.isFinite(s) ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}` : "0:00";
 
 const linkOf = (item: SetlistItem, kind: string) => item.effective_links.find((l) => l.kind === kind);
-
-const songPanelUrl = (item: SetlistItem) => `/${item.song_type || "cover"}s?song=${item.song_id}`;
 
 /** Two-option switch (Chart | Lyrics, Fit | Scroll). */
 function Segmented<T extends string>({ value, options, onChange, dark }: {
@@ -83,6 +81,47 @@ function UploadChartButton({ songId, setlistId }: { songId: number; setlistId: n
       </button>
       {upload.isError && <span className="text-xs" style={{ color: "var(--red)" }}>Upload failed</span>}
     </>
+  );
+}
+
+/** Paste-in lyrics for a song that has none yet, next to a link to a chords
+ * page to copy them from. Saves through the lyrics endpoint (keeps history). */
+function AddLyrics({ item, setlistId }: { item: SetlistItem; setlistId: number }) {
+  const queryClient = useQueryClient();
+  const [text, setText] = useState("");
+  const save = useMutation({
+    mutationFn: () => api.songs.updateLyrics(item.song_id, text),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["setlist", setlistId] });
+      queryClient.invalidateQueries({ queryKey: ["song", item.song_id] });
+    },
+  });
+  const source = item.effective_links.find((l) => l.url.includes("chords"))
+    ?? item.effective_links.find((l) => l.kind === "tab");
+  return (
+    <div className="h-full flex flex-col gap-2 p-4">
+      <div className="flex items-center gap-3 text-sm" style={{ color: "var(--text-muted)" }}>
+        <span>No lyrics yet. Paste them here (chord sheets keep their alignment).</span>
+        {source && (
+          <a href={source.url} target="_blank" rel="noreferrer" className="flex items-center gap-1"
+            style={{ color: "var(--accent)" }}>
+            <ExternalLink size={13} /> Open chords page
+          </a>
+        )}
+      </div>
+      <textarea value={text} onChange={(e) => setText(e.target.value)}
+        placeholder="Paste lyrics or a chord sheet…"
+        className="flex-1 w-full px-3 py-2 rounded-lg border text-sm outline-none resize-none font-mono"
+        style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" }} />
+      <div className="flex items-center gap-3">
+        <button onClick={() => save.mutate()} disabled={!text.trim() || save.isPending}
+          className="px-4 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-40"
+          style={{ background: "var(--accent)" }}>
+          {save.isPending ? "Saving…" : "Save lyrics"}
+        </button>
+        {save.isError && <span className="text-xs" style={{ color: "var(--red)" }}>Save failed</span>}
+      </div>
+    </div>
   );
 }
 
@@ -365,12 +404,7 @@ export default function SetlistPlayer() {
               {view === "lyrics"
                 ? item.song_lyrics
                   ? <LyricsView lyrics={item.song_lyrics} fit={false} />
-                  : (
-                    <div className="h-full flex flex-col items-center justify-center gap-2 text-sm" style={{ color: "var(--text-muted)" }}>
-                      <p>No lyrics for this song yet.</p>
-                      <RouterLink to={songPanelUrl(item)} style={{ color: "var(--accent)" }}>Add them in the song panel →</RouterLink>
-                    </div>
-                  )
+                  : <AddLyrics key={item.song_id} item={item} setlistId={setlistId} />
                 : chart ? <ChartView chart={chart} /> : <NoChart item={item} setlistId={setlistId} />}
             </div>
           </div>

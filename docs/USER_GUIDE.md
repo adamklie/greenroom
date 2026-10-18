@@ -190,7 +190,7 @@ The ▶ on a setlist row starts practice from that song. ← / → change songs;
 The screen stays awake while Perform is open, and the ⛶ button goes full-screen.
 
 **Chart / Lyrics.** Both views have a Chart | Lyrics switch, and your choice carries over from song to song, so a singer can stay on Lyrics for the whole set.
-- Lyrics come from the song's **Lyrics** field in the song panel.
+- Lyrics come from the song's **Lyrics** field in the song panel. If a song has none yet, Practice → Lyrics shows a paste box, with a link to the song's chords page to copy from. Paste, then **Save lyrics**.
 - A pasted chord sheet (chord lines above lyric lines) is detected automatically: it's shown in a fixed-width font so the chords stay over the right words, with chords highlighted.
 
 **Fit / Scroll** (Perform):
