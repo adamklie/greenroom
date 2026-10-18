@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from app.schemas.song import Link
+from app.schemas.song_chart import SongChartRead
 
 
 class SetlistItemCreate(BaseModel):
@@ -26,9 +27,12 @@ class SetlistItemRead(BaseModel):
     links: list[Link] = []
     # Song links with any kind this item overrides replaced by the item's own.
     effective_links: list[Link] = []
+    charts: list[SongChartRead] = []
     song_title: str | None = None
     song_artist: str | None = None
     song_status: str | None = None
+    song_type: str | None = None
+    song_lyrics: str | None = None
     song_key: str | None = None
     song_tempo_bpm: int | None = None
 

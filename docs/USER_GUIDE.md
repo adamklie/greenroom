@@ -165,8 +165,37 @@ Opening a setlist shows it grouped by section, with Tab / Track / Chart / Listen
 
 Songs are matched to ones already in the active project by title and artist; anything not found is created as a cover. Tab, track and listen links are saved on the song so later gigs reuse them. Charts stay on the setlist, since they are usually numbered per event.
 
-A dedicated performance-mode view (full-screen, swipe between songs)
-is on the roadmap but not built yet.
+### Charts
+
+Upload a chart (PDF, PNG, JPG or WebP) for a song from the song panel (**Charts → + Upload chart**), or for a whole setlist at once with **Upload charts** on the setlist page:
+- Pick the files and each one is matched to a song by filename. Gig prefixes like `GICC1018-02-` are ignored.
+- Check or fix the matches, then upload.
+
+Charts attach to the song, so every later setlist reuses them.
+
+### Practice and Perform
+
+From a setlist, **Practice** opens a play-along view laid out like a music app:
+- The chart in the middle, with the song's notes and links above it.
+- The queue on the right, grouped by section. Click a song to jump to it.
+- A now-playing bar with the backing track: play/pause, seek, speed (0.75× / 0.9× / 1×). With **Auto-advance** on, the next song's track starts when this one ends.
+
+The ▶ on a setlist row starts practice from that song. ← / → change songs; Space plays or pauses.
+
+**Perform** is for the stage. The chart fills a black screen, with a slim banner showing the song number, title, gig notes and what's next. Moving forward turns the chart's pages first, then goes to the next song. Ways to move:
+- → / PageDown / Space go forward; ← / PageUp go back. Bluetooth page-turner pedals send these keys.
+- Tap the right or left third of the screen.
+- Swipe.
+
+The screen stays awake while Perform is open, and the ⛶ button goes full-screen.
+
+**Chart / Lyrics.** Both views have a Chart | Lyrics switch, and your choice carries over from song to song, so a singer can stay on Lyrics for the whole set.
+- Lyrics come from the song's **Lyrics** field in the song panel.
+- A pasted chord sheet (chord lines above lyric lines) is detected automatically: it's shown in a fixed-width font so the chords stay over the right words, with chords highlighted.
+
+**Fit / Scroll** (Perform):
+- **Fit** sizes the whole song to one screen, using up to three columns, and never wraps a line mid-phrase. Charts show one page at a time. If a song is too long to fit comfortably, a hint suggests Scroll.
+- **Scroll** shows one large column (or the chart at full width). Each pedal press scrolls down a screen, and at the bottom it moves to the next song.
 
 ### Deleting a recording
 

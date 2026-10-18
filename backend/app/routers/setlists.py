@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.auth.deps import project_editor, project_viewer
 from app.database import get_db
-from app.models import Setlist, SetlistItem, Song
+from app.models import Setlist, SetlistItem, Song, SongChart
+from app.schemas.song_chart import SongChartRead
 from app.schemas.setlist import (
     SetlistCreate,
     SetlistImportResult,
@@ -49,6 +50,14 @@ def _item_values(item_data) -> dict:
 
 
 def _setlist_to_read(setlist: Setlist, db: Session) -> SetlistRead:
+    song_ids = {item.song_id for item in setlist.items}
+    charts_by_song: dict[int, list[SongChartRead]] = {}
+    if song_ids:
+        for chart in (
+            db.query(SongChart).filter(SongChart.song_id.in_(song_ids)).order_by(SongChart.id).all()
+        ):
+            charts_by_song.setdefault(chart.song_id, []).append(SongChartRead.model_validate(chart))
+
     items = []
     for item in setlist.items:
         song = item.song
@@ -61,9 +70,12 @@ def _setlist_to_read(setlist: Setlist, db: Session) -> SetlistRead:
             section=item.section,
             links=item.links or [],
             effective_links=_effective_links(song.links if song else None, item.links),
+            charts=charts_by_song.get(item.song_id, []),
             song_title=song.title if song else None,
             song_artist=song.artist if song else None,
             song_status=song.status if song else None,
+            song_type=song.type if song else None,
+            song_lyrics=song.lyrics if song else None,
             song_key=song.key if song else None,
             song_tempo_bpm=song.tempo_bpm if song else None,
         ))

@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.auth.router import router as auth_router
-from app.routers import analytics, audio_files, backup, dashboard, dedup, feedback, filebrowser, files, gopro, integrity, media, options, projects, sessions, setlists, songs, tabs as tabs_router, tags, trash, trim, upload
+from app.routers import analytics, audio_files, backup, charts, dashboard, dedup, feedback, filebrowser, files, gopro, integrity, media, options, projects, sessions, setlists, songs, tabs as tabs_router, tags, trash, trim, upload
 
 try:
     from importlib.metadata import version as _pkg_version
@@ -80,6 +80,7 @@ app.include_router(projects.router)
 app.include_router(feedback.router)
 app.include_router(trim.router)
 app.include_router(tabs_router.router)
+app.include_router(charts.router)
 
 
 @app.get("/api/health")
@@ -113,6 +114,11 @@ _static_dir = settings.static_dir
 if _static_dir and os.path.isdir(_static_dir):
     from fastapi.responses import FileResponse
     from fastapi import HTTPException
+
+    # The pdf.js worker ships as .mjs; Python < 3.12 doesn't map that to a JS
+    # MIME type, and browsers refuse module workers served as text/plain.
+    import mimetypes
+    mimetypes.add_type("text/javascript", ".mjs")
 
     _assets_dir = os.path.join(_static_dir, "assets")
     if os.path.isdir(_assets_dir):

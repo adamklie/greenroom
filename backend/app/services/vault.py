@@ -49,6 +49,10 @@ class VaultBackend(Protocol):
         """True if a file is already stored at `{identifier}.{ext}`."""
         ...
 
+    def read_bytes(self, identifier: str, file_type: str) -> bytes:
+        """The stored file's contents (used for small files such as charts)."""
+        ...
+
     def url_for(self, af: AudioFile, expires_in: int | None = None, download_name: str | None = None) -> str | None:
         """Return a directly-fetchable URL for `af`, or None if the backend
         can't produce one (e.g. local files). Cloud backends return a
@@ -84,6 +88,9 @@ class LocalVaultBackend:
 
     def exists(self, identifier: str, file_type: str) -> bool:
         return self.path_for(identifier, file_type).exists()
+
+    def read_bytes(self, identifier: str, file_type: str) -> bytes:
+        return self.path_for(identifier, file_type).read_bytes()
 
     def url_for(self, af: AudioFile, expires_in: int | None = None, download_name: str | None = None) -> str | None:
         """Local files are served by FastAPI itself; no external URL.
@@ -149,6 +156,10 @@ class CloudVaultBackend:
             return True
         except ClientError:
             return False
+
+    def read_bytes(self, identifier: str, file_type: str) -> bytes:
+        obj = self._s3.get_object(Bucket=self._bucket, Key=self._key(identifier, file_type))
+        return obj["Body"].read()
 
     def list_keys(self) -> list[str]:
         """All object keys under the files/ prefix (paginated). Used by the

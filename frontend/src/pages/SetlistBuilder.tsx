@@ -2,10 +2,11 @@ import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, type Link, type Song, type Setlist, type SetlistItem } from "../api/client";
-import { Plus, Trash2, Clock, GripVertical, X, ListMusic, Upload, Pencil, Link2 } from "lucide-react";
+import { Plus, Trash2, Clock, GripVertical, X, ListMusic, Upload, Pencil, Link2, Play, FileText, MonitorPlay } from "lucide-react";
 import MoveToProjectMenu from "../components/MoveToProjectMenu";
 import LinkChips from "../components/LinkChips";
 import LinksEditor from "../components/LinksEditor";
+import BulkChartUpload from "../components/BulkChartUpload";
 
 interface DraftSong {
   kind: "song";
@@ -340,7 +341,11 @@ interface ImportSummary { songs_matched: number; songs_created: number }
 function SetlistView({ setlist, onEdit, onBack, imported }: {
   setlist: Setlist; onEdit: () => void; onBack: () => void; imported: ImportSummary | null;
 }) {
+  const navigate = useNavigate();
+  const [uploadingCharts, setUploadingCharts] = useState(false);
+  const play = (i: number, mode: "practice" | "perform") => navigate(`/setlists/${setlist.id}/play?i=${i}&mode=${mode}`);
   const groups = groupBySection(setlist.items);
+  const withCharts = setlist.items.filter((i) => i.charts.length > 0).length;
   let n = 0;
   const th = "text-left text-xs font-medium uppercase tracking-wide px-3 py-2";
   return (
@@ -360,15 +365,34 @@ function SetlistView({ setlist, onEdit, onBack, imported }: {
           <h2 className="text-2xl font-bold">{setlist.name}</h2>
           {setlist.description && <p className="text-sm" style={{ color: "var(--text-muted)" }}>{setlist.description}</p>}
         </div>
-        <button onClick={onEdit}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm border"
-          style={{ borderColor: "var(--border)", color: "var(--text)" }}>
-          <Pencil size={14} /> Edit
-        </button>
+        <div className="flex flex-wrap gap-2 justify-end">
+          <button onClick={() => setUploadingCharts(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm border"
+            style={{ borderColor: "var(--border)", color: "var(--text)" }}>
+            <FileText size={14} /> Upload charts
+          </button>
+          <button onClick={onEdit}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm border"
+            style={{ borderColor: "var(--border)", color: "var(--text)" }}>
+            <Pencil size={14} /> Edit
+          </button>
+          <button onClick={() => play(0, "perform")} disabled={!setlist.items.length}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm border disabled:opacity-40"
+            style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>
+            <MonitorPlay size={14} /> Perform
+          </button>
+          <button onClick={() => play(0, "practice")} disabled={!setlist.items.length}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40"
+            style={{ background: "var(--accent)" }}>
+            <Play size={14} /> Practice
+          </button>
+        </div>
       </div>
+      {uploadingCharts && <BulkChartUpload setlist={setlist} onClose={() => setUploadingCharts(false)} />}
       <div className="flex gap-6 mb-6 text-sm" style={{ color: "var(--text-muted)" }}>
         <span>{setlist.song_count} songs</span>
         <span className="flex items-center gap-1"><Clock size={14} /> {setlist.total_minutes} min</span>
+        <span className="flex items-center gap-1"><FileText size={14} /> {withCharts}/{setlist.song_count} with charts</span>
       </div>
 
       {setlist.items.length === 0 && (
@@ -386,23 +410,35 @@ function SetlistView({ setlist, onEdit, onBack, imported }: {
           <table className="w-full text-sm">
             <thead style={{ color: "var(--text-muted)" }}>
               <tr>
+                <th className={`${th} w-10`} />
                 <th className={`${th} w-10`}>#</th>
                 <th className={th}>Song</th>
                 <th className={th}>Artist</th>
                 <th className={th}>Notes</th>
                 <th className={th}>Links</th>
+                <th className={`${th} w-16`}>Chart</th>
               </tr>
             </thead>
             <tbody>
               {group.items.map((item) => {
                 n += 1;
+                const idx = n - 1;
                 return (
-                  <tr key={item.id} className="border-t" style={{ borderColor: "var(--border)" }}>
+                  <tr key={item.id} className="border-t group" style={{ borderColor: "var(--border)" }}>
+                    <td className="pl-3 py-2">
+                      <button onClick={() => play(idx, "practice")} title="Practice from here"
+                        className="p-1 rounded opacity-40 group-hover:opacity-100" style={{ color: "var(--accent)" }}>
+                        <Play size={14} />
+                      </button>
+                    </td>
                     <td className="px-3 py-2" style={{ color: "var(--text-muted)" }}>{n}</td>
                     <td className="px-3 py-2 font-medium">{item.song_title}</td>
                     <td className="px-3 py-2" style={{ color: "var(--text-muted)" }}>{item.song_artist}</td>
                     <td className="px-3 py-2" style={{ color: "var(--text-muted)" }}>{item.notes}</td>
                     <td className="px-3 py-2"><LinkChips links={item.effective_links} /></td>
+                    <td className="px-3 py-2" style={{ color: item.charts.length ? "var(--accent)" : "var(--text-muted)" }}>
+                      {item.charts.length ? <FileText size={14} /> : "—"}
+                    </td>
                   </tr>
                 );
               })}

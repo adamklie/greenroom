@@ -26,8 +26,8 @@ def _scoped_models():
     # time would cycle. Only the content tables that carry project_id; the
     # access-control tables (Project, ProjectMember, User) stay unscoped so the
     # membership lookup that *determines* the scope isn't itself filtered.
-    from app.models import AudioFile, PracticeSession, Setlist, Song, Take
-    return (AudioFile, PracticeSession, Setlist, Song, Take)
+    from app.models import AudioFile, PracticeSession, Setlist, Song, SongChart, Take
+    return (AudioFile, PracticeSession, Setlist, Song, SongChart, Take)
 
 
 @event.listens_for(Session, "do_orm_execute")
