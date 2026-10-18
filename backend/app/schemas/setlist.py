@@ -4,12 +4,16 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.schemas.song import Link
+
 
 class SetlistItemCreate(BaseModel):
     song_id: int
     position: int
     duration_minutes: int = 4
     notes: str | None = None
+    section: str | None = None
+    links: list[Link] = []
 
 
 class SetlistItemRead(BaseModel):
@@ -18,9 +22,15 @@ class SetlistItemRead(BaseModel):
     position: int
     duration_minutes: int
     notes: str | None = None
+    section: str | None = None
+    links: list[Link] = []
+    # Song links with any kind this item overrides replaced by the item's own.
+    effective_links: list[Link] = []
     song_title: str | None = None
     song_artist: str | None = None
     song_status: str | None = None
+    song_key: str | None = None
+    song_tempo_bpm: int | None = None
 
     model_config = {"from_attributes": True}
 
@@ -44,6 +54,12 @@ class SetlistRead(BaseModel):
     song_count: int = 0
 
     model_config = {"from_attributes": True}
+
+
+class SetlistImportResult(BaseModel):
+    setlist: SetlistRead
+    songs_matched: int
+    songs_created: int
 
 
 class SetlistUpdate(BaseModel):

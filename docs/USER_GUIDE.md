@@ -149,6 +149,21 @@ arrangements).
 3. Add songs in performance order. Each entry can carry a
    per-song duration estimate and a note.
 4. Total estimated runtime updates as you add.
+5. **Add Section** inserts a divider ("Set 1", "Encore"). Every song below it, up to the next divider, belongs to that section.
+6. The link button on each row holds **links for this gig only**, such as this event's chart PDF. A link here replaces the song's own link of the same kind.
+
+Opening a setlist shows it grouped by section, with Tab / Track / Chart / Listen links for each song. Links that apply to every gig live on the song itself, under **Links** in the song panel.
+
+### Importing a setlist spreadsheet
+
+**Setlists → Import .xlsx** builds a setlist from a band set-list sheet:
+
+- The title rows above the header become the setlist's name and description.
+- The header row must contain a **Song** column. `#`, **Artist** and **Notes** are read by name.
+- Any column with hyperlinks becomes a link: Tab, Track, Chart, or Listen (from the song title's own link). Other text columns are ignored.
+- A row with text but no song starts a new section (e.g. "SET 1 7:30 - 9:30", "Potential EXTRAS:").
+
+Songs are matched to ones already in the active project by title and artist; anything not found is created as a cover. Tab, track and listen links are saved on the song so later gigs reuse them. Charts stay on the setlist, since they are usually numbered per event.
 
 A dedicated performance-mode view (full-screen, swipe between songs)
 is on the roadmap but not built yet.
