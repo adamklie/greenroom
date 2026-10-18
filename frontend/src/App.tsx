@@ -173,6 +173,7 @@ function AppShell() {
           <Route path="/sessions" element={<Sessions />} />
           <Route path="/library" element={<Library />} />
           <Route path="/setlists" element={<SetlistBuilder />} />
+          <Route path="/setlists/:id" element={<SetlistBuilder />} />
           <Route path="/import" element={<Import />} />
           <Route path="/feedback" element={<Feedback />} />
           <Route path="/schemas" element={<Schemas />} />

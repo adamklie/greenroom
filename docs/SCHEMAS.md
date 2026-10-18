@@ -1,6 +1,6 @@
 # Greenroom Data Schemas
 
-Last updated: 2026-05-24
+Last updated: 2026-10-18
 
 Table-by-table reference for the SQLAlchemy models in `backend/app/models/`.
 This doc tracks the live schema — if you change a model, update the matching
@@ -75,6 +75,7 @@ A musical work. Groups related audio files together.
 | tempo_bpm | int? | |
 | tuning | str? | `standard`, `drop_d`, `open_g`, ... (default `standard`) |
 | vibe | str? | Free-text mood/feel |
+| links | JSON? | `[{kind, label, url}]` external practice links; `kind` ∈ `tab`, `track`, `chart`, `listen`, `other` |
 | lyrics | text? | Current version (history in `lyrics_versions`) |
 | reference_audio_file_id | int FK → audio_files? | Reference recording for covers |
 | promoted_from_id | int FK → songs? | If promoted from an idea, links back |
@@ -137,8 +138,12 @@ An ordered list of songs for a performance.
 | position | int | 0-indexed order |
 | duration_minutes | int | Estimated, default 4 |
 | notes | text? | "start with acoustic intro", etc. |
+| section | str? | e.g. "Set 1 7:30-9:30", "Potential Extras". Consecutive items with the same label form a section |
+| links | JSON? | Per-gig link overrides, same shape as `songs.links`. An item link of a given `kind` replaces the song's links of that kind |
 
 Items are loaded ordered by `position` with `cascade="all, delete-orphan"`.
+
+The API adds `effective_links` to each item: the song's links, with any kind the item overrides replaced by the item's own. Links are stored as JSON rather than a child table because setlist PATCH replaces every item.
 
 ---
 

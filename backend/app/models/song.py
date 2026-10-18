@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -29,6 +29,10 @@ class Song(Base):
     tempo_bpm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tuning: Mapped[str | None] = mapped_column(String, nullable=True, default="standard")
     vibe: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # External practice links: [{kind, label, url}], kind in
+    # tab | track | chart | listen | other
+    links: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     # Lyrics (current version)
     lyrics: Mapped[str | None] = mapped_column(Text, nullable=True)

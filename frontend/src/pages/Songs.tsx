@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { api, type Song, type AudioFile } from "../api/client";
+import { api, type Song, type AudioFile, type Link } from "../api/client";
 import { Search, X, Play, Music, Tag, ArrowUpRight, Plus, Trash2, ChevronDown, ChevronRight, Scissors, FileMusic, Upload, RotateCcw, FolderInput } from "lucide-react";
 import { TabViewer } from "../components/TabViewer";
 import { useProject } from "../project";
 import MoveToProjectMenu from "../components/MoveToProjectMenu";
 import MoveRecordingModal from "../components/MoveRecordingModal";
+import LinksEditor from "../components/LinksEditor";
 
 const STATUS_COLORS: Record<string, string> = {
   idea: "var(--text-muted)", learning: "var(--blue)", rehearsed: "var(--yellow)",
@@ -321,6 +322,24 @@ function EditableField({ label, value, onChange, type = "text", options, placeho
   );
 }
 
+function SongLinksSection({ links, onSave, saving }: { links: Link[]; onSave: (links: Link[]) => void; saving: boolean }) {
+  const [draft, setDraft] = useState<Link[] | null>(null);
+  const value = draft ?? links;
+  return (
+    <div className="mb-4">
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-xs" style={{ color: "var(--text-muted)" }}>Links (tab, backing track, chart, listen)</label>
+        {draft && (
+          <button onClick={() => { onSave(draft); setDraft(null); }} className="text-xs" style={{ color: "var(--accent)" }}>
+            {saving ? "Saving..." : "Save links"}
+          </button>
+        )}
+      </div>
+      <LinksEditor value={value} onChange={setDraft} />
+    </div>
+  );
+}
+
 function SongTabsSection({ songId }: { songId: number }) {
   const queryClient = useQueryClient();
   const [selectedTabId, setSelectedTabId] = useState<number | null>(null);
@@ -573,6 +592,9 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
           style={{ borderColor: "var(--border)", color: "var(--text)", background: "var(--bg)" }}
           key={`notes-${song.id}-${song.notes}`} />
       </div>
+
+      <SongLinksSection key={song.id} links={song.links || []} saving={updateSong.isPending}
+        onSave={(links) => updateSong.mutate({ links })} />
 
       {/* Reference recording (covers) */}
       {song.type === "cover" && song.reference_audio_file_id && (

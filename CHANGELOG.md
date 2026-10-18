@@ -6,7 +6,16 @@ All notable changes to Greenroom are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+- Setlists have **sections** and **links**:
+  - Songs carry Tab / Track / Chart / Listen links, edited in the song panel.
+  - Setlist items can override those links for one gig.
+  - Opening a setlist shows a sectioned table with link chips. Setlists have their own URL (`/setlists/:id`).
+  - Adds `songs.links`, `setlist_items.section` and `setlist_items.links` (migration `e5f6a7b8c9d0`).
+- **Import .xlsx** on the Setlists page (`POST /api/setlists/import`) builds a setlist from a band set-list sheet. It reads hyperlinks and section rows, and matches or creates songs. Adds the `openpyxl` dependency.
+
 ### Fixed
+- Saving a setlist no longer erases per-song notes.
 - Imported recordings now show their **original filename** (e.g. `fly_away.mp4`)
   in the Library, Songs, and Sessions views instead of the vault identifier, so
   unassigned clips are identifiable. Folder-upload names are stored/shown as the

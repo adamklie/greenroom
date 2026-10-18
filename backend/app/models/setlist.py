@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -33,6 +33,12 @@ class SetlistItem(Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     duration_minutes: Mapped[int] = mapped_column(Integer, default=4)  # estimated
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Section label, e.g. "Set 1 7:30-9:30" / "Potential Extras". Consecutive
+    # items sharing a label form one section.
+    section: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Per-gig link overrides ({kind, label, url}); an item link of a given kind
+    # replaces the song's links of that kind for this setlist.
+    links: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     setlist: Mapped["Setlist"] = relationship(back_populates="items")
     song: Mapped["Song"] = relationship()  # noqa: F821

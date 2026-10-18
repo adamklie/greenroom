@@ -99,6 +99,14 @@ export interface DashboardResponse {
   recent_sessions: RecentSession[];
 }
 
+export type LinkKind = "tab" | "track" | "chart" | "listen" | "other";
+
+export interface Link {
+  kind: LinkKind;
+  label: string | null;
+  url: string;
+}
+
 export interface Song {
   id: number;
   title: string;
@@ -112,6 +120,7 @@ export interface Song {
   vibe: string | null;
   lyrics: string | null;
   notes: string | null;
+  links: Link[] | null;
   times_practiced: number;
   reference_audio_file_id: number | null;
   promoted_from_id: number | null;
@@ -237,9 +246,14 @@ export interface SetlistItem {
   position: number;
   duration_minutes: number;
   notes: string | null;
+  section: string | null;
+  links: Link[];
+  effective_links: Link[];
   song_title: string | null;
   song_artist: string | null;
   song_status: string | null;
+  song_key: string | null;
+  song_tempo_bpm: number | null;
 }
 
 export interface Setlist {
@@ -410,6 +424,13 @@ export const api = {
     create: (data: Record<string, unknown>) => post<Setlist>(`${BASE}/setlists`, data),
     update: (id: number, data: Record<string, unknown>) => patch<Setlist>(`${BASE}/setlists/${id}`, data),
     delete: (id: number) => json<{ ok: boolean }>(`${BASE}/setlists/${id}`, { method: "DELETE" }),
+    import: (file: File) => {
+      const body = new FormData();
+      body.append("file", file);
+      return json<{ setlist: Setlist; songs_matched: number; songs_created: number }>(
+        `${BASE}/setlists/import`, { method: "POST", body },
+      );
+    },
   },
   options: {
     list: (category?: string) => {

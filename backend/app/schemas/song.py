@@ -2,7 +2,18 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from typing import Literal
+
 from pydantic import BaseModel
+
+LinkKind = Literal["tab", "track", "chart", "listen", "other"]
+
+
+class Link(BaseModel):
+    """An external practice resource (UG tab, backing track, chart PDF, Spotify)."""
+    kind: LinkKind = "other"
+    label: str | None = None
+    url: str
 
 
 class SongBase(BaseModel):
@@ -17,6 +28,7 @@ class SongBase(BaseModel):
     vibe: str | None = None
     lyrics: str | None = None
     notes: str | None = None
+    links: list[Link] | None = None
 
 
 class SongCreate(SongBase):
@@ -56,6 +68,7 @@ class SongUpdate(BaseModel):
     vibe: str | None = None
     lyrics: str | None = None
     notes: str | None = None
+    links: list[Link] | None = None
     reference_audio_file_id: int | None = None
     rating_overall: int | None = None
     rating_vocals: int | None = None
