@@ -25,6 +25,7 @@ import Dashboard from "./pages/Dashboard";
 import Songs from "./pages/Songs";
 import Sessions from "./pages/Sessions";
 import SetlistBuilder from "./pages/SetlistBuilder";
+import SetlistPlayer from "./pages/SetlistPlayer";
 import Import from "./pages/Import";
 import Library from "./pages/Library";
 import Schemas from "./pages/Schemas";
@@ -174,6 +175,7 @@ function AppShell() {
           <Route path="/library" element={<Library />} />
           <Route path="/setlists" element={<SetlistBuilder />} />
           <Route path="/setlists/:id" element={<SetlistBuilder />} />
+          <Route path="/setlists/:id/play" element={<SetlistPlayer />} />
           <Route path="/import" element={<Import />} />
           <Route path="/feedback" element={<Feedback />} />
           <Route path="/schemas" element={<Schemas />} />

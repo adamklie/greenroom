@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { api, type Song, type AudioFile, type Link } from "../api/client";
@@ -340,6 +340,43 @@ function SongLinksSection({ links, onSave, saving }: { links: Link[]; onSave: (l
   );
 }
 
+function SongChartsSection({ songId }: { songId: number }) {
+  const queryClient = useQueryClient();
+  const input = useRef<HTMLInputElement>(null);
+  const { data: charts = [] } = useQuery({ queryKey: ["charts", songId], queryFn: () => api.charts.list(songId) });
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["charts", songId] });
+    queryClient.invalidateQueries({ queryKey: ["setlists"] });
+  };
+  const upload = useMutation({ mutationFn: (file: File) => api.charts.upload(songId, file), onSuccess: refresh });
+  const remove = useMutation({ mutationFn: (id: number) => api.charts.delete(id), onSuccess: refresh });
+
+  return (
+    <div className="mb-4">
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-xs" style={{ color: "var(--text-muted)" }}>Charts (PDF or image)</label>
+        <input ref={input} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ""; }} />
+        <button onClick={() => input.current?.click()} className="text-xs" style={{ color: "var(--accent)" }}>
+          {upload.isPending ? "Uploading..." : "+ Upload chart"}
+        </button>
+      </div>
+      {charts.length === 0 && <p className="text-xs" style={{ color: "var(--text-muted)" }}>None yet.</p>}
+      {charts.map((c) => (
+        <div key={c.id} className="flex items-center gap-2 text-sm py-0.5">
+          <FileMusic size={12} style={{ color: "var(--text-muted)" }} />
+          <a href={api.charts.fileUrl(c.id)} target="_blank" rel="noreferrer" className="flex-1 truncate hover:underline">
+            {c.label || c.original_filename || `Chart ${c.id}`}
+          </a>
+          <button onClick={() => remove.mutate(c.id)} className="p-0.5 rounded hover:bg-white/10" style={{ color: "var(--text-muted)" }}>
+            <X size={12} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SongTabsSection({ songId }: { songId: number }) {
   const queryClient = useQueryClient();
   const [selectedTabId, setSelectedTabId] = useState<number | null>(null);
@@ -595,6 +632,7 @@ function SongDetailPanel({ songId, onClose }: { songId: number; onClose: () => v
 
       <SongLinksSection key={song.id} links={song.links || []} saving={updateSong.isPending}
         onSave={(links) => updateSong.mutate({ links })} />
+      <SongChartsSection songId={song.id} />
 
       {/* Reference recording (covers) */}
       {song.type === "cover" && song.reference_audio_file_id && (

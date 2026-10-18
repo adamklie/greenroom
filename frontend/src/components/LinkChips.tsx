@@ -20,7 +20,7 @@ export default function LinkChips({ links }: { links: Link[] }) {
           onClick={(e) => e.stopPropagation()}
           className="px-2 py-0.5 rounded-full text-xs border hover:opacity-80 whitespace-nowrap"
           style={{ borderColor: KIND_COLORS[link.kind], color: KIND_COLORS[link.kind] }}>
-          {kindLabel(link.kind)}
+          {link.label && link.label.length <= 16 ? link.label : kindLabel(link.kind)}
         </a>
       ))}
     </div>

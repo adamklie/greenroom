@@ -13,6 +13,15 @@ All notable changes to Greenroom are documented here. Format follows
   - Opening a setlist shows a sectioned table with link chips. Setlists have their own URL (`/setlists/:id`).
   - Adds `songs.links`, `setlist_items.section` and `setlist_items.links` (migration `e5f6a7b8c9d0`).
 - **Import .xlsx** on the Setlists page (`POST /api/setlists/import`) builds a setlist from a band set-list sheet. It reads hyperlinks and section rows, and matches or creates songs. Adds the `openpyxl` dependency.
+- **Charts:** upload PDF or image charts per song (song panel), or a folder of them per setlist, matched to songs by filename.
+  - Stored in the vault or R2, and served by `GET /api/charts/{id}/file`.
+  - Adds the `song_charts` table (migration `f6a7b8c9d0e1`).
+- **Practice / Perform player** (`/setlists/:id/play`):
+  - Practice is a playlist-style view: chart, section-grouped queue, and a backing-track bar with speed and auto-advance.
+  - Perform is a full-screen chart view. Keys, pedal, tap and swipe page through charts, then songs, and the screen stays awake.
+  - PDFs render with pdf.js (`pdfjs-dist`, loaded on demand), so multi-page charts work on iPad.
+  - A **Chart / Lyrics** switch shows the song's lyrics. Pasted chord sheets keep their alignment.
+  - On stage, **Fit** sizes a song to one screen (up to 3 columns) and **Scroll** pages down with the pedal before moving to the next song.
 
 ### Fixed
 - Saving a setlist no longer erases per-song notes.

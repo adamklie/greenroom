@@ -111,6 +111,17 @@ def test_patch_round_trip_keeps_item_fields(client):
             assert before[f] == after[f]
 
 
+def test_setlist_items_carry_song_lyrics(client, db):
+    sl = _import(client, _sheet()).json()["setlist"]
+    song = db.query(Song).filter(Song.title == "Jump").one()
+    song.lyrics = "[Verse]\nI get up"
+    db.commit()
+    items = client.get(f"/api/setlists/{sl['id']}").json()["items"]
+    jump = next(i for i in items if i["song_title"] == "Jump")
+    assert jump["song_lyrics"] == "[Verse]\nI get up"
+    assert jump["song_type"] == "cover"
+
+
 def test_import_rejects_sheet_without_header(client):
     wb = Workbook()
     wb.active["A1"] = "nothing here"

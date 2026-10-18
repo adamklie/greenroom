@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.auth.deps import require_admin
 from app.config import settings
 from app.database import get_db
-from app.models import AudioFile
+from app.models import AudioFile, SongChart
 from app.services.vault import get_backend, is_cloud_backend
 
 router = APIRouter(prefix="/api/integrity", tags=["integrity"])
@@ -30,6 +30,7 @@ def check_recordings(db: Session = Depends(get_db), _user=Depends(require_admin)
     # All known identifiers (any role) — an object is only an "orphan" if NO
     # row references it; soft-deleted rows still own their object.
     known = {ident for (ident,) in db.query(AudioFile.identifier).all() if ident}
+    known |= {ident for (ident,) in db.query(SongChart.identifier).all()}
 
     # Direction 1: active DB rows whose object is gone.
     active = (

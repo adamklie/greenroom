@@ -240,6 +240,15 @@ export interface TagItem {
   is_predefined: boolean;
 }
 
+export interface SongChart {
+  id: number;
+  song_id: number;
+  file_type: string; // pdf, png, jpg, jpeg, webp
+  original_filename: string | null;
+  label: string | null;
+  created_at: string | null;
+}
+
 export interface SetlistItem {
   id: number;
   song_id: number;
@@ -249,9 +258,12 @@ export interface SetlistItem {
   section: string | null;
   links: Link[];
   effective_links: Link[];
+  charts: SongChart[];
   song_title: string | null;
   song_artist: string | null;
   song_status: string | null;
+  song_type: string | null;
+  song_lyrics: string | null;
   song_key: string | null;
   song_tempo_bpm: number | null;
 }
@@ -431,6 +443,17 @@ export const api = {
         `${BASE}/setlists/import`, { method: "POST", body },
       );
     },
+  },
+  charts: {
+    list: (songId: number) => json<SongChart[]>(`${BASE}/charts?song_id=${songId}`),
+    upload: (songId: number, file: File) => {
+      const body = new FormData();
+      body.append("song_id", String(songId));
+      body.append("file", file);
+      return json<SongChart>(`${BASE}/charts`, { method: "POST", body });
+    },
+    delete: (id: number) => json<{ ok: boolean }>(`${BASE}/charts/${id}`, { method: "DELETE" }),
+    fileUrl: (id: number) => `${BASE}/charts/${id}/file`,
   },
   options: {
     list: (category?: string) => {

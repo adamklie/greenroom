@@ -147,6 +147,25 @@ The API adds `effective_links` to each item: the song's links, with any kind the
 
 ---
 
+## SongChart (`song_charts`)
+
+A chart (PDF or image) uploaded for a song. The file lives in the vault next to recordings as `{identifier}.{file_type}`, on local disk or R2. Project-scoped like the other content tables.
+
+| Field | Type | Notes |
+|---|---|---|
+| id | int PK | |
+| song_id | int FK → songs | Indexed |
+| project_id | int FK → projects? | Stamped from the active project |
+| identifier | str unique | `CH` + 8 hex chars |
+| file_type | str | `pdf`, `png`, `jpg`, `jpeg`, `webp` |
+| original_filename | str? | As uploaded |
+| label | str? | |
+| created_at | datetime | |
+
+Served by `GET /api/charts/{id}/file`: the backend streams the bytes with an inline Content-Type, rather than redirecting to R2, so pdf.js can load them same-origin. Setlist items list their song's charts under `charts`. Deleting a chart removes the row; the stored file stays in the vault (the integrity report will list it as an orphan).
+
+---
+
 ## User + MagicToken (`users`, `magic_tokens`)
 
 Added in the auth phase (post-cloud-deploy). Admin-invite-only — no signup
